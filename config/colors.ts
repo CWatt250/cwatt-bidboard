@@ -2,10 +2,12 @@ import type { BidScope, BidStatus } from '@/hooks/useBids'
 
 /** Badge classes for each bid scope (used on BidCards). */
 export const SCOPE_BADGE_CLASSES: Record<BidScope, string> = {
-  Ductwork: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
-  Piping:   'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300',
-  Firestop: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300',
-  Combo:    'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300',
+  'Plumbing Piping': 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
+  'HVAC Piping':     'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300',
+  'HVAC Ductwork':   'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300',
+  'Fire Stopping':   'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300',
+  'Equipment':       'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300',
+  'Other':           'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
 }
 
 /** Header and body background classes for each Kanban column. */
