@@ -38,7 +38,6 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
   const { branch, estimator, scope, status, setBranch, setEstimator, setScope, setStatus } = useFilters()
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches, loading } = useUserRole()
 
-  // Build branch options based on role
   const branchOptions: { value: Branch; label: string }[] = (() => {
     if (loading) return []
     if (isAdmin) {
@@ -53,11 +52,9 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
         ...userBranches.map((b) => ({ value: b as Branch, label: BRANCH_LABELS[b] })),
       ]
     }
-    // Estimator: only their branches, no "All" option
     return userBranches.map((b) => ({ value: b as Branch, label: BRANCH_LABELS[b] }))
   })()
 
-  // Build estimator options based on role
   const estimatorOptions: Profile[] = (() => {
     if (isAdmin) return profiles
     if (isBranchManager) {
@@ -69,75 +66,190 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
   })()
 
   return (
-    <aside className="fixed inset-y-0 left-0 w-60 bg-card border-r flex flex-col z-10">
-      <div className="px-4 py-5 border-b">
-        <span className="font-semibold text-sm tracking-tight">cwatt-bidboard</span>
+    <aside
+      style={{
+        background: 'var(--sb-bg)',
+        borderRight: '1px solid var(--sb-border)',
+      }}
+      className="fixed inset-y-0 left-0 w-60 flex flex-col z-10"
+    >
+      {/* Logo */}
+      <div
+        style={{ borderBottom: '1px solid var(--sb-border)' }}
+        className="px-5 py-5 flex items-center gap-3"
+      >
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #38bdf8, #0ea5e9)',
+            boxShadow: '0 0 12px rgba(56,189,248,0.4)',
+            borderRadius: '8px',
+            width: 30,
+            height: 30,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ color: 'white', fontWeight: 800, fontSize: '0.8rem' }}>B</span>
+        </div>
+        <span style={{ color: 'var(--sb-text)', fontWeight: 700, fontSize: '0.875rem', letterSpacing: '-0.3px' }}>
+          cwatt-bidboard
+        </span>
       </div>
 
-      <nav className="px-2 py-4 space-y-1">
-        {navLinks.map(({ href, label, Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              pathname === href
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            <Icon size={16} />
-            {label}
-          </Link>
-        ))}
+      {/* Nav */}
+      <nav className="px-2 py-4 space-y-0.5">
+        {navLinks.map(({ href, label, Icon }) => {
+          const isActive = pathname === href
+          return (
+            <Link
+              key={href}
+              href={href}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                transition: 'all 200ms ease',
+                background: isActive ? 'var(--sb-active)' : 'transparent',
+                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
+                textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }}
+            >
+              <Icon size={15} />
+              {label}
+            </Link>
+          )
+        })}
 
-        <Link
-          href="/dashboard/toolbox"
-          className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-            pathname.startsWith('/dashboard/toolbox')
-              ? 'bg-primary text-primary-foreground'
-              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-          }`}
-        >
-          <Wrench size={16} />
-          Toolbox
-        </Link>
+        {/* Toolbox */}
+        {(() => {
+          const isActive = pathname.startsWith('/dashboard/toolbox')
+          return (
+            <Link
+              href="/dashboard/toolbox"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                transition: 'all 200ms ease',
+                background: isActive ? 'var(--sb-active)' : 'transparent',
+                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
+                textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }}
+            >
+              <Wrench size={15} />
+              Toolbox
+            </Link>
+          )
+        })()}
 
-        {isBranchManager && (
-          <Link
-            href="/dashboard/admin/reports"
-            className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              pathname === '/dashboard/admin/reports'
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            <BarChart2 size={16} />
-            Reports
-          </Link>
-        )}
+        {/* Reports (branch manager) */}
+        {isBranchManager && (() => {
+          const isActive = pathname === '/dashboard/admin/reports'
+          return (
+            <Link
+              href="/dashboard/admin/reports"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                transition: 'all 200ms ease',
+                background: isActive ? 'var(--sb-active)' : 'transparent',
+                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
+                textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }}
+            >
+              <BarChart2 size={15} />
+              Reports
+            </Link>
+          )
+        })()}
 
-        {isAdmin && (
-          <Link
-            href="/dashboard/admin"
-            className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              pathname.startsWith('/dashboard/admin')
-                ? 'bg-primary text-primary-foreground'
-                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-            }`}
-          >
-            <Settings size={16} />
-            Admin
-          </Link>
-        )}
+        {/* Admin */}
+        {isAdmin && (() => {
+          const isActive = pathname.startsWith('/dashboard/admin')
+          return (
+            <Link
+              href="/dashboard/admin"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                fontSize: '0.875rem',
+                fontWeight: 500,
+                transition: 'all 200ms ease',
+                background: isActive ? 'var(--sb-active)' : 'transparent',
+                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
+                textDecoration: 'none',
+              }}
+              onMouseEnter={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
+              }}
+              onMouseLeave={(e) => {
+                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+              }}
+            >
+              <Settings size={15} />
+              Admin
+            </Link>
+          )
+        })()}
       </nav>
 
-      <div className="px-4 py-4 border-t space-y-3 flex-1 overflow-y-auto">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Filters</p>
+      {/* Filters */}
+      <div
+        style={{ borderTop: '1px solid var(--sb-border)' }}
+        className="px-4 py-4 space-y-3 flex-1 overflow-y-auto"
+      >
+        <p style={{ color: 'var(--sb-text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Filters
+        </p>
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Branch</label>
+          <label style={{ color: 'var(--sb-text2)', fontSize: '0.75rem' }}>Branch</label>
           <Select value={branch} onValueChange={(v) => setBranch((v ?? 'All') as Branch)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger
+              className="h-8 text-xs"
+              style={{
+                background: 'var(--sb-bg2)',
+                border: '1px solid var(--sb-border)',
+                color: 'var(--sb-text)',
+                borderRadius: '6px',
+              }}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -150,9 +262,17 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
 
         {!isEstimator && (
           <div className="space-y-1">
-            <label className="text-xs text-muted-foreground">Estimator</label>
+            <label style={{ color: 'var(--sb-text2)', fontSize: '0.75rem' }}>Estimator</label>
             <Select value={estimator} onValueChange={(v) => setEstimator(v ?? 'All')}>
-              <SelectTrigger className="h-8 text-xs">
+              <SelectTrigger
+                className="h-8 text-xs"
+                style={{
+                  background: 'var(--sb-bg2)',
+                  border: '1px solid var(--sb-border)',
+                  color: 'var(--sb-text)',
+                  borderRadius: '6px',
+                }}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -166,9 +286,17 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
         )}
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Scope</label>
+          <label style={{ color: 'var(--sb-text2)', fontSize: '0.75rem' }}>Scope</label>
           <Select value={scope} onValueChange={(v) => setScope((v ?? 'All') as Scope)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger
+              className="h-8 text-xs"
+              style={{
+                background: 'var(--sb-bg2)',
+                border: '1px solid var(--sb-border)',
+                color: 'var(--sb-text)',
+                borderRadius: '6px',
+              }}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -180,9 +308,17 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
         </div>
 
         <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Status</label>
+          <label style={{ color: 'var(--sb-text2)', fontSize: '0.75rem' }}>Status</label>
           <Select value={status} onValueChange={(v) => setStatus((v ?? 'All') as Status)}>
-            <SelectTrigger className="h-8 text-xs">
+            <SelectTrigger
+              className="h-8 text-xs"
+              style={{
+                background: 'var(--sb-bg2)',
+                border: '1px solid var(--sb-border)',
+                color: 'var(--sb-text)',
+                borderRadius: '6px',
+              }}
+            >
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -207,11 +343,55 @@ export function TopBar({ userName }: { userName: string }) {
   }
 
   return (
-    <header className="fixed top-0 left-60 right-0 h-14 bg-background border-b flex items-center justify-between px-6 z-10">
-      <span className="text-sm font-medium">{userName}</span>
+    <header
+      style={{
+        background: 'var(--surface)',
+        borderBottom: '1px solid var(--border)',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+      className="fixed top-0 left-60 right-0 h-16 flex items-center justify-between px-6 z-10"
+    >
+      <div className="flex items-center gap-3">
+        {/* User avatar */}
+        <div
+          style={{
+            background: 'linear-gradient(135deg, #38bdf8, #0ea5e9)',
+            borderRadius: '50%',
+            width: 32,
+            height: 32,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ color: 'white', fontWeight: 700, fontSize: '0.75rem' }}>
+            {userName.charAt(0).toUpperCase()}
+          </span>
+        </div>
+        <span style={{ color: 'var(--text)', fontWeight: 500, fontSize: '0.875rem' }}>{userName}</span>
+      </div>
       <button
         onClick={handleSignOut}
-        className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+        style={{
+          color: 'var(--text3)',
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          padding: '6px 12px',
+          borderRadius: '8px',
+          transition: 'all 150ms ease',
+          background: 'transparent',
+          border: '1px solid var(--border)',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLElement).style.color = 'var(--text)'
+          ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border2)'
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLElement).style.color = 'var(--text3)'
+          ;(e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
+        }}
       >
         Sign out
       </button>

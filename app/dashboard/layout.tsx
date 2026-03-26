@@ -31,7 +31,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <BidDetailProvider profiles={profiles ?? []}>
           <Sidebar profiles={profiles ?? []} />
           <TopBar userName={userName} />
-          <main className="ml-60 mt-14 p-6 min-h-screen">
+          <main className="ml-60 mt-16 p-6 min-h-screen" style={{ background: 'var(--bg)' }}>
             {children}
           </main>
           <BidDetailDrawer />
