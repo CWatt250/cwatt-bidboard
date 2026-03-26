@@ -8,21 +8,15 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 import type { Bid } from '@/hooks/useBids'
-
-const SCOPE_CLASSES: Record<string, string> = {
-  Ductwork: 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
-  Piping: 'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300',
-  Firestop: 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300',
-  Combo: 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300',
-}
+import { SCOPE_BADGE_CLASSES, DUE_DATE_URGENT_CLASS, DUE_DATE_WARNING_CLASS } from '@/config/colors'
 
 function dueDateClass(dateStr: string): string {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const due = new Date(dateStr + 'T00:00:00')
   const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diffDays <= 3) return 'text-red-600 font-semibold'
-  if (diffDays <= 7) return 'text-yellow-600 font-semibold'
+  if (diffDays <= 3) return DUE_DATE_URGENT_CLASS
+  if (diffDays <= 7) return DUE_DATE_WARNING_CLASS
   return 'text-muted-foreground'
 }
 
@@ -70,7 +64,7 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
                 <div className="text-xs text-muted-foreground">{bid.client}</div>
                 <div className="flex flex-wrap gap-1">
                   <Badge
-                    className={SCOPE_CLASSES[bid.scope]}
+                    className={SCOPE_BADGE_CLASSES[bid.scope]}
                     variant="outline"
                   >
                     {bid.scope}

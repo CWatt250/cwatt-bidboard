@@ -3,25 +3,7 @@
 import { Droppable } from '@hello-pangea/dnd'
 import { BidCard } from '@/components/kanban/BidCard'
 import type { Bid, BidStatus } from '@/hooks/useBids'
-
-const COLUMN_STYLES: Record<BidStatus, { header: string; bg: string }> = {
-  Unassigned: {
-    header: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300',
-    bg: 'bg-gray-50 dark:bg-gray-900/30',
-  },
-  Bidding: {
-    header: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
-    bg: 'bg-blue-50/50 dark:bg-blue-950/20',
-  },
-  'In Progress': {
-    header: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
-    bg: 'bg-amber-50/50 dark:bg-amber-950/20',
-  },
-  Sent: {
-    header: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
-    bg: 'bg-green-50/50 dark:bg-green-950/20',
-  },
-}
+import { STATUS_COLUMN_STYLES } from '@/config/colors'
 
 interface KanbanColumnProps {
   status: BidStatus
@@ -30,7 +12,7 @@ interface KanbanColumnProps {
 }
 
 export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps) {
-  const styles = COLUMN_STYLES[status]
+  const styles = STATUS_COLUMN_STYLES[status]
 
   return (
     <div className="flex flex-col w-72 shrink-0 rounded-xl overflow-hidden border border-border">
