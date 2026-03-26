@@ -12,6 +12,7 @@ import {
 import { ArrowUpDown, ArrowUp, ArrowDown, PencilIcon } from 'lucide-react'
 import { useAdminUsers, type AdminUser } from '@/hooks/useAdminUsers'
 import { EditUserDrawer } from '@/components/admin/EditUserDrawer'
+import { AddUserDialog } from '@/components/admin/AddUserDialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -247,7 +248,7 @@ export default function UsersPage() {
           </Select>
         </div>
 
-        <div id="add-user-portal" />
+        <AddUserDialog onCreated={refetch} />
       </div>
 
       {/* Error */}
