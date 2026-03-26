@@ -158,12 +158,12 @@ export function BranchManagerDashboard() {
         <div className="space-y-6">
           <div className="grid grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-card border rounded-lg p-4 h-24 animate-pulse" />
+              <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
             ))}
           </div>
-          <div className="bg-card border rounded-lg h-64 animate-pulse" />
+          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
         </div>
-        <div className="bg-card border rounded-lg h-40 animate-pulse" />
+        <div className="rounded-lg h-40 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
       </div>
     )
   }
@@ -263,7 +263,7 @@ export function BranchManagerDashboard() {
         )}
 
         {/* Recent Bids */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Recent Bids</h2>
           </div>
@@ -279,7 +279,7 @@ export function BranchManagerDashboard() {
         </div>
 
         {/* Estimator Performance */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Estimator Performance</h2>
           </div>
@@ -324,7 +324,7 @@ export function BranchManagerDashboard() {
         </div>
 
         {/* Bids Due This Week */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Bids Due This Week</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Active bids due in the next 7 days</p>

@@ -270,19 +270,19 @@ export function AdminDashboard() {
         <div className="space-y-6">
           <div className="grid grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-card border rounded-lg p-4 h-24 animate-pulse" />
+              <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
             ))}
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
           </div>
         </div>
-        <div className="bg-card border rounded-lg h-40 animate-pulse" />
+        <div className="rounded-lg h-40 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
       </div>
     )
   }
@@ -342,7 +342,7 @@ export function AdminDashboard() {
 
         {/* Middle row — Branch Performance + Recent Bids */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Branch Performance</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Pipeline value by branch</p>
@@ -356,7 +356,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Recent Bids</h2>
             </div>
@@ -374,7 +374,7 @@ export function AdminDashboard() {
 
         {/* Bottom row — Estimator Leaderboard + Scope Breakdown */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Estimator Leaderboard</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Sorted by pipeline value</p>
@@ -433,7 +433,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Scope Breakdown</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Active bids by scope</p>
@@ -447,7 +447,7 @@ export function AdminDashboard() {
 
       {/* Right column */}
       <div className="space-y-4">
-        <div className="bg-card border rounded-lg p-4">
+        <div className="rounded-lg p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <h2 className="text-sm font-semibold mb-1">To-Do List</h2>
           <p className="text-xs text-muted-foreground">Coming in Phase 6G</p>
         </div>

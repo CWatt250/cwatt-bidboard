@@ -23,7 +23,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-semibold">Dashboard</h1>
+      <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Dashboard</h1>
       {isAdmin ? (
         <AdminDashboard />
       ) : isBranchManager ? (

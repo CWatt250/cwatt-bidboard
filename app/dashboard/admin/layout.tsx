@@ -43,14 +43,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {isAdmin && (
         <>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Admin Panel</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.4px' }}>Admin Panel</h1>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text3)', marginTop: 4 }}>
               Manage users, branches, and system settings
             </p>
           </div>
 
-          <div className="border-b">
-            <nav className="flex gap-1 -mb-px">
+          <div style={{ borderBottom: '1px solid var(--border)' }}>
+            <nav style={{ display: 'flex', gap: 4, marginBottom: -1 }}>
               {ADMIN_TABS.map(({ href, label }) => {
                 const isActive =
                   pathname === href || (label === 'Users' && pathname === '/dashboard/admin')
@@ -58,11 +58,15 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
                   <Link
                     key={href}
                     href={href}
-                    className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                      isActive
-                        ? 'border-primary text-foreground'
-                        : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground'
-                    }`}
+                    style={{
+                      padding: '8px 16px',
+                      fontSize: '0.875rem',
+                      fontWeight: 600,
+                      borderBottom: `2px solid ${isActive ? '#38bdf8' : 'transparent'}`,
+                      color: isActive ? '#38bdf8' : 'var(--text3)',
+                      transition: 'all 150ms ease',
+                      textDecoration: 'none',
+                    }}
                   >
                     {label}
                   </Link>
