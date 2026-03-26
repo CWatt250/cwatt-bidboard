@@ -143,6 +143,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
               table.setPageIndex(0)
             }}
             className="pl-8"
+            style={{ borderRadius: '8px', borderColor: 'var(--border)' }}
           />
         </div>
 
@@ -175,13 +176,28 @@ export function DataTable({ bids, loading }: DataTableProps) {
       </div>
 
       {/* Table */}
-      <div className="rounded-lg border overflow-hidden">
+      <div
+        style={{
+          background: 'var(--surface)',
+          borderRadius: 'var(--radius)',
+          border: '1px solid var(--border)',
+          overflow: 'hidden',
+          boxShadow: 'var(--shadow-sm)',
+        }}
+      >
         <Table>
           <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id} className="bg-muted/40 hover:bg-muted/40">
+              <TableRow
+                key={headerGroup.id}
+                style={{ background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}
+                className="hover:bg-[var(--surface2)]"
+              >
                 {headerGroup.headers.map((header) => (
-                  <TableHead key={header.id}>
+                  <TableHead
+                    key={header.id}
+                    style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}
+                  >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
@@ -194,7 +210,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
           <TableBody>
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
-                <TableRow key={i}>
+                <TableRow key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                   {columns.map((_, j) => (
                     <TableCell key={j}>
                       <Skeleton className="h-4 w-full" />
@@ -206,16 +222,20 @@ export function DataTable({ bids, loading }: DataTableProps) {
               <TableRow>
                 <TableCell
                   colSpan={columns.length}
-                  className="h-32 text-center text-muted-foreground"
+                  style={{ color: 'var(--text3)', textAlign: 'center', padding: '48px 0' }}
                 >
                   No bids found.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((row) => (
-                <TableRow key={row.id}>
+                <TableRow
+                  key={row.id}
+                  style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', transition: 'background 120ms ease' }}
+                  className="hover:bg-[var(--surface2)]"
+                >
                   {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
+                    <TableCell key={cell.id} style={{ color: 'var(--text)', fontSize: '0.8rem' }}>
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
@@ -227,7 +247,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
       </div>
 
       {/* Footer */}
-      <div className="flex items-center justify-between text-sm text-muted-foreground">
+      <div className="flex items-center justify-between" style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>
         <span>
           {loading
             ? 'Loading…'

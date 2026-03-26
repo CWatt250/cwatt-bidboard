@@ -51,21 +51,36 @@ function MetricCard({
   subtext?: string
   accent?: 'green' | 'blue'
 }) {
+  const valueColor =
+    accent === 'green'
+      ? 'var(--green)'
+      : accent === 'blue'
+      ? 'var(--accent2)'
+      : 'var(--text)'
   return (
-    <div className="bg-card border rounded-lg p-4">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        padding: '16px',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
+      <p style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{label}</p>
       <p
-        className={`text-2xl font-bold mt-1 ${
-          accent === 'green'
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : accent === 'blue'
-            ? 'text-blue-600 dark:text-blue-400'
-            : ''
-        }`}
+        style={{
+          fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+          fontSize: '1.5rem',
+          fontWeight: 600,
+          marginTop: '4px',
+          color: valueColor,
+          letterSpacing: '-0.5px',
+        }}
       >
         {value}
       </p>
-      {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}
+      {subtext && <p style={{ color: 'var(--text3)', fontSize: '0.72rem', marginTop: '4px' }}>{subtext}</p>}
     </div>
   )
 }
@@ -140,10 +155,10 @@ function BranchPerformanceChart({
                 <span className="font-semibold">{formatCurrency(item.pipelineValue)}</span>
               </div>
             </div>
-            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface2)' }}>
               <div
-                className="h-full bg-primary rounded-full transition-all duration-500"
-                style={{ width: `${pct}%` }}
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #38bdf8, #0ea5e9)' }}
               />
             </div>
           </div>
@@ -183,7 +198,7 @@ function ScopeDonut({
           style={{ background: `conic-gradient(${gradient})` }}
         />
         {/* Donut hole */}
-        <div className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-card flex items-center justify-center">
+        <div className="absolute inset-0 m-auto w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'var(--surface)' }}>
           <span className="text-xs font-semibold">{total}</span>
         </div>
       </div>
@@ -255,26 +270,26 @@ export function AdminDashboard() {
         <div className="space-y-6">
           <div className="grid grid-cols-3 gap-4">
             {[...Array(6)].map((_, i) => (
-              <div key={i} className="bg-card border rounded-lg p-4 h-24 animate-pulse" />
+              <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
             ))}
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
           </div>
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
-            <div className="bg-card border rounded-lg h-64 animate-pulse" />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
           </div>
         </div>
-        <div className="bg-card border rounded-lg h-40 animate-pulse" />
+        <div className="rounded-lg h-40 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+      <div className="error-card">
         Failed to load dashboard: {error}
       </div>
     )
@@ -327,7 +342,7 @@ export function AdminDashboard() {
 
         {/* Middle row — Branch Performance + Recent Bids */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Branch Performance</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Pipeline value by branch</p>
@@ -341,7 +356,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Recent Bids</h2>
             </div>
@@ -359,7 +374,7 @@ export function AdminDashboard() {
 
         {/* Bottom row — Estimator Leaderboard + Scope Breakdown */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Estimator Leaderboard</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Sorted by pipeline value</p>
@@ -418,7 +433,7 @@ export function AdminDashboard() {
             </div>
           </div>
 
-          <div className="bg-card border rounded-lg">
+          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
             <div className="px-4 py-3 border-b">
               <h2 className="text-sm font-semibold">Scope Breakdown</h2>
               <p className="text-xs text-muted-foreground mt-0.5">Active bids by scope</p>
@@ -432,7 +447,7 @@ export function AdminDashboard() {
 
       {/* Right column */}
       <div className="space-y-4">
-        <div className="bg-card border rounded-lg p-4">
+        <div className="rounded-lg p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <h2 className="text-sm font-semibold mb-1">To-Do List</h2>
           <p className="text-xs text-muted-foreground">Coming in Phase 6G</p>
         </div>

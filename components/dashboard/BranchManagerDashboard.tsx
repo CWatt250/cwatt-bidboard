@@ -39,17 +39,31 @@ function MetricCard({
   subtext?: string
   accent?: 'green'
 }) {
+  const valueColor = accent === 'green' ? 'var(--green)' : 'var(--text)'
   return (
-    <div className="bg-card border rounded-lg p-4">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        padding: '16px',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
+      <p style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{label}</p>
       <p
-        className={`text-2xl font-bold mt-1 ${
-          accent === 'green' ? 'text-emerald-600 dark:text-emerald-400' : ''
-        }`}
+        style={{
+          fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+          fontSize: '1.5rem',
+          fontWeight: 600,
+          marginTop: '4px',
+          color: valueColor,
+          letterSpacing: '-0.5px',
+        }}
       >
         {value}
       </p>
-      {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}
+      {subtext && <p style={{ color: 'var(--text3)', fontSize: '0.72rem', marginTop: '4px' }}>{subtext}</p>}
     </div>
   )
 }
@@ -144,19 +158,19 @@ export function BranchManagerDashboard() {
         <div className="space-y-6">
           <div className="grid grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-card border rounded-lg p-4 h-24 animate-pulse" />
+              <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
             ))}
           </div>
-          <div className="bg-card border rounded-lg h-64 animate-pulse" />
+          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
         </div>
-        <div className="bg-card border rounded-lg h-40 animate-pulse" />
+        <div className="rounded-lg h-40 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+      <div className="error-card">
         Failed to load dashboard: {error}
       </div>
     )
@@ -210,11 +224,18 @@ export function BranchManagerDashboard() {
           <div className="flex gap-1 flex-wrap">
             <button
               onClick={() => setActiveBranch('All')}
-              className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                activeBranch === 'All'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-muted text-muted-foreground hover:text-foreground'
-              }`}
+              style={{
+                padding: '5px 12px',
+                borderRadius: '8px',
+                fontSize: '0.75rem',
+                fontWeight: 600,
+                transition: 'all 150ms ease',
+                background: activeBranch === 'All' ? 'linear-gradient(135deg, #38bdf8, #0ea5e9)' : 'var(--surface2)',
+                color: activeBranch === 'All' ? 'white' : 'var(--text2)',
+                border: activeBranch === 'All' ? 'none' : '1px solid var(--border)',
+                boxShadow: activeBranch === 'All' ? '0 4px 14px rgba(56,189,248,0.35)' : 'none',
+                cursor: 'pointer',
+              }}
             >
               All Branches
             </button>
@@ -222,11 +243,18 @@ export function BranchManagerDashboard() {
               <button
                 key={b}
                 onClick={() => setActiveBranch(b)}
-                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  activeBranch === b
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted text-muted-foreground hover:text-foreground'
-                }`}
+                style={{
+                  padding: '5px 12px',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: 600,
+                  transition: 'all 150ms ease',
+                  background: activeBranch === b ? 'linear-gradient(135deg, #38bdf8, #0ea5e9)' : 'var(--surface2)',
+                  color: activeBranch === b ? 'white' : 'var(--text2)',
+                  border: activeBranch === b ? 'none' : '1px solid var(--border)',
+                  boxShadow: activeBranch === b ? '0 4px 14px rgba(56,189,248,0.35)' : 'none',
+                  cursor: 'pointer',
+                }}
               >
                 {BRANCH_LABELS[b] ?? b}
               </button>
@@ -235,7 +263,7 @@ export function BranchManagerDashboard() {
         )}
 
         {/* Recent Bids */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Recent Bids</h2>
           </div>
@@ -251,7 +279,7 @@ export function BranchManagerDashboard() {
         </div>
 
         {/* Estimator Performance */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Estimator Performance</h2>
           </div>
@@ -296,7 +324,7 @@ export function BranchManagerDashboard() {
         </div>
 
         {/* Bids Due This Week */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Bids Due This Week</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Active bids due in the next 7 days</p>

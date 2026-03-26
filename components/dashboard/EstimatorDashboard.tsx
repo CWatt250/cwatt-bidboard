@@ -33,17 +33,31 @@ function MetricCard({
   subtext?: string
   accent?: 'green' | 'default'
 }) {
+  const valueColor = accent === 'green' ? 'var(--green)' : 'var(--text)'
   return (
-    <div className="bg-card border rounded-lg p-4">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        padding: '16px',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
+      <p style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{label}</p>
       <p
-        className={`text-2xl font-bold mt-1 ${
-          accent === 'green' ? 'text-emerald-600 dark:text-emerald-400' : ''
-        }`}
+        style={{
+          fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+          fontSize: '1.5rem',
+          fontWeight: 600,
+          marginTop: '4px',
+          color: valueColor,
+          letterSpacing: '-0.5px',
+        }}
       >
         {value}
       </p>
-      {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}
+      {subtext && <p style={{ color: 'var(--text3)', fontSize: '0.72rem', marginTop: '4px' }}>{subtext}</p>}
     </div>
   )
 }
@@ -94,19 +108,19 @@ export function EstimatorDashboard() {
         <div className="space-y-6">
           <div className="grid grid-cols-4 gap-4">
             {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-card border rounded-lg p-4 h-24 animate-pulse" />
+              <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
             ))}
           </div>
-          <div className="bg-card border rounded-lg p-4 h-64 animate-pulse" />
+          <div className="rounded-lg p-4 h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
         </div>
-        <div className="bg-card border rounded-lg p-4 h-40 animate-pulse" />
+        <div className="rounded-lg p-4 h-40 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+      <div className="error-card">
         Failed to load dashboard: {error}
       </div>
     )
@@ -143,7 +157,7 @@ export function EstimatorDashboard() {
         </div>
 
         {/* Recent Bids */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Recent Bids</h2>
           </div>
@@ -161,7 +175,7 @@ export function EstimatorDashboard() {
         </div>
 
         {/* Bids Due This Week */}
-        <div className="bg-card border rounded-lg">
+        <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
           <div className="px-4 py-3 border-b">
             <h2 className="text-sm font-semibold">Bids Due This Week</h2>
             <p className="text-xs text-muted-foreground mt-0.5">Active bids due in the next 7 days</p>

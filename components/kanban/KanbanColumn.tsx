@@ -3,7 +3,15 @@
 import { Droppable } from '@hello-pangea/dnd'
 import { BidCard } from '@/components/kanban/BidCard'
 import type { Bid, BidStatus } from '@/hooks/useBids'
-import { STATUS_COLUMN_STYLES } from '@/config/colors'
+
+const STATUS_LEFT_BORDER: Record<BidStatus, string> = {
+  Unassigned:    '#8892b0',
+  Bidding:       '#38bdf8',
+  'In Progress': '#f59e0b',
+  Sent:          '#10b981',
+  Awarded:       '#10b981',
+  Lost:          '#ef4444',
+}
 
 interface KanbanColumnProps {
   status: BidStatus
@@ -12,13 +20,48 @@ interface KanbanColumnProps {
 }
 
 export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps) {
-  const styles = STATUS_COLUMN_STYLES[status]
+  const accentColor = STATUS_LEFT_BORDER[status]
 
   return (
-    <div className="flex flex-col w-72 shrink-0 rounded-xl overflow-hidden border border-border">
-      <div className={`flex items-center justify-between px-3 py-2 ${styles.header}`}>
-        <span className="font-semibold text-sm">{status}</span>
-        <span className="text-xs font-medium px-1.5 py-0.5 rounded-full bg-white/40 dark:bg-black/20">
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        width: '288px',
+        flexShrink: 0,
+        borderRadius: 'var(--radius)',
+        overflow: 'hidden',
+        background: 'var(--surface)',
+        boxShadow: 'var(--shadow-sm)',
+        border: '1px solid var(--border)',
+      }}
+    >
+      {/* Column Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '10px 14px',
+          borderBottom: '1px solid var(--border)',
+          borderLeft: `3px solid ${accentColor}`,
+          background: 'var(--surface)',
+        }}
+      >
+        <span style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--text)', letterSpacing: '-0.2px' }}>
+          {status}
+        </span>
+        <span
+          style={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            padding: '2px 7px',
+            borderRadius: '100px',
+            background: 'var(--surface2)',
+            color: 'var(--text2)',
+            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+          }}
+        >
           {bids.length}
         </span>
       </div>
@@ -28,12 +71,29 @@ export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps)
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`flex-1 min-h-[200px] p-2 space-y-2 transition-colors ${styles.bg} ${
-              snapshot.isDraggingOver ? 'ring-2 ring-inset ring-primary/30' : ''
-            }`}
+            style={{
+              flex: 1,
+              minHeight: 200,
+              padding: '8px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+              background: snapshot.isDraggingOver ? 'var(--accent-light)' : 'var(--surface2)',
+              transition: 'background 200ms ease',
+              outline: snapshot.isDraggingOver ? `2px solid var(--accent-border)` : 'none',
+              outlineOffset: '-2px',
+            }}
           >
             {bids.length === 0 && !snapshot.isDraggingOver && (
-              <div className="flex items-center justify-center h-20 text-xs text-muted-foreground italic">
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 80,
+                color: 'var(--text3)',
+                fontSize: '0.75rem',
+                fontStyle: 'italic',
+              }}>
                 No bids
               </div>
             )}
