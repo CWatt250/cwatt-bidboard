@@ -20,9 +20,8 @@ function dueDateClass(dateStr: string): string {
   return 'text-muted-foreground'
 }
 
-function formatCurrency(value: number | null): string {
-  if (value === null) return 'TBD'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value)
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
 }
 
 interface BidCardProps {
@@ -47,6 +46,24 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
     setClaiming(false)
   }
 
+  const lineItems = bid.line_items ?? []
+
+  // Unique clients — max 2 shown
+  const uniqueClients = [...new Set(lineItems.map((li) => li.client))]
+  const clientsDisplay =
+    uniqueClients.length === 0
+      ? null
+      : uniqueClients.slice(0, 2).join(', ') +
+        (uniqueClients.length > 2 ? ` +${uniqueClients.length - 2} more` : '')
+
+  // Unique scopes — max 2 badges
+  const uniqueScopes = [...new Set(lineItems.map((li) => li.scope))]
+  const extraScopes = uniqueScopes.length > 2 ? uniqueScopes.length - 2 : 0
+
+  // Total price
+  const hasPrice = lineItems.some((li) => li.price !== null)
+  const totalPriceDisplay = hasPrice ? formatCurrency(bid.total_price ?? 0) : 'TBD'
+
   return (
     <>
       <Draggable draggableId={bid.id} index={index}>
@@ -61,14 +78,24 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
             <Card className="cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all select-none">
               <CardContent className="space-y-2 pt-0">
                 <div className="font-semibold text-sm leading-tight">{bid.project_name}</div>
-                <div className="text-xs text-muted-foreground">{bid.client}</div>
+                {clientsDisplay && (
+                  <div className="text-xs text-muted-foreground">{clientsDisplay}</div>
+                )}
                 <div className="flex flex-wrap gap-1">
-                  <Badge
-                    className={SCOPE_BADGE_CLASSES[bid.scope]}
-                    variant="outline"
-                  >
-                    {bid.scope}
-                  </Badge>
+                  {uniqueScopes.slice(0, 2).map((scope) => (
+                    <Badge
+                      key={scope}
+                      className={SCOPE_BADGE_CLASSES[scope]}
+                      variant="outline"
+                    >
+                      {scope}
+                    </Badge>
+                  ))}
+                  {extraScopes > 0 && (
+                    <Badge variant="secondary" className="text-xs">
+                      +{extraScopes} more
+                    </Badge>
+                  )}
                   <Badge variant="secondary" className="text-xs">{bid.branch}</Badge>
                 </div>
                 <div className="text-xs text-muted-foreground">
@@ -77,7 +104,7 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
                 <div className={`text-xs ${dueDateClass(bid.bid_due_date)}`}>
                   Due: {new Date(bid.bid_due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
                 </div>
-                <div className="text-xs font-medium">{formatCurrency(bid.bid_price)}</div>
+                <div className="text-xs font-medium">{totalPriceDisplay}</div>
               </CardContent>
               {bid.status === 'Unassigned' && (
                 <CardFooter onClick={(e) => e.stopPropagation()}>
