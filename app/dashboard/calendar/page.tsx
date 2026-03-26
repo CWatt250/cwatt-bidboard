@@ -29,12 +29,12 @@ export default function CalendarPage() {
     <div className="flex flex-col h-full gap-4 p-4">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Calendar</h1>
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Calendar</h1>
         <NewBidDialog />
       </div>
 
       {/* Calendar */}
-      <div className="rbc-wrapper flex-1 min-h-[600px] rounded-lg border border-border bg-card p-3">
+      <div className="rbc-wrapper flex-1 min-h-[600px] p-4" style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         {loading ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             Loading…
@@ -59,17 +59,17 @@ export default function CalendarPage() {
       </div>
 
       {/* Legend */}
-      <div className="flex items-center gap-4 text-sm text-muted-foreground px-1 pb-2">
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-red-500" />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: '0.75rem', color: 'var(--text3)', padding: '0 4px 8px' }}>
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', height: 10, width: 10, borderRadius: '50%', background: 'var(--red)' }} />
           Due within 3 days
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-amber-400" />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', height: 10, width: 10, borderRadius: '50%', background: 'var(--yellow)' }} />
           Due within 7 days
         </span>
-        <span className="flex items-center gap-1.5">
-          <span className="inline-block h-3 w-3 rounded-full bg-primary" />
+        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <span style={{ display: 'inline-block', height: 10, width: 10, borderRadius: '50%', background: 'var(--accent)' }} />
           On track
         </span>
       </div>

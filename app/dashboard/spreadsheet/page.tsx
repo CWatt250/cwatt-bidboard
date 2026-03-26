@@ -84,7 +84,7 @@ export default function SpreadsheetPage() {
   return (
     <div className="flex flex-col h-full gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold">Spreadsheet</h1>
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Spreadsheet</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"
