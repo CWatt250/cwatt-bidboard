@@ -15,6 +15,7 @@ import {
 import { useState, useMemo, useCallback } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { useBidDetail } from '@/contexts/bidDetail'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -60,6 +61,7 @@ interface DataTableProps {
 }
 
 export function DataTable({ bids, loading }: DataTableProps) {
+  const { openBid } = useBidDetail()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
@@ -67,14 +69,10 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const columns = useMemo<ColumnDef<Bid>[]>(
     () =>
       createColumns({
-        onOpenBid: (_bid) => {
-          /* Bid detail drawer — coming in a future task */
-        },
-        onEdit: (_bid) => {
-          /* Edit dialog — coming in a future task */
-        },
+        onOpenBid: openBid,
+        onEdit: openBid,
       }),
-    []
+    [openBid]
   )
 
   const updateBid = useCallback(
