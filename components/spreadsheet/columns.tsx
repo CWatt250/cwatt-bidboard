@@ -47,8 +47,8 @@ declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
     updateBid: (
       id: string,
-      field: 'bid_price' | 'notes' | 'project_start_date',
-      value: string | number | null
+      field: 'notes' | 'project_start_date',
+      value: string | null
     ) => Promise<void>
   }
 }
@@ -77,8 +77,7 @@ function dueDateClass(dateStr: string): string {
   return ''
 }
 
-function formatCurrency(value: number | null): string {
-  if (value === null) return 'TBD'
+function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -281,18 +280,34 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
       ),
     },
     {
-      accessorKey: 'client',
+      id: 'client',
       header: ({ column }) => <SortableHeader label="Client" column={column} />,
-      cell: ({ row }) => <span>{row.original.client}</span>,
+      cell: ({ row }) => {
+        const clients = [...new Set((row.original.line_items ?? []).map((li) => li.client))]
+        return (
+          <span className="text-sm">
+            {clients.length === 0 ? <span className="italic text-muted-foreground">—</span> : clients.join(', ')}
+          </span>
+        )
+      },
     },
     {
-      accessorKey: 'scope',
+      id: 'scope',
       header: ({ column }) => <SortableHeader label="Scope" column={column} />,
-      cell: ({ row }) => (
-        <Badge className={SCOPE_BADGE_CLASSES[row.original.scope]} variant="outline">
-          {row.original.scope}
-        </Badge>
-      ),
+      cell: ({ row }) => {
+        const scopes = [...new Set((row.original.line_items ?? []).map((li) => li.scope))]
+        return (
+          <div className="flex flex-wrap gap-1">
+            {scopes.length === 0
+              ? <span className="italic text-muted-foreground text-xs">—</span>
+              : scopes.map((scope) => (
+                  <Badge key={scope} className={SCOPE_BADGE_CLASSES[scope]} variant="outline">
+                    {scope}
+                  </Badge>
+                ))}
+          </div>
+        )
+      },
     },
     {
       accessorKey: 'branch',
@@ -312,26 +327,17 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
           <span className="italic text-muted-foreground">Unassigned</span>
         ),
     },
-    // ── Inline editable: Bid Price ──
     {
-      accessorKey: 'bid_price',
+      id: 'total_price',
       header: ({ column }) => <SortableHeader label="Bid Price" column={column} />,
-      cell: ({ row, table }) => (
-        <InlineEditCell
-          defaultValue={row.original.bid_price?.toString() ?? ''}
-          type="number"
-          placeholder="0"
-          onSave={async (raw) => {
-            const value = raw.trim() === '' ? null : parseFloat(raw)
-            await table.options.meta?.updateBid(row.original.id, 'bid_price', value ?? null)
-          }}
-          renderDisplay={(raw) => (
-            <span className={raw === '' ? 'italic text-muted-foreground' : 'font-medium'}>
-              {raw === '' ? 'TBD' : formatCurrency(parseFloat(raw))}
-            </span>
-          )}
-        />
-      ),
+      cell: ({ row }) => {
+        const hasPrice = (row.original.line_items ?? []).some((li) => li.price !== null)
+        return (
+          <span className={hasPrice ? 'font-medium' : 'italic text-muted-foreground'}>
+            {hasPrice ? formatCurrency(row.original.total_price ?? 0) : 'TBD'}
+          </span>
+        )
+      },
     },
     {
       accessorKey: 'status',

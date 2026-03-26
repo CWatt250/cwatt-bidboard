@@ -8,7 +8,7 @@ import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { useBids, type Bid, type BidStatus } from '@/hooks/useBids'
 import { createClient } from '@/lib/supabase/client'
 
-const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent']
+const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
 
 export default function KanbanPage() {
   const { bids, loading, error } = useBids()
@@ -58,7 +58,7 @@ export default function KanbanPage() {
       acc[status] = localBids.filter((b) => b.status === status)
       return acc
     },
-    { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [] }
+    { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [], Awarded: [], Lost: [] }
   )
 
   return (

@@ -15,7 +15,7 @@ import { createClient } from '@/lib/supabase/client'
 
 const BRANCHES: Branch[] = ['All', 'Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5']
 const SCOPES: Scope[] = ['All', 'Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
-const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent']
+const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
 
 const navLinks = [
   { href: '/dashboard/kanban', label: 'Kanban', Icon: LayoutGrid },

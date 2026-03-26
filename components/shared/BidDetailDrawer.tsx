@@ -1,15 +1,15 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useForm, Controller } from 'react-hook-form'
+import { useEffect, useState, useCallback } from 'react'
+import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { XIcon } from 'lucide-react'
+import { PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
-import { STATUS_BADGE_CLASSES } from '@/config/colors'
-import type { BidStatus } from '@/hooks/useBids'
+import { SCOPE_BADGE_CLASSES, STATUS_BADGE_CLASSES } from '@/config/colors'
+import type { BidScope, BidStatus, BidLineItem } from '@/hooks/useBids'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -40,26 +40,28 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const SCOPES: BidScope[] = ['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
+
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
+
+const lineItemSchema = z.object({
+  id: z.string().optional(), // undefined = new row
+  client: z.string().min(1, 'Required'),
+  scope: z.enum(['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other'] as const),
+  price: z.string().optional(),
+})
 
 const bidDetailSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
-  client: z.string().min(1, 'Client is required'),
-  scope: z.enum([
-    'Plumbing Piping',
-    'HVAC Piping',
-    'HVAC Ductwork',
-    'Fire Stopping',
-    'Equipment',
-    'Other',
-  ]),
   branch: z.enum(['Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5']),
-  status: z.enum(['Unassigned', 'Bidding', 'In Progress', 'Sent']),
+  status: z.enum(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']),
   estimator_id: z.string().nullable().optional(),
-  bid_price: z.string().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
   project_start_date: z.string().optional(),
   notes: z.string().optional(),
+  line_items: z.array(lineItemSchema).min(1, 'At least one line item is required'),
 })
 
 type BidDetailForm = z.infer<typeof bidDetailSchema>
@@ -107,64 +109,164 @@ function DeleteConfirmDialog({
 // ─── BidDetailDrawer ──────────────────────────────────────────────────────────
 
 export function BidDetailDrawer() {
-  const { selectedBid, profiles, closeBid } = useBidDetail()
+  const { selectedBid, profiles, closeBid, openBid } = useBidDetail()
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteLineItemIndex, setDeleteLineItemIndex] = useState<number | null>(null)
 
   const {
     register,
     handleSubmit,
     control,
     reset,
+    watch,
     formState: { errors },
   } = useForm<BidDetailForm>({
     resolver: zodResolver(bidDetailSchema),
   })
+
+  const { fields, append, remove } = useFieldArray({ control, name: 'line_items' })
 
   // Re-populate form whenever the selected bid changes
   useEffect(() => {
     if (!selectedBid) return
     reset({
       project_name: selectedBid.project_name,
-      client: selectedBid.client,
-      scope: selectedBid.scope,
       branch: selectedBid.branch,
       status: selectedBid.status,
       estimator_id: selectedBid.estimator_id ?? undefined,
-      bid_price: selectedBid.bid_price?.toString() ?? '',
       bid_due_date: selectedBid.bid_due_date,
       project_start_date: selectedBid.project_start_date ?? '',
       notes: selectedBid.notes ?? '',
+      line_items: (selectedBid.line_items ?? []).length > 0
+        ? (selectedBid.line_items ?? []).map((li) => ({
+            id: li.id,
+            client: li.client,
+            scope: li.scope,
+            price: li.price?.toString() ?? '',
+          }))
+        : [{ id: undefined, client: '', scope: undefined as any, price: '' }],
     })
   }, [selectedBid, reset])
+
+  // Real-time: listen for bid_line_items changes and refresh the selected bid
+  useEffect(() => {
+    if (!selectedBid) return
+    const supabase = createClient()
+
+    const channel = supabase
+      .channel(`drawer-line-items-${selectedBid.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'bid_line_items',
+          filter: `bid_id=eq.${selectedBid.id}`,
+        },
+        async () => {
+          // Re-fetch the bid with updated line items
+          const { data } = await supabase
+            .from('bids')
+            .select(`
+              id,
+              project_name,
+              branch,
+              estimator_id,
+              status,
+              bid_due_date,
+              project_start_date,
+              notes,
+              created_at,
+              updated_at,
+              profiles!bids_estimator_id_fkey(name),
+              bid_line_items(*)
+            `)
+            .eq('id', selectedBid.id)
+            .single()
+
+          if (!data) return
+          const line_items: BidLineItem[] = (data as any).bid_line_items ?? []
+          const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
+          openBid({
+            ...(data as any),
+            estimator_name: (data as any).profiles?.name ?? null,
+            line_items,
+            total_price,
+          })
+        }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [selectedBid?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const watchedItems = watch('line_items') ?? []
+  const totalPreview = watchedItems.reduce((sum, item) => {
+    const p = parseFloat(item.price ?? '')
+    return sum + (isNaN(p) ? 0 : p)
+  }, 0)
+  const hasAnyPrice = watchedItems.some((item) => {
+    const p = parseFloat(item.price ?? '')
+    return !isNaN(p)
+  })
 
   async function onSubmit(values: BidDetailForm) {
     if (!selectedBid) return
     setSaving(true)
     const supabase = createClient()
-    const { error } = await supabase
+
+    // Update parent bid
+    const { error: bidError } = await supabase
       .from('bids')
       .update({
         project_name: values.project_name,
-        client: values.client,
-        scope: values.scope,
         branch: values.branch,
         status: values.status,
         estimator_id: values.estimator_id ?? null,
-        bid_price: values.bid_price?.trim()
-          ? parseFloat(values.bid_price)
-          : null,
         bid_due_date: values.bid_due_date,
         project_start_date: values.project_start_date?.trim() || null,
         notes: values.notes?.trim() || null,
       })
       .eq('id', selectedBid.id)
-    setSaving(false)
-    if (error) {
+
+    if (bidError) {
+      setSaving(false)
       toast.error('Failed to save changes. Please try again.')
       return
     }
+
+    // Upsert line items
+    const lineItemsToUpsert = values.line_items.map((li) => ({
+      ...(li.id ? { id: li.id } : {}),
+      bid_id: selectedBid.id,
+      client: li.client,
+      scope: li.scope,
+      price: li.price?.trim() ? parseFloat(li.price) : null,
+    }))
+
+    const { error: liError } = await supabase
+      .from('bid_line_items')
+      .upsert(lineItemsToUpsert, { onConflict: 'id' })
+
+    if (liError) {
+      setSaving(false)
+      toast.error('Failed to save line items. Please try again.')
+      return
+    }
+
+    // Delete line items that were removed (present in DB but not in form)
+    const formIds = new Set(values.line_items.map((li) => li.id).filter(Boolean))
+    const deletedIds = (selectedBid.line_items ?? [])
+      .map((li) => li.id)
+      .filter((id) => !formIds.has(id))
+
+    if (deletedIds.length > 0) {
+      await supabase.from('bid_line_items').delete().in('id', deletedIds)
+    }
+
+    setSaving(false)
     toast.success('Bid updated successfully.')
     closeBid()
   }
@@ -235,84 +337,21 @@ export function BidDetailDrawer() {
                   )}
                 </div>
 
-                {/* Client */}
-                <div className="space-y-1">
-                  <Label htmlFor="dd-client">Client</Label>
-                  <Input
-                    id="dd-client"
-                    {...register('client')}
-                    placeholder="Client name"
-                  />
-                  {errors.client && (
-                    <p className="text-xs text-destructive">{errors.client.message}</p>
-                  )}
-                </div>
-
-                {/* Scope + Branch */}
+                {/* Branch + Status */}
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label>Scope</Label>
-                    <Controller
-                      name="scope"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value}
-                          onValueChange={(v) => field.onChange(v)}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Select scope" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {(
-                              [
-                                'Plumbing Piping',
-                                'HVAC Piping',
-                                'HVAC Ductwork',
-                                'Fire Stopping',
-                                'Equipment',
-                                'Other',
-                              ] as const
-                            ).map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                    {errors.scope && (
-                      <p className="text-xs text-destructive">{errors.scope.message}</p>
-                    )}
-                  </div>
-
                   <div className="space-y-1">
                     <Label>Branch</Label>
                     <Controller
                       name="branch"
                       control={control}
                       render={({ field }) => (
-                        <Select
-                          value={field.value}
-                          onValueChange={(v) => field.onChange(v)}
-                        >
+                        <Select value={field.value} onValueChange={(v) => field.onChange(v)}>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select branch" />
                           </SelectTrigger>
                           <SelectContent>
-                            {(
-                              [
-                                'Branch 1',
-                                'Branch 2',
-                                'Branch 3',
-                                'Branch 4',
-                                'Branch 5',
-                              ] as const
-                            ).map((b) => (
-                              <SelectItem key={b} value={b}>
-                                {b}
-                              </SelectItem>
+                            {(['Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5'] as const).map((b) => (
+                              <SelectItem key={b} value={b}>{b}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -322,35 +361,20 @@ export function BidDetailDrawer() {
                       <p className="text-xs text-destructive">{errors.branch.message}</p>
                     )}
                   </div>
-                </div>
 
-                {/* Status + Estimator */}
-                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label>Status</Label>
                     <Controller
                       name="status"
                       control={control}
                       render={({ field }) => (
-                        <Select
-                          value={field.value}
-                          onValueChange={(v) => field.onChange(v)}
-                        >
+                        <Select value={field.value} onValueChange={(v) => field.onChange(v)}>
                           <SelectTrigger className="w-full">
                             <SelectValue placeholder="Select status" />
                           </SelectTrigger>
                           <SelectContent>
-                            {(
-                              [
-                                'Unassigned',
-                                'Bidding',
-                                'In Progress',
-                                'Sent',
-                              ] as const
-                            ).map((s) => (
-                              <SelectItem key={s} value={s}>
-                                {s}
-                              </SelectItem>
+                            {(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost'] as const).map((s) => (
+                              <SelectItem key={s} value={s}>{s}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
@@ -360,50 +384,32 @@ export function BidDetailDrawer() {
                       <p className="text-xs text-destructive">{errors.status.message}</p>
                     )}
                   </div>
-
-                  <div className="space-y-1">
-                    <Label>Estimator</Label>
-                    <Controller
-                      name="estimator_id"
-                      control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value ?? '__none__'}
-                          onValueChange={(v) =>
-                            field.onChange(v === '__none__' ? null : v)
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              <span className="italic text-muted-foreground">
-                                Unassigned
-                              </span>
-                            </SelectItem>
-                            {profiles.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
-                    />
-                  </div>
                 </div>
 
-                {/* Bid Price */}
+                {/* Estimator */}
                 <div className="space-y-1">
-                  <Label htmlFor="dd-bid_price">Bid Price (optional)</Label>
-                  <Input
-                    id="dd-bid_price"
-                    type="number"
-                    step="1"
-                    min="0"
-                    {...register('bid_price')}
-                    placeholder="0"
+                  <Label>Estimator</Label>
+                  <Controller
+                    name="estimator_id"
+                    control={control}
+                    render={({ field }) => (
+                      <Select
+                        value={field.value ?? '__none__'}
+                        onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="Unassigned" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none__">
+                            <span className="italic text-muted-foreground">Unassigned</span>
+                          </SelectItem>
+                          {profiles.map((p) => (
+                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   />
                 </div>
 
@@ -411,27 +417,128 @@ export function BidDetailDrawer() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="dd-bid_due_date">Bid Due Date</Label>
-                    <Input
-                      id="dd-bid_due_date"
-                      type="date"
-                      {...register('bid_due_date')}
-                    />
+                    <Input id="dd-bid_due_date" type="date" {...register('bid_due_date')} />
                     {errors.bid_due_date && (
-                      <p className="text-xs text-destructive">
-                        {errors.bid_due_date.message}
-                      </p>
+                      <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
                     )}
                   </div>
-
                   <div className="space-y-1">
-                    <Label htmlFor="dd-project_start_date">
-                      Project Start Date (optional)
-                    </Label>
-                    <Input
-                      id="dd-project_start_date"
-                      type="date"
-                      {...register('project_start_date')}
-                    />
+                    <Label htmlFor="dd-project_start_date">Project Start (optional)</Label>
+                    <Input id="dd-project_start_date" type="date" {...register('project_start_date')} />
+                  </div>
+                </div>
+
+                {/* Line Items */}
+                <div className="space-y-2">
+                  <Label>Line Items</Label>
+                  {errors.line_items?.root && (
+                    <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
+                  )}
+
+                  <div className="border rounded-md overflow-hidden">
+                    {/* Table header */}
+                    <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                      <span>Client</span>
+                      <span>Scope</span>
+                      <span>Price</span>
+                      <span />
+                    </div>
+
+                    {/* Table rows */}
+                    {fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
+                      >
+                        {/* Hidden: preserve database ID for existing rows */}
+                        <input type="hidden" {...register(`line_items.${index}.id`)} />
+                        <div>
+                          <Input
+                            {...register(`line_items.${index}.client`)}
+                            placeholder="Client"
+                            className="h-7 text-xs px-2"
+                          />
+                          {errors.line_items?.[index]?.client && (
+                            <p className="text-xs text-destructive mt-0.5">
+                              {errors.line_items[index]?.client?.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <Controller
+                            name={`line_items.${index}.scope`}
+                            control={control}
+                            render={({ field: scopeField }) => (
+                              <Select value={scopeField.value} onValueChange={(v) => scopeField.onChange(v)}>
+                                <SelectTrigger className="w-full h-7 text-xs">
+                                  <SelectValue placeholder="Scope" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {SCOPES.map((s) => (
+                                    <SelectItem key={s} value={s}>
+                                      <span className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}>
+                                        {s}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                          {errors.line_items?.[index]?.scope && (
+                            <p className="text-xs text-destructive mt-0.5">
+                              {errors.line_items[index]?.scope?.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <Input
+                          {...register(`line_items.${index}.price`)}
+                          type="number"
+                          step="1"
+                          min="0"
+                          placeholder="TBD"
+                          className="h-7 text-xs px-2"
+                        />
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (fields.length === 1) {
+                              setDeleteLineItemIndex(index)
+                            } else {
+                              remove(index)
+                            }
+                          }}
+                          aria-label="Remove line item"
+                        >
+                          <Trash2Icon className="size-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => append({ id: undefined, client: '', scope: undefined as any, price: '' })}
+                  >
+                    <PlusIcon className="size-3.5" />
+                    Add Line Item
+                  </Button>
+
+                  {/* Running total */}
+                  <div className="flex items-center justify-end pt-1 border-t">
+                    <span className="text-sm text-muted-foreground mr-2">Total:</span>
+                    <span className="text-sm font-semibold">
+                      {hasAnyPrice
+                        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalPreview)
+                        : 'TBD'}
+                    </span>
                   </div>
                 </div>
 
@@ -469,16 +576,10 @@ export function BidDetailDrawer() {
               Delete Bid
             </Button>
             <div className="flex-1" />
-            <SheetClose
-              render={<Button variant="outline" type="button" />}
-            >
+            <SheetClose render={<Button variant="outline" type="button" />}>
               Cancel
             </SheetClose>
-            <Button
-              type="submit"
-              form="bid-detail-form"
-              disabled={saving}
-            >
+            <Button type="submit" form="bid-detail-form" disabled={saving}>
               {saving ? 'Saving…' : 'Save Changes'}
             </Button>
           </SheetFooter>
@@ -494,6 +595,36 @@ export function BidDetailDrawer() {
           deleting={deleting}
         />
       )}
+
+      {/* Confirmation when trying to remove the last line item */}
+      <AlertDialog
+        open={deleteLineItemIndex !== null}
+        onOpenChange={(open) => { if (!open) setDeleteLineItemIndex(null) }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove last line item?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This bid will have no line items. You can add a new one after saving.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => {
+                if (deleteLineItemIndex !== null) {
+                  remove(deleteLineItemIndex)
+                  append({ id: undefined, client: '', scope: undefined as any, price: '' })
+                  setDeleteLineItemIndex(null)
+                }
+              }}
+            >
+              Remove
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   )
 }

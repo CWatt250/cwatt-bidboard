@@ -48,9 +48,12 @@ const PAGE_SIZE = 25
 
 const globalFilterFn: FilterFn<Bid> = (row, _columnId, filterValue: string) => {
   const search = filterValue.toLowerCase()
+  const clientMatch = (row.original.line_items ?? []).some((li) =>
+    li.client.toLowerCase().includes(search)
+  )
   return (
     row.original.project_name.toLowerCase().includes(search) ||
-    row.original.client.toLowerCase().includes(search) ||
+    clientMatch ||
     (row.original.estimator_name?.toLowerCase().includes(search) ?? false)
   )
 }
@@ -78,8 +81,8 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const updateBid = useCallback(
     async (
       id: string,
-      field: 'bid_price' | 'notes' | 'project_start_date',
-      value: string | number | null
+      field: 'notes' | 'project_start_date',
+      value: string | null
     ) => {
       const supabase = createClient()
       const { error } = await supabase.from('bids').update({ [field]: value }).eq('id', id)
@@ -120,7 +123,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
     scope: 'Scope',
     branch: 'Branch',
     estimator_name: 'Estimator',
-    bid_price: 'Bid Price',
+    total_price: 'Bid Price',
     status: 'Status',
     bid_due_date: 'Bid Due Date',
     project_start_date: 'Project Start',

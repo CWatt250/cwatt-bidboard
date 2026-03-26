@@ -17,7 +17,7 @@ export default function transformBidsToEvents(bids: Bid[]): CalendarEvent[] {
       const local = new Date(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate())
       return {
         id: bid.id,
-        title: `${bid.project_name} — ${bid.client}`,
+        title: bid.project_name,
         start: local,
         end: local,
         resource: bid,
