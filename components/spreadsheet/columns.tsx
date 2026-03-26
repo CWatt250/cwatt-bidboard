@@ -1,13 +1,23 @@
 'use client'
 
-import { type ColumnDef, type Row } from '@tanstack/react-table'
-import { ArrowUpDownIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon } from 'lucide-react'
-import { useState } from 'react'
+import {
+  type ColumnDef,
+  type Row,
+  type RowData,
+} from '@tanstack/react-table'
+import {
+  ArrowUpDownIcon,
+  MoreHorizontalIcon,
+  PencilIcon,
+  Trash2Icon,
+} from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { Bid } from '@/hooks/useBids'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,6 +40,20 @@ import {
   DUE_DATE_URGENT_CLASS,
   DUE_DATE_WARNING_CLASS,
 } from '@/config/colors'
+
+// Augment TanStack Table meta so cells can call updateBid
+declare module '@tanstack/react-table' {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface TableMeta<TData extends RowData> {
+    updateBid: (
+      id: string,
+      field: 'bid_price' | 'notes' | 'project_start_date',
+      value: string | number | null
+    ) => Promise<void>
+  }
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function SortableHeader({ label, column }: { label: string; column: any }) {
   return (
@@ -55,7 +79,11 @@ function dueDateClass(dateStr: string): string {
 
 function formatCurrency(value: number | null): string {
   if (value === null) return 'TBD'
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
 }
 
 function formatDate(dateStr: string | null): string {
@@ -66,6 +94,103 @@ function formatDate(dateStr: string | null): string {
     year: 'numeric',
   })
 }
+
+// ─── InlineEditCell ───────────────────────────────────────────────────────────
+
+interface InlineEditCellProps {
+  defaultValue: string
+  type?: 'text' | 'number' | 'date'
+  placeholder?: string
+  onSave: (value: string) => Promise<void>
+  renderDisplay: (value: string) => React.ReactNode
+}
+
+function InlineEditCell({
+  defaultValue,
+  type = 'text',
+  placeholder,
+  onSave,
+  renderDisplay,
+}: InlineEditCellProps) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(defaultValue)
+  const [saving, setSaving] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  // Keep draft in sync with upstream value when not editing
+  useEffect(() => {
+    if (!editing) setDraft(defaultValue)
+  }, [defaultValue, editing])
+
+  function startEdit() {
+    setDraft(defaultValue)
+    setEditing(true)
+    // focus handled by autoFocus on input
+  }
+
+  async function commit() {
+    if (draft === defaultValue) {
+      setEditing(false)
+      return
+    }
+    setSaving(true)
+    await onSave(draft)
+    setSaving(false)
+    setEditing(false)
+  }
+
+  function cancel() {
+    setDraft(defaultValue)
+    setEditing(false)
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      commit()
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      cancel()
+    }
+  }
+
+  if (editing) {
+    return (
+      <div className="flex items-center gap-1.5 min-w-[120px]">
+        <Input
+          ref={inputRef}
+          type={type}
+          value={draft}
+          placeholder={placeholder}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={handleKeyDown}
+          autoFocus
+          disabled={saving}
+          className="h-6 text-xs px-1.5 py-0"
+          step={type === 'number' ? '1' : undefined}
+          min={type === 'number' ? '0' : undefined}
+        />
+        {saving && (
+          <span className="text-xs text-muted-foreground shrink-0">Saving…</span>
+        )}
+      </div>
+    )
+  }
+
+  return (
+    <button
+      className="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
+      onClick={startEdit}
+      title="Click to edit"
+    >
+      {renderDisplay(defaultValue)}
+    </button>
+  )
+}
+
+// ─── ActionsCell ──────────────────────────────────────────────────────────────
 
 function ActionsCell({ row, onEdit }: { row: Row<Bid>; onEdit: (bid: Bid) => void }) {
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -134,6 +259,8 @@ function ActionsCell({ row, onEdit }: { row: Row<Bid>; onEdit: (bid: Bid) => voi
   )
 }
 
+// ─── Column Definitions ───────────────────────────────────────────────────────
+
 interface ColumnCallbacks {
   onOpenBid: (bid: Bid) => void
   onEdit: (bid: Bid) => void
@@ -170,7 +297,9 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     {
       accessorKey: 'branch',
       header: ({ column }) => <SortableHeader label="Branch" column={column} />,
-      cell: ({ row }) => <span className="text-muted-foreground">{row.original.branch}</span>,
+      cell: ({ row }) => (
+        <span className="text-muted-foreground">{row.original.branch}</span>
+      ),
       filterFn: 'equals',
     },
     {
@@ -183,13 +312,25 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
           <span className="italic text-muted-foreground">Unassigned</span>
         ),
     },
+    // ── Inline editable: Bid Price ──
     {
       accessorKey: 'bid_price',
       header: ({ column }) => <SortableHeader label="Bid Price" column={column} />,
-      cell: ({ row }) => (
-        <span className={row.original.bid_price === null ? 'italic text-muted-foreground' : 'font-medium'}>
-          {formatCurrency(row.original.bid_price)}
-        </span>
+      cell: ({ row, table }) => (
+        <InlineEditCell
+          defaultValue={row.original.bid_price?.toString() ?? ''}
+          type="number"
+          placeholder="0"
+          onSave={async (raw) => {
+            const value = raw.trim() === '' ? null : parseFloat(raw)
+            await table.options.meta?.updateBid(row.original.id, 'bid_price', value ?? null)
+          }}
+          renderDisplay={(raw) => (
+            <span className={raw === '' ? 'italic text-muted-foreground' : 'font-medium'}>
+              {raw === '' ? 'TBD' : formatCurrency(parseFloat(raw))}
+            </span>
+          )}
+        />
       ),
     },
     {
@@ -210,11 +351,43 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
         </span>
       ),
     },
+    // ── Inline editable: Project Start Date ──
     {
       accessorKey: 'project_start_date',
       header: ({ column }) => <SortableHeader label="Project Start" column={column} />,
-      cell: ({ row }) => (
-        <span className="text-muted-foreground">{formatDate(row.original.project_start_date)}</span>
+      cell: ({ row, table }) => (
+        <InlineEditCell
+          defaultValue={row.original.project_start_date ?? ''}
+          type="date"
+          onSave={async (raw) => {
+            const value = raw.trim() === '' ? null : raw
+            await table.options.meta?.updateBid(row.original.id, 'project_start_date', value)
+          }}
+          renderDisplay={(raw) => (
+            <span className="text-muted-foreground">{formatDate(raw || null)}</span>
+          )}
+        />
+      ),
+    },
+    // ── Inline editable: Notes ──
+    {
+      accessorKey: 'notes',
+      header: ({ column }) => <SortableHeader label="Notes" column={column} />,
+      cell: ({ row, table }) => (
+        <InlineEditCell
+          defaultValue={row.original.notes ?? ''}
+          type="text"
+          placeholder="Add notes…"
+          onSave={async (raw) => {
+            const value = raw.trim() === '' ? null : raw.trim()
+            await table.options.meta?.updateBid(row.original.id, 'notes', value)
+          }}
+          renderDisplay={(raw) => (
+            <span className={raw === '' ? 'italic text-muted-foreground text-xs' : 'text-sm'}>
+              {raw === '' ? 'Add notes…' : raw}
+            </span>
+          )}
+        />
       ),
     },
     {

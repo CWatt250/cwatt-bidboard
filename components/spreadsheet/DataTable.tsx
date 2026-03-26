@@ -12,7 +12,9 @@ import {
   type VisibilityState,
   type FilterFn,
 } from '@tanstack/react-table'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -75,6 +77,22 @@ export function DataTable({ bids, loading }: DataTableProps) {
     []
   )
 
+  const updateBid = useCallback(
+    async (
+      id: string,
+      field: 'bid_price' | 'notes' | 'project_start_date',
+      value: string | number | null
+    ) => {
+      const supabase = createClient()
+      const { error } = await supabase.from('bids').update({ [field]: value }).eq('id', id)
+      if (error) {
+        toast.error('Failed to save changes. Please try again.')
+        throw error
+      }
+    },
+    []
+  )
+
   const table = useReactTable<Bid>({
     data: bids,
     columns,
@@ -88,6 +106,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
     getPaginationRowModel: getPaginationRowModel(),
     globalFilterFn,
     initialState: { pagination: { pageSize: PAGE_SIZE } },
+    meta: { updateBid },
   })
 
   const { rows } = table.getRowModel()
