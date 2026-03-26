@@ -28,6 +28,14 @@ export const STATUS_COLUMN_STYLES: Record<BidStatus, { header: string; bg: strin
   },
 }
 
+/** Badge classes for each bid status (used in Spreadsheet view). */
+export const STATUS_BADGE_CLASSES: Record<BidStatus, string> = {
+  Unassigned:    'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
+  Bidding:       'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+  'In Progress': 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+  Sent:          'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+}
+
 /** Text class applied to a bid due date that is critically close (≤ 3 days). */
 export const DUE_DATE_URGENT_CLASS = 'text-red-600 font-semibold'
 
