@@ -29,7 +29,7 @@ import {
 const newBidSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
   client: z.string().min(1, 'Client is required'),
-  scope: z.enum(['Ductwork', 'Piping', 'Firestop', 'Combo']),
+  scope: z.enum(['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']),
   branch: z.enum(['Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5']),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
   bid_price: z.string().optional(),
@@ -128,7 +128,7 @@ export function NewBidDialog() {
                       <SelectValue placeholder="Select scope" />
                     </SelectTrigger>
                     <SelectContent>
-                      {(['Ductwork', 'Piping', 'Firestop', 'Combo'] as const).map((s) => (
+                      {(['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other'] as const).map((s) => (
                         <SelectItem key={s} value={s}>
                           {s}
                         </SelectItem>
