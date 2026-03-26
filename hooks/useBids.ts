@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useFilters } from '@/contexts/filters'
+import { useUserRole } from '@/contexts/userRole'
 
 // Re-export types from canonical location for backwards compatibility
 export type { BidStatus, BidScope, BidBranch, BidLineItem, Bid } from '@/lib/supabase/types'
@@ -19,6 +20,7 @@ export function useBids(): UseBidsResult {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { branch, estimator, scope, status } = useFilters()
+  const { isAdmin, isBranchManager, isEstimator, branches: userBranches, profile } = useUserRole()
 
   const fetchBids = useCallback(async () => {
     const supabase = createClient()
@@ -43,6 +45,14 @@ export function useBids(): UseBidsResult {
     if (branch !== 'All') query = query.eq('branch', branch)
     if (status !== 'All') query = query.eq('status', status)
 
+    // Defense-in-depth role filtering on top of RLS
+    if (isEstimator && userBranches.length > 0) {
+      query = query.in('branch', userBranches)
+    } else if (isBranchManager && userBranches.length > 0) {
+      query = query.in('branch', userBranches)
+    }
+    // Admin: no additional filter
+
     const { data, error: fetchError } = await query
 
     if (fetchError) {
@@ -62,8 +72,13 @@ export function useBids(): UseBidsResult {
     })
 
     let filtered = estimator !== 'All'
-      ? mapped.filter((b) => b.estimator_name === estimator)
+      ? mapped.filter((b) => b.estimator_id === estimator)
       : mapped
+
+    // Estimator: further filter to own bids only (estimator_id matches or unassigned)
+    if (isEstimator && profile) {
+      filtered = filtered.filter((b) => b.estimator_id === profile.id || b.estimator_id === null)
+    }
 
     // Scope filter: keep bids that have at least one line item matching the scope
     if (scope !== 'All') {
@@ -74,7 +89,7 @@ export function useBids(): UseBidsResult {
 
     setBids(filtered)
     setError(null)
-  }, [branch, estimator, scope, status])
+  }, [branch, estimator, scope, status, isAdmin, isBranchManager, isEstimator, userBranches, profile])
 
   useEffect(() => {
     setLoading(true)
