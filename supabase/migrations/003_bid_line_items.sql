@@ -29,3 +29,7 @@ CREATE POLICY "Authenticated users can delete bid line items"
 ALTER TABLE bids DROP COLUMN IF EXISTS client;
 ALTER TABLE bids DROP COLUMN IF EXISTS scope;
 ALTER TABLE bids DROP COLUMN IF EXISTS bid_price;
+
+-- Add Awarded and Lost to bid_status enum
+ALTER TYPE bid_status ADD VALUE 'Awarded';
+ALTER TYPE bid_status ADD VALUE 'Lost';
