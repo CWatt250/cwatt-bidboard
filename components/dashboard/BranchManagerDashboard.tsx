@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { TodoList } from '@/components/workspace/TodoList'
 import { useUserRole } from '@/contexts/userRole'
 import { STATUS_BADGE_CLASSES, DUE_DATE_URGENT_CLASS, DUE_DATE_WARNING_CLASS, BRANCH_BADGE_CLASSES } from '@/config/colors'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
@@ -314,10 +315,7 @@ export function BranchManagerDashboard() {
 
       {/* Right column */}
       <div className="space-y-4">
-        <div className="bg-card border rounded-lg p-4">
-          <h2 className="text-sm font-semibold mb-1">To-Do List</h2>
-          <p className="text-xs text-muted-foreground">Coming in Phase 6G</p>
-        </div>
+        <TodoList />
       </div>
     </div>
   )

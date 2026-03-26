@@ -5,6 +5,7 @@ import { DragDropContext, type DropResult } from '@hello-pangea/dnd'
 import { toast } from 'sonner'
 import { KanbanColumn } from '@/components/kanban/KanbanColumn'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
+import { TodoList } from '@/components/workspace/TodoList'
 import { useBids, type Bid, type BidStatus } from '@/hooks/useBids'
 import { createClient } from '@/lib/supabase/client'
 
@@ -62,38 +63,48 @@ export default function KanbanPage() {
   )
 
   return (
-    <div className="flex flex-col h-full gap-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full gap-4 min-h-0">
+      <div className="flex items-center justify-between shrink-0">
         <h1 className="text-xl font-semibold">Kanban Board</h1>
         <NewBidDialog />
       </div>
 
-      {loading && (
-        <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
-          Loading bids…
-        </div>
-      )}
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Left: Kanban board — horizontally scrollable */}
+        <div className="flex-1 min-w-0 flex flex-col min-h-0">
+          {loading && (
+            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
+              Loading bids…
+            </div>
+          )}
 
-      {error && (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          Error loading bids: {error}
-        </div>
-      )}
+          {error && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+              Error loading bids: {error}
+            </div>
+          )}
 
-      {!loading && !error && (
-        <DragDropContext onDragEnd={onDragEnd}>
-          <div className="flex gap-4 overflow-x-auto pb-4">
-            {STATUSES.map((status) => (
-              <KanbanColumn
-                key={status}
-                status={status}
-                bids={bidsByStatus[status]}
-                currentUserId={currentUserId}
-              />
-            ))}
-          </div>
-        </DragDropContext>
-      )}
+          {!loading && !error && (
+            <DragDropContext onDragEnd={onDragEnd}>
+              <div className="flex gap-4 overflow-x-auto pb-4 h-full">
+                {STATUSES.map((status) => (
+                  <KanbanColumn
+                    key={status}
+                    status={status}
+                    bids={bidsByStatus[status]}
+                    currentUserId={currentUserId}
+                  />
+                ))}
+              </div>
+            </DragDropContext>
+          )}
+        </div>
+
+        {/* Right: To-Do sidebar — fixed width, does not scroll with board */}
+        <div className="w-[280px] shrink-0 flex flex-col min-h-0">
+          <TodoList />
+        </div>
+      </div>
     </div>
   )
 }
