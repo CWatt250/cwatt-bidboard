@@ -53,3 +53,12 @@ export const DUE_DATE_URGENT_CLASS = 'text-red-600 font-semibold'
 
 /** Text class applied to a bid due date that is approaching (≤ 7 days). */
 export const DUE_DATE_WARNING_CLASS = 'text-yellow-600 font-semibold'
+
+/** Badge classes for each branch. */
+export const BRANCH_BADGE_CLASSES: Record<string, string> = {
+  PSC: 'bg-sky-100 text-sky-700 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300',
+  SEA: 'bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/30 dark:text-teal-300',
+  POR: 'bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300',
+  PHX: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300',
+  SLC: 'bg-lime-100 text-lime-700 border-lime-200 dark:bg-lime-900/30 dark:text-lime-300',
+}

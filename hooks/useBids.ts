@@ -6,7 +6,7 @@ import { useFilters } from '@/contexts/filters'
 
 export type BidStatus = 'Unassigned' | 'Bidding' | 'In Progress' | 'Sent' | 'Awarded' | 'Lost'
 export type BidScope = 'Plumbing Piping' | 'HVAC Piping' | 'HVAC Ductwork' | 'Fire Stopping' | 'Equipment' | 'Other'
-export type BidBranch = 'Branch 1' | 'Branch 2' | 'Branch 3' | 'Branch 4' | 'Branch 5'
+export type BidBranch = 'PSC' | 'SEA' | 'POR' | 'PHX' | 'SLC'
 
 export interface BidLineItem {
   id: string

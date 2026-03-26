@@ -27,7 +27,15 @@ import {
 } from '@/components/ui/select'
 
 const SCOPES = ['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other'] as const
-const BRANCHES = ['Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5'] as const
+const BRANCHES = ['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const
+
+const BRANCH_LABELS: Record<string, string> = {
+  PSC: 'Pasco, WA',
+  SEA: 'Seattle, WA',
+  POR: 'Portland, OR',
+  PHX: 'Phoenix, AZ',
+  SLC: 'Salt Lake City, UT',
+}
 
 const lineItemSchema = z.object({
   client: z.string().min(1, 'Client is required'),
@@ -175,7 +183,7 @@ export function NewBidDialog() {
                     </SelectTrigger>
                     <SelectContent>
                       {BRANCHES.map((b) => (
-                        <SelectItem key={b} value={b}>{b}</SelectItem>
+                        <SelectItem key={b} value={b}>{BRANCH_LABELS[b]}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

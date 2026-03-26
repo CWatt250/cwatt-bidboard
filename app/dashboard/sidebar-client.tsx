@@ -13,7 +13,14 @@ import {
 import { useFilters, type Branch, type Scope, type Status } from '@/contexts/filters'
 import { createClient } from '@/lib/supabase/client'
 
-const BRANCHES: Branch[] = ['All', 'Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5']
+const BRANCH_OPTIONS: { value: Branch; label: string }[] = [
+  { value: 'All', label: 'All' },
+  { value: 'PSC', label: 'Pasco, WA' },
+  { value: 'SEA', label: 'Seattle, WA' },
+  { value: 'POR', label: 'Portland, OR' },
+  { value: 'PHX', label: 'Phoenix, AZ' },
+  { value: 'SLC', label: 'Salt Lake City, UT' },
+]
 const SCOPES: Scope[] = ['All', 'Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
 const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
 
@@ -65,8 +72,8 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {BRANCHES.map((b) => (
-                <SelectItem key={b} value={b} className="text-xs">{b}</SelectItem>
+              {BRANCH_OPTIONS.map((b) => (
+                <SelectItem key={b.value} value={b.value} className="text-xs">{b.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
