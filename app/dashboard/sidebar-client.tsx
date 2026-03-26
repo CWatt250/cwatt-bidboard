@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, LayoutGrid, Table2, Calendar, Settings } from 'lucide-react'
+import { LayoutDashboard, LayoutGrid, Table2, Calendar, Settings, Wrench } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -89,6 +89,18 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
             {label}
           </Link>
         ))}
+
+        <Link
+          href="/dashboard/toolbox"
+          className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+            pathname.startsWith('/dashboard/toolbox')
+              ? 'bg-primary text-primary-foreground'
+              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+          }`}
+        >
+          <Wrench size={16} />
+          Toolbox
+        </Link>
 
         {isAdmin && (
           <Link
