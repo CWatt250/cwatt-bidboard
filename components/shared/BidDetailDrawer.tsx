@@ -8,8 +8,10 @@ import { toast } from 'sonner'
 import { PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { useUserRole } from '@/contexts/userRole'
 import { SCOPE_BADGE_CLASSES, STATUS_BADGE_CLASSES } from '@/config/colors'
 import type { BidScope, BidStatus, BidLineItem } from '@/hooks/useBids'
+import type { Branch as BranchType } from '@/lib/supabase/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -120,10 +122,22 @@ function DeleteConfirmDialog({
 
 export function BidDetailDrawer() {
   const { selectedBid, profiles, closeBid, openBid } = useBidDetail()
+  const { isAdmin, isBranchManager, isEstimator, branches: userBranches } = useUserRole()
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [deleteLineItemIndex, setDeleteLineItemIndex] = useState<number | null>(null)
+
+  // Estimator dropdown options based on role
+  const estimatorProfiles = (() => {
+    if (isAdmin) return profiles
+    if (isBranchManager) {
+      return profiles.filter((p) =>
+        (p.branches ?? []).some((b) => userBranches.includes(b as BranchType))
+      )
+    }
+    return []
+  })()
 
   const {
     register,
@@ -399,28 +413,34 @@ export function BidDetailDrawer() {
                 {/* Estimator */}
                 <div className="space-y-1">
                   <Label>Estimator</Label>
-                  <Controller
-                    name="estimator_id"
-                    control={control}
-                    render={({ field }) => (
-                      <Select
-                        value={field.value ?? '__none__'}
-                        onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
-                      >
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Unassigned" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">
-                            <span className="italic text-muted-foreground">Unassigned</span>
-                          </SelectItem>
-                          {profiles.map((p) => (
-                            <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  />
+                  {isEstimator ? (
+                    <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
+                      {selectedBid?.estimator_name ?? 'Unassigned'}
+                    </div>
+                  ) : (
+                    <Controller
+                      name="estimator_id"
+                      control={control}
+                      render={({ field }) => (
+                        <Select
+                          value={field.value ?? '__none__'}
+                          onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                        >
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Unassigned" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">
+                              <span className="italic text-muted-foreground">Unassigned</span>
+                            </SelectItem>
+                            {estimatorProfiles.map((p) => (
+                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  )}
                 </div>
 
                 {/* Bid Due Date + Project Start Date */}
@@ -578,13 +598,15 @@ export function BidDetailDrawer() {
 
           {/* Footer */}
           <SheetFooter>
-            <Button
-              variant="destructive"
-              type="button"
-              onClick={() => setDeleteOpen(true)}
-            >
-              Delete Bid
-            </Button>
+            {isAdmin && (
+              <Button
+                variant="destructive"
+                type="button"
+                onClick={() => setDeleteOpen(true)}
+              >
+                Delete Bid
+              </Button>
+            )}
             <div className="flex-1" />
             <SheetClose render={<Button variant="outline" type="button" />}>
               Cancel

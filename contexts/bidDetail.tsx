@@ -3,7 +3,7 @@
 import { createContext, useContext, useState } from 'react'
 import type { Bid } from '@/hooks/useBids'
 
-export type BidDetailProfile = { id: string; name: string }
+export type BidDetailProfile = { id: string; name: string; branches?: string[] }
 
 interface BidDetailState {
   selectedBid: Bid | null
