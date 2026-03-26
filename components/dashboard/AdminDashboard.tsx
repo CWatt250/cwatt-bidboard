@@ -51,21 +51,36 @@ function MetricCard({
   subtext?: string
   accent?: 'green' | 'blue'
 }) {
+  const valueColor =
+    accent === 'green'
+      ? 'var(--green)'
+      : accent === 'blue'
+      ? 'var(--accent2)'
+      : 'var(--text)'
   return (
-    <div className="bg-card border rounded-lg p-4">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        padding: '16px',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
+      <p style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{label}</p>
       <p
-        className={`text-2xl font-bold mt-1 ${
-          accent === 'green'
-            ? 'text-emerald-600 dark:text-emerald-400'
-            : accent === 'blue'
-            ? 'text-blue-600 dark:text-blue-400'
-            : ''
-        }`}
+        style={{
+          fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+          fontSize: '1.5rem',
+          fontWeight: 600,
+          marginTop: '4px',
+          color: valueColor,
+          letterSpacing: '-0.5px',
+        }}
       >
         {value}
       </p>
-      {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}
+      {subtext && <p style={{ color: 'var(--text3)', fontSize: '0.72rem', marginTop: '4px' }}>{subtext}</p>}
     </div>
   )
 }
@@ -140,10 +155,10 @@ function BranchPerformanceChart({
                 <span className="font-semibold">{formatCurrency(item.pipelineValue)}</span>
               </div>
             </div>
-            <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface2)' }}>
               <div
-                className="h-full bg-primary rounded-full transition-all duration-500"
-                style={{ width: `${pct}%` }}
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #38bdf8, #0ea5e9)' }}
               />
             </div>
           </div>
@@ -183,7 +198,7 @@ function ScopeDonut({
           style={{ background: `conic-gradient(${gradient})` }}
         />
         {/* Donut hole */}
-        <div className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-card flex items-center justify-center">
+        <div className="absolute inset-0 m-auto w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'var(--surface)' }}>
           <span className="text-xs font-semibold">{total}</span>
         </div>
       </div>

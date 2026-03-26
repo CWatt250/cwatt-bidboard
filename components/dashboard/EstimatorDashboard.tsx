@@ -33,17 +33,31 @@ function MetricCard({
   subtext?: string
   accent?: 'green' | 'default'
 }) {
+  const valueColor = accent === 'green' ? 'var(--green)' : 'var(--text)'
   return (
-    <div className="bg-card border rounded-lg p-4">
-      <p className="text-xs text-muted-foreground font-medium uppercase tracking-wide">{label}</p>
+    <div
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius)',
+        padding: '16px',
+        boxShadow: 'var(--shadow-sm)',
+      }}
+    >
+      <p style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{label}</p>
       <p
-        className={`text-2xl font-bold mt-1 ${
-          accent === 'green' ? 'text-emerald-600 dark:text-emerald-400' : ''
-        }`}
+        style={{
+          fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+          fontSize: '1.5rem',
+          fontWeight: 600,
+          marginTop: '4px',
+          color: valueColor,
+          letterSpacing: '-0.5px',
+        }}
       >
         {value}
       </p>
-      {subtext && <p className="text-xs text-muted-foreground mt-1">{subtext}</p>}
+      {subtext && <p style={{ color: 'var(--text3)', fontSize: '0.72rem', marginTop: '4px' }}>{subtext}</p>}
     </div>
   )
 }
