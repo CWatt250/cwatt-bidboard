@@ -31,8 +31,8 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
   const { resource: bid } = event
   const urgency = getUrgencyClasses(event.start)
 
-  const scopeClass = SCOPE_BADGE_CLASSES[bid.scope]
   const statusClass = STATUS_BADGE_CLASSES[bid.status]
+  const uniqueScopes = [...new Set((bid.line_items ?? []).map((li) => li.scope))]
 
   return (
     <>
@@ -45,9 +45,14 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
       >
         <span className="block font-medium truncate">{bid.project_name}</span>
         <span className="flex gap-1 mt-0.5 flex-wrap">
-          <span className={`inline-block rounded border px-1 text-[10px] leading-tight ${scopeClass}`}>
-            {bid.scope}
-          </span>
+          {uniqueScopes.slice(0, 2).map((scope) => (
+            <span
+              key={scope}
+              className={`inline-block rounded border px-1 text-[10px] leading-tight ${SCOPE_BADGE_CLASSES[scope]}`}
+            >
+              {scope}
+            </span>
+          ))}
           <span className={`inline-block rounded border px-1 text-[10px] leading-tight ${statusClass}`}>
             {bid.status}
           </span>
