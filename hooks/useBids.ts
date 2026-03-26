@@ -4,36 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useFilters } from '@/contexts/filters'
 
-export type BidStatus = 'Unassigned' | 'Bidding' | 'In Progress' | 'Sent' | 'Awarded' | 'Lost'
-export type BidScope = 'Plumbing Piping' | 'HVAC Piping' | 'HVAC Ductwork' | 'Fire Stopping' | 'Equipment' | 'Other'
-export type BidBranch = 'PSC' | 'SEA' | 'POR' | 'PHX' | 'SLC'
-
-export interface BidLineItem {
-  id: string
-  bid_id: string
-  client: string
-  scope: BidScope
-  price: number | null
-  created_at: string
-  updated_at: string
-}
-
-export interface Bid {
-  id: string
-  project_name: string
-  branch: BidBranch
-  estimator_id: string | null
-  estimator_name: string | null
-  status: BidStatus
-  bid_due_date: string
-  project_start_date: string | null
-  notes: string | null
-  created_at: string
-  updated_at: string
-  // Joined fields
-  line_items?: BidLineItem[]
-  total_price?: number // computed: sum of all line item prices
-}
+// Re-export types from canonical location for backwards compatibility
+export type { BidStatus, BidScope, BidBranch, BidLineItem, Bid } from '@/lib/supabase/types'
+import type { Bid, BidLineItem } from '@/lib/supabase/types'
 
 interface UseBidsResult {
   bids: Bid[]
