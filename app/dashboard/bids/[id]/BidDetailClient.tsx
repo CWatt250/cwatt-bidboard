@@ -428,7 +428,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </Link>
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
-              <h1 className="text-2xl font-bold leading-tight">{bid.project_name}</h1>
+              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.4px', lineHeight: 1.2 }}>{bid.project_name}</h1>
               <Badge
                 className={STATUS_BADGE_CLASSES[bid.status]}
                 variant="outline"
@@ -445,17 +445,38 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         {/* Status Change Buttons */}
         {nextStatuses.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {nextStatuses.map((next) => (
-              <Button
-                key={next}
-                size="sm"
-                variant="outline"
-                disabled={changingStatus !== null}
-                onClick={() => handleStatusChange(next)}
-              >
-                {changingStatus === next ? 'Updating…' : `→ ${next}`}
-              </Button>
-            ))}
+            {nextStatuses.map((next) => {
+              const statusColors: Record<string, { bg: string; text: string; shadow: string }> = {
+                'Bidding':     { bg: 'linear-gradient(135deg, #38bdf8, #0ea5e9)', text: 'white', shadow: '0 4px 14px rgba(56,189,248,0.35)' },
+                'In Progress': { bg: 'linear-gradient(135deg, #fbbf24, #f59e0b)', text: 'white', shadow: '0 4px 14px rgba(245,158,11,0.35)' },
+                'Sent':        { bg: 'linear-gradient(135deg, #34d399, #10b981)', text: 'white', shadow: '0 4px 14px rgba(16,185,129,0.35)' },
+                'Awarded':     { bg: 'linear-gradient(135deg, #6ee7b7, #10b981)', text: 'white', shadow: '0 4px 14px rgba(16,185,129,0.35)' },
+                'Lost':        { bg: 'linear-gradient(135deg, #fca5a5, #ef4444)', text: 'white', shadow: '0 4px 14px rgba(239,68,68,0.35)' },
+              }
+              const c = statusColors[next] ?? { bg: 'var(--surface2)', text: 'var(--text2)', shadow: 'none' }
+              return (
+                <button
+                  key={next}
+                  disabled={changingStatus !== null}
+                  onClick={() => handleStatusChange(next)}
+                  style={{
+                    padding: '6px 16px',
+                    borderRadius: '100px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: changingStatus !== null ? 'not-allowed' : 'pointer',
+                    background: c.bg,
+                    color: c.text,
+                    border: 'none',
+                    boxShadow: c.shadow,
+                    transition: 'all 150ms ease',
+                    opacity: changingStatus !== null ? 0.7 : 1,
+                  }}
+                >
+                  {changingStatus === next ? 'Updating…' : `→ ${next}`}
+                </button>
+              )
+            })}
           </div>
         )}
       </div>
@@ -685,9 +706,9 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 </Button>
 
                 {/* Running Total */}
-                <div className="flex items-center justify-end pt-1 border-t">
-                  <span className="text-sm text-muted-foreground mr-2">Total:</span>
-                  <span className="text-sm font-semibold">
+                <div className="flex items-center justify-end pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+                  <span style={{ color: 'var(--text3)', fontSize: '0.8rem', marginRight: 8 }}>Total:</span>
+                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 700, color: 'var(--accent2)', fontSize: '0.95rem' }}>
                     {hasAnyPrice ? formatCurrency(totalPreview) : 'TBD'}
                   </span>
                 </div>
@@ -735,13 +756,13 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
                 {/* Notes List (newest first) */}
                 {notes.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No notes yet.</p>
+                  <p style={{ color: 'var(--text3)', fontSize: '0.875rem', fontStyle: 'italic' }}>No notes yet.</p>
                 ) : (
-                  <ul className="space-y-2.5 max-h-64 overflow-y-auto">
+                  <ul style={{ maxHeight: 256, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
                     {notes.map((note) => (
-                      <li key={note.id} className="text-sm border-b pb-2 last:border-b-0">
-                        <p className="leading-snug">{note.text}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
+                      <li key={note.id} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid var(--border)' }} className="last:border-b-0 last:mb-0 last:pb-0">
+                        <p style={{ fontSize: '0.8rem', lineHeight: 1.4, color: 'var(--text)' }}>{note.text}</p>
+                        <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 3 }}>
                           {note.author_name ?? 'Unknown'} · {formatDateTime(note.created_at)}
                         </p>
                       </li>
@@ -758,15 +779,25 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               </CardHeader>
               <CardContent>
                 {activity.length === 0 ? (
-                  <p className="text-sm text-muted-foreground italic">No activity yet.</p>
+                  <p style={{ color: 'var(--text3)', fontSize: '0.875rem', fontStyle: 'italic' }}>No activity yet.</p>
                 ) : (
-                  <ul className="space-y-2.5 max-h-72 overflow-y-auto">
+                  <ul style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {activity.map((entry) => (
-                      <li key={entry.id} className="text-sm border-b pb-2 last:border-b-0">
-                        <p className="leading-snug">{entry.action}</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          {entry.author_name ?? 'System'} · {formatDateTime(entry.created_at)}
-                        </p>
+                      <li key={entry.id} style={{ display: 'flex', gap: 10, paddingBottom: 12, borderBottom: '1px solid var(--border)', marginBottom: 0 }} className="last:border-b-0">
+                        <div style={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: '50%',
+                          background: 'var(--accent)',
+                          flexShrink: 0,
+                          marginTop: 5,
+                        }} />
+                        <div>
+                          <p style={{ fontSize: '0.8rem', lineHeight: 1.4, color: 'var(--text)' }}>{entry.action}</p>
+                          <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+                            {entry.author_name ?? 'System'} · {formatDateTime(entry.created_at)}
+                          </p>
+                        </div>
                       </li>
                     ))}
                   </ul>
@@ -783,23 +814,27 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 <CardTitle>Quick Stats</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Total Bid Value</span>
-                  <span className="font-semibold">
+                <div className="flex justify-between items-center">
+                  <span style={{ color: 'var(--text3)' }}>Total Bid Value</span>
+                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 600, color: 'var(--accent2)' }}>
                     {(bid.total_price ?? 0) > 0 ? formatCurrency(bid.total_price ?? 0) : 'TBD'}
                   </span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Line Items</span>
-                  <span className="font-semibold">{bid.line_items?.length ?? 0}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Clients</span>
-                  <span className="font-semibold">{uniqueClients}</span>
+                <div className="flex justify-between items-center">
+                  <span style={{ color: 'var(--text3)' }}>Line Items</span>
+                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 600, color: 'var(--text)' }}>{bid.line_items?.length ?? 0}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-muted-foreground">Days Until Due</span>
-                  <span className={`font-semibold ${dueDateClass(days)}`}>
+                  <span style={{ color: 'var(--text3)' }}>Clients</span>
+                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 600, color: 'var(--text)' }}>{uniqueClients}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span style={{ color: 'var(--text3)' }}>Days Until Due</span>
+                  <span style={{
+                    fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                    fontWeight: 700,
+                    color: days <= 3 ? 'var(--red)' : days <= 7 ? 'var(--yellow)' : 'var(--green)',
+                  }}>
                     {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
                   </span>
                 </div>
@@ -813,8 +848,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
                 <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Bid ID</p>
-                  <p className="font-mono text-xs break-all">{bid.id}</p>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginBottom: 2 }}>Bid ID</p>
+                  <p style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontSize: '0.7rem', color: 'var(--text2)', wordBreak: 'break-all' }}>{bid.id}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground mb-0.5">Created</p>
