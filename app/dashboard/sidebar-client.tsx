@@ -14,7 +14,7 @@ import { useFilters, type Branch, type Scope, type Status } from '@/contexts/fil
 import { createClient } from '@/lib/supabase/client'
 
 const BRANCHES: Branch[] = ['All', 'Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5']
-const SCOPES: Scope[] = ['All', 'Ductwork', 'Piping', 'Firestop', 'Combo']
+const SCOPES: Scope[] = ['All', 'Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
 const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent']
 
 const navLinks = [

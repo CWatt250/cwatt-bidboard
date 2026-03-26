@@ -5,8 +5,8 @@ import { Draggable } from '@hello-pangea/dnd'
 import { Card, CardContent, CardFooter } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
+import { useBidDetail } from '@/contexts/bidDetail'
 import type { Bid } from '@/hooks/useBids'
 import { SCOPE_BADGE_CLASSES, DUE_DATE_URGENT_CLASS, DUE_DATE_WARNING_CLASS } from '@/config/colors'
 
@@ -32,7 +32,7 @@ interface BidCardProps {
 }
 
 export function BidCard({ bid, index, currentUserId }: BidCardProps) {
-  const [drawerOpen, setDrawerOpen] = useState(false)
+  const { openBid } = useBidDetail()
   const [claiming, setClaiming] = useState(false)
 
   async function handleClaim(e: React.MouseEvent) {
@@ -56,7 +56,7 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
             {...provided.draggableProps}
             {...provided.dragHandleProps}
             className={snapshot.isDragging ? 'opacity-80 rotate-1' : ''}
-            onClick={() => setDrawerOpen(true)}
+            onClick={() => openBid(bid)}
           >
             <Card className="cursor-pointer hover:ring-2 hover:ring-primary/30 transition-all select-none">
               <CardContent className="space-y-2 pt-0">
@@ -96,16 +96,6 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
         )}
       </Draggable>
 
-      <Dialog open={drawerOpen} onOpenChange={setDrawerOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{bid.project_name}</DialogTitle>
-          </DialogHeader>
-          <div className="py-6 text-center text-muted-foreground">
-            Bid Detail Coming Soon
-          </div>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }

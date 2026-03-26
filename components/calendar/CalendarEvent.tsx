@@ -1,13 +1,7 @@
 'use client'
 
-import { useState } from 'react'
 import { differenceInCalendarDays, startOfToday } from 'date-fns'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { useBidDetail } from '@/contexts/bidDetail'
 import { SCOPE_BADGE_CLASSES, STATUS_BADGE_CLASSES } from '@/config/colors'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
 
@@ -33,7 +27,7 @@ function getUrgencyClasses(dueDate: Date): { bg: string; text: string } {
 }
 
 export default function CalendarEventComponent({ event }: CalendarEventProps) {
-  const [open, setOpen] = useState(false)
+  const { openBid } = useBidDetail()
   const { resource: bid } = event
   const urgency = getUrgencyClasses(event.start)
 
@@ -46,7 +40,7 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
         className={`w-full text-left px-1 py-0.5 rounded text-xs leading-tight ${urgency.bg} ${urgency.text}`}
         onClick={(e) => {
           e.stopPropagation()
-          setOpen(true)
+          openBid(bid)
         }}
       >
         <span className="block font-medium truncate">{bid.project_name}</span>
@@ -60,14 +54,6 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
         </span>
       </button>
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Bid Detail Coming Soon</DialogTitle>
-          </DialogHeader>
-          <p className="text-muted-foreground">{bid.project_name}</p>
-        </DialogContent>
-      </Dialog>
     </>
   )
 }
