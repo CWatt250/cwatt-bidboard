@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { FiltersProvider } from '@/contexts/filters'
+import { BidDetailProvider } from '@/contexts/bidDetail'
 import { Sidebar, TopBar } from './sidebar-client'
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -18,11 +19,13 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <FiltersProvider>
-      <Sidebar profiles={profiles ?? []} />
-      <TopBar userName={userName} />
-      <main className="ml-60 mt-14 p-6 min-h-screen">
-        {children}
-      </main>
+      <BidDetailProvider profiles={profiles ?? []}>
+        <Sidebar profiles={profiles ?? []} />
+        <TopBar userName={userName} />
+        <main className="ml-60 mt-14 p-6 min-h-screen">
+          {children}
+        </main>
+      </BidDetailProvider>
     </FiltersProvider>
   )
 }
