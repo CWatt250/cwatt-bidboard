@@ -14,6 +14,7 @@ import {
   ChevronRightIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/activity'
 import { useBid } from '@/hooks/useBid'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
@@ -271,26 +272,43 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       return
     }
 
-    // Delete line items that were removed
+    // Delete line items that were removed and log each removal
     const formIds = new Set(values.line_items.map((li) => li.id).filter(Boolean))
-    const deletedIds = (bid.line_items ?? [])
-      .map((li) => li.id)
-      .filter((id) => !formIds.has(id))
+    const deletedLineItems = (bid.line_items ?? []).filter((li) => !formIds.has(li.id))
 
-    if (deletedIds.length > 0) {
-      await supabase.from('bid_line_items').delete().in('id', deletedIds)
+    if (deletedLineItems.length > 0) {
+      await supabase
+        .from('bid_line_items')
+        .delete()
+        .in('id', deletedLineItems.map((li) => li.id))
+
+      if (profile) {
+        await Promise.all(
+          deletedLineItems.map((li) =>
+            logActivity(bidId, profile.id, `Removed ${li.scope} line item for ${li.client}`)
+          )
+        )
+      }
     }
 
-    // Log estimator change if applicable (silently; table may not exist yet)
+    // Log newly added line items (those without an existing id)
+    if (profile) {
+      const newItems = values.line_items.filter((li) => !li.id)
+      await Promise.all(
+        newItems.map((li) =>
+          logActivity(bidId, profile.id, `Added ${li.scope} line item for ${li.client}`)
+        )
+      )
+    }
+
+    // Log estimator change if applicable
     if (profile && values.estimator_id !== prevEstimatorId) {
       const newProfile = profiles.find((p) => p.id === values.estimator_id)
       const newName = newProfile?.name ?? 'Unknown'
       const action = prevEstimatorId
         ? `Reassigned to ${newName}`
         : `Assigned to ${newName}`
-      await supabase
-        .from('bid_activity')
-        .insert({ bid_id: bidId, user_id: profile.id, action })
+      await logActivity(bidId, profile.id, action)
     }
 
     setSaving(false)
@@ -314,14 +332,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       return
     }
 
-    // Log status change (silently; table may not exist yet)
-    await supabase
-      .from('bid_activity')
-      .insert({
-        bid_id: bidId,
-        user_id: profile.id,
-        action: `Status changed from ${prevStatus} to ${newStatus}`,
-      })
+    await logActivity(bidId, profile.id, `Status changed from ${prevStatus} to ${newStatus}`)
 
     setChangingStatus(null)
     toast.success(`Status updated to ${newStatus}.`)
@@ -344,10 +355,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       return
     }
 
-    // Log note added (silently; table may not exist yet)
-    await supabase
-      .from('bid_activity')
-      .insert({ bid_id: bidId, user_id: profile.id, action: 'Added a note' })
+    await logActivity(bidId, profile.id, 'Added a note')
 
     setNoteText('')
     setAddingNote(false)
