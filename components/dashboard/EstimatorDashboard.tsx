@@ -2,6 +2,7 @@
 
 import { useDashboard } from '@/hooks/useDashboard'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { TodoList } from '@/components/workspace/TodoList'
 import { STATUS_BADGE_CLASSES, DUE_DATE_URGENT_CLASS, DUE_DATE_WARNING_CLASS } from '@/config/colors'
 import type { Bid } from '@/lib/supabase/types'
 
@@ -181,10 +182,7 @@ export function EstimatorDashboard() {
 
       {/* Right column */}
       <div className="space-y-4">
-        <div className="bg-card border rounded-lg p-4">
-          <h2 className="text-sm font-semibold mb-1">To-Do List</h2>
-          <p className="text-xs text-muted-foreground">Coming in Phase 6G</p>
-        </div>
+        <TodoList />
       </div>
     </div>
   )
