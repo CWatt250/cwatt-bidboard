@@ -289,7 +289,7 @@ export function AdminDashboard() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+      <div className="error-card">
         Failed to load dashboard: {error}
       </div>
     )

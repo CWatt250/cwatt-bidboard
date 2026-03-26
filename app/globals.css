@@ -309,6 +309,42 @@ textarea:focus {
   border-color: var(--border) !important;
 }
 
+/* ── Skeleton pulse: consistent shimmer ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-pulse {
+  background: linear-gradient(
+    90deg,
+    var(--surface2) 25%,
+    var(--border) 50%,
+    var(--surface2) 75%
+  ) !important;
+  background-size: 200% 100% !important;
+  animation: shimmer 1.5s ease-in-out infinite !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+/* ── Page fade-in transition ── */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+main > * {
+  animation: fadeIn 200ms ease forwards;
+}
+
+/* ── Error card: red-tinted ── */
+.error-card {
+  background: var(--red-light);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: var(--radius);
+  color: var(--red);
+  padding: 16px;
+  font-size: 0.875rem;
+}
+
 /* Print styles */
 @media print {
   body {

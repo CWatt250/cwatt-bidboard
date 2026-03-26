@@ -73,13 +73,24 @@ export default function KanbanPage() {
         {/* Left: Kanban board — horizontally scrollable */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           {loading && (
-            <div className="flex items-center justify-center h-40 text-muted-foreground text-sm">
-              Loading bids…
+            <div style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 16 }}>
+              {[...Array(6)].map((_, i) => (
+                <div
+                  key={i}
+                  className="animate-pulse"
+                  style={{
+                    width: 288,
+                    flexShrink: 0,
+                    height: 280,
+                    borderRadius: 'var(--radius)',
+                  }}
+                />
+              ))}
             </div>
           )}
 
           {error && (
-            <div className="rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div className="error-card">
               Error loading bids: {error}
             </div>
           )}
