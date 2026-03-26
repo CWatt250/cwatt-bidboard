@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutGrid, Table2, Calendar } from 'lucide-react'
+import { LayoutGrid, Table2, Calendar, Settings } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -11,16 +11,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useFilters, type Branch, type Scope, type Status } from '@/contexts/filters'
+import { useUserRole } from '@/contexts/userRole'
 import { createClient } from '@/lib/supabase/client'
+import { BRANCH_LABELS } from '@/lib/supabase/types'
+import type { Branch as BranchType } from '@/lib/supabase/types'
 
-const BRANCH_OPTIONS: { value: Branch; label: string }[] = [
-  { value: 'All', label: 'All' },
-  { value: 'PSC', label: 'Pasco, WA' },
-  { value: 'SEA', label: 'Seattle, WA' },
-  { value: 'POR', label: 'Portland, OR' },
-  { value: 'PHX', label: 'Phoenix, AZ' },
-  { value: 'SLC', label: 'Salt Lake City, UT' },
-]
+const ALL_BRANCHES: BranchType[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const SCOPES: Scope[] = ['All', 'Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
 const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
 
@@ -39,6 +35,37 @@ interface Profile {
 export function Sidebar({ profiles }: { profiles: Profile[] }) {
   const pathname = usePathname()
   const { branch, estimator, scope, status, setBranch, setEstimator, setScope, setStatus } = useFilters()
+  const { isAdmin, isBranchManager, isEstimator, branches: userBranches, loading } = useUserRole()
+
+  // Build branch options based on role
+  const branchOptions: { value: Branch; label: string }[] = (() => {
+    if (loading) return []
+    if (isAdmin) {
+      return [
+        { value: 'All', label: 'All Branches' },
+        ...ALL_BRANCHES.map((b) => ({ value: b as Branch, label: BRANCH_LABELS[b] })),
+      ]
+    }
+    if (isBranchManager) {
+      return [
+        { value: 'All', label: 'All My Branches' },
+        ...userBranches.map((b) => ({ value: b as Branch, label: BRANCH_LABELS[b] })),
+      ]
+    }
+    // Estimator: only their branches, no "All" option
+    return userBranches.map((b) => ({ value: b as Branch, label: BRANCH_LABELS[b] }))
+  })()
+
+  // Build estimator options based on role
+  const estimatorOptions: Profile[] = (() => {
+    if (isAdmin) return profiles
+    if (isBranchManager) {
+      return profiles.filter((p) =>
+        p.branches?.some((pb) => userBranches.includes(pb as BranchType))
+      )
+    }
+    return []
+  })()
 
   return (
     <aside className="fixed inset-y-0 left-0 w-60 bg-card border-r flex flex-col z-10">
@@ -61,6 +88,20 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
             {label}
           </Link>
         ))}
+
+        {isAdmin && (
+          <Link
+            href="/dashboard/admin"
+            className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              pathname === '/dashboard/admin'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <Settings size={16} />
+            Admin
+          </Link>
+        )}
       </nav>
 
       <div className="px-4 py-4 border-t space-y-3 flex-1 overflow-y-auto">
@@ -73,27 +114,29 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {BRANCH_OPTIONS.map((b) => (
+              {branchOptions.map((b) => (
                 <SelectItem key={b.value} value={b.value} className="text-xs">{b.label}</SelectItem>
               ))}
             </SelectContent>
           </Select>
         </div>
 
-        <div className="space-y-1">
-          <label className="text-xs text-muted-foreground">Estimator</label>
-          <Select value={estimator} onValueChange={(v) => setEstimator(v ?? 'All')}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="All" className="text-xs">All</SelectItem>
-              {profiles.map((p) => (
-                <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {!isEstimator && (
+          <div className="space-y-1">
+            <label className="text-xs text-muted-foreground">Estimator</label>
+            <Select value={estimator} onValueChange={(v) => setEstimator(v ?? 'All')}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="All" className="text-xs">All</SelectItem>
+                {estimatorOptions.map((p) => (
+                  <SelectItem key={p.id} value={p.id} className="text-xs">{p.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-1">
           <label className="text-xs text-muted-foreground">Scope</label>
