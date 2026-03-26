@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, LayoutGrid, Table2, Calendar, Settings, Wrench } from 'lucide-react'
+import { LayoutDashboard, LayoutGrid, Table2, Calendar, Settings, Wrench, BarChart2 } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -102,11 +102,25 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
           Toolbox
         </Link>
 
+        {isBranchManager && (
+          <Link
+            href="/dashboard/admin/reports"
+            className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+              pathname === '/dashboard/admin/reports'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted hover:text-foreground'
+            }`}
+          >
+            <BarChart2 size={16} />
+            Reports
+          </Link>
+        )}
+
         {isAdmin && (
           <Link
             href="/dashboard/admin"
             className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-              pathname === '/dashboard/admin'
+              pathname.startsWith('/dashboard/admin')
                 ? 'bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-muted hover:text-foreground'
             }`}
