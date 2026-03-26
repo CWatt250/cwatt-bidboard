@@ -53,9 +53,19 @@ const lineItemSchema = z.object({
   price: z.string().optional(),
 })
 
+const BRANCHES = ['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const
+
+const BRANCH_LABELS: Record<string, string> = {
+  PSC: 'Pasco, WA',
+  SEA: 'Seattle, WA',
+  POR: 'Portland, OR',
+  PHX: 'Phoenix, AZ',
+  SLC: 'Salt Lake City, UT',
+}
+
 const bidDetailSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
-  branch: z.enum(['Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5']),
+  branch: z.enum(['PSC', 'SEA', 'POR', 'PHX', 'SLC']),
   status: z.enum(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']),
   estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
@@ -350,8 +360,8 @@ export function BidDetailDrawer() {
                             <SelectValue placeholder="Select branch" />
                           </SelectTrigger>
                           <SelectContent>
-                            {(['Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5'] as const).map((b) => (
-                              <SelectItem key={b} value={b}>{b}</SelectItem>
+                            {BRANCHES.map((b) => (
+                              <SelectItem key={b} value={b}>{BRANCH_LABELS[b]}</SelectItem>
                             ))}
                           </SelectContent>
                         </Select>
