@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutGrid, Table2, Calendar, Settings } from 'lucide-react'
+import { LayoutDashboard, LayoutGrid, Table2, Calendar, Settings } from 'lucide-react'
 import {
   Select,
   SelectContent,
@@ -21,6 +21,7 @@ const SCOPES: Scope[] = ['All', 'Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork
 const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
 
 const navLinks = [
+  { href: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
   { href: '/dashboard/kanban', label: 'Kanban', Icon: LayoutGrid },
   { href: '/dashboard/spreadsheet', label: 'Spreadsheet', Icon: Table2 },
   { href: '/dashboard/calendar', label: 'Calendar', Icon: Calendar },
