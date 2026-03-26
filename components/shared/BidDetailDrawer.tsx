@@ -5,7 +5,8 @@ import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
+import { ExternalLinkIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
@@ -121,6 +122,7 @@ function DeleteConfirmDialog({
 // ─── BidDetailDrawer ──────────────────────────────────────────────────────────
 
 export function BidDetailDrawer() {
+  const router = useRouter()
   const { selectedBid, profiles, closeBid, openBid } = useBidDetail()
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches } = useUserRole()
   const [saving, setSaving] = useState(false)
@@ -329,14 +331,30 @@ export function BidDetailDrawer() {
                 </Badge>
               )}
             </div>
-            <SheetClose
-              render={
-                <Button variant="ghost" size="icon-sm" aria-label="Close" />
-              }
-            >
-              <XIcon />
-              <span className="sr-only">Close</span>
-            </SheetClose>
+            <div className="flex items-center gap-1">
+              {selectedBid && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    closeBid()
+                    router.push(`/dashboard/bids/${selectedBid.id}`)
+                  }}
+                >
+                  <ExternalLinkIcon className="size-3.5" />
+                  Open Full Page
+                </Button>
+              )}
+              <SheetClose
+                render={
+                  <Button variant="ghost" size="icon-sm" aria-label="Close" />
+                }
+              >
+                <XIcon />
+                <span className="sr-only">Close</span>
+              </SheetClose>
+            </div>
           </SheetHeader>
 
           {/* Body */}
