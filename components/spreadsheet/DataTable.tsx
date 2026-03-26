@@ -78,8 +78,8 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const updateBid = useCallback(
     async (
       id: string,
-      field: 'bid_price' | 'notes' | 'project_start_date',
-      value: string | number | null
+      field: 'notes' | 'project_start_date',
+      value: string | null
     ) => {
       const supabase = createClient()
       const { error } = await supabase.from('bids').update({ [field]: value }).eq('id', id)
@@ -120,7 +120,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
     scope: 'Scope',
     branch: 'Branch',
     estimator_name: 'Estimator',
-    bid_price: 'Bid Price',
+    total_price: 'Bid Price',
     status: 'Status',
     bid_due_date: 'Bid Due Date',
     project_start_date: 'Project Start',
