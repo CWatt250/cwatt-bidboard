@@ -7,8 +7,7 @@ import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { Button } from '@/components/ui/button'
 import type { Bid } from '@/hooks/useBids'
 
-function formatCurrencyRaw(value: number | null): string {
-  if (value === null) return 'TBD'
+function formatCurrencyRaw(value: number): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency: 'USD',
@@ -46,18 +45,24 @@ function exportToCsv(bids: Bid[]) {
     'Notes',
   ]
 
-  const rows = bids.map((bid) => [
-    bid.project_name,
-    bid.client,
-    bid.scope,
-    bid.branch,
-    bid.estimator_name ?? 'Unassigned',
-    formatCurrencyRaw(bid.bid_price),
-    bid.status,
-    formatDateRaw(bid.bid_due_date),
-    formatDateRaw(bid.project_start_date),
-    bid.notes ?? '',
-  ])
+  const rows = bids.map((bid) => {
+    const lineItems = bid.line_items ?? []
+    const clients = [...new Set(lineItems.map((li) => li.client))].join('; ')
+    const scopes = [...new Set(lineItems.map((li) => li.scope))].join('; ')
+    const hasPrice = lineItems.some((li) => li.price !== null)
+    return [
+      bid.project_name,
+      clients,
+      scopes,
+      bid.branch,
+      bid.estimator_name ?? 'Unassigned',
+      hasPrice ? formatCurrencyRaw(bid.total_price ?? 0) : 'TBD',
+      bid.status,
+      formatDateRaw(bid.bid_due_date),
+      formatDateRaw(bid.project_start_date),
+      bid.notes ?? '',
+    ]
+  })
 
   const csv = [headers, ...rows]
     .map((row) => row.map(escapeCsv).join(','))

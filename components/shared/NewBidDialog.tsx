@@ -31,7 +31,7 @@ const BRANCHES = ['Branch 1', 'Branch 2', 'Branch 3', 'Branch 4', 'Branch 5'] as
 
 const lineItemSchema = z.object({
   client: z.string().min(1, 'Client is required'),
-  scope: z.enum(SCOPES, { required_error: 'Scope is required' }),
+  scope: z.enum(SCOPES, { error: 'Scope is required' }),
   price: z.string().optional(),
 })
 
