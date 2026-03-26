@@ -33,6 +33,7 @@ const navLinks = [
 interface Profile {
   id: string
   name: string
+  branches?: string[]
 }
 
 export function Sidebar({ profiles }: { profiles: Profile[] }) {
