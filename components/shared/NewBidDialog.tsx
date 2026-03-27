@@ -169,8 +169,16 @@ type NewBidForm = z.infer<typeof newBidSchema>
 
 // ─── NewBidDialog ─────────────────────────────────────────────────────────────
 
-export function NewBidDialog({ defaultProjectName }: { defaultProjectName?: string } = {}) {
-  const [open, setOpen] = useState(false)
+interface NewBidDialogProps {
+  defaultProjectName?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenChange: externalOnOpenChange }: NewBidDialogProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = externalOpen !== undefined ? externalOpen : internalOpen
+  const setOpen = externalOnOpenChange ?? setInternalOpen
   const [submitting, setSubmitting] = useState(false)
 
   const {
@@ -192,6 +200,19 @@ export function NewBidDialog({ defaultProjectName }: { defaultProjectName?: stri
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: 'line_items' })
+
+  // Reset form with new defaultProjectName whenever the dialog opens
+  useEffect(() => {
+    if (open && defaultProjectName) {
+      reset({
+        project_name: defaultProjectName,
+        branch: '' as any,
+        bid_due_date: '',
+        notes: '',
+        line_items: [{ client: '', scopes: [], price: '' }],
+      })
+    }
+  }, [open, defaultProjectName, reset])
 
   const watchedItems = watch('line_items')
   const totalPreview = (watchedItems ?? []).reduce((sum, item) => {
@@ -260,14 +281,16 @@ export function NewBidDialog({ defaultProjectName }: { defaultProjectName?: stri
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button>
-            <PlusIcon />
-            New Bid
-          </Button>
-        }
-      />
+      {externalOpen === undefined && (
+        <DialogTrigger
+          render={
+            <Button>
+              <PlusIcon />
+              New Bid
+            </Button>
+          }
+        />
+      )}
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Bid</DialogTitle>

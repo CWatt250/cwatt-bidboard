@@ -12,10 +12,11 @@ import {
   type VisibilityState,
   type FilterFn,
 } from '@tanstack/react-table'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import {
   ChevronLeftIcon,
   ChevronRightIcon,
@@ -68,6 +69,9 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [ghostName, setGhostName] = useState('')
+  const [newBidOpen, setNewBidOpen] = useState(false)
+  const ghostInputRef = useRef<HTMLInputElement>(null)
 
   const columns = useMemo<ColumnDef<Bid>[]>(
     () =>
@@ -242,9 +246,55 @@ export function DataTable({ bids, loading }: DataTableProps) {
                 </TableRow>
               ))
             )}
+
+            {/* Ghost row — quick-add new bid */}
+            {!loading && (
+              <TableRow
+                style={{ borderTop: '2px dashed var(--border)', background: 'var(--surface)', cursor: 'text' }}
+                onClick={() => ghostInputRef.current?.focus()}
+              >
+                <TableCell style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>
+                  <input
+                    ref={ghostInputRef}
+                    type="text"
+                    value={ghostName}
+                    onChange={(e) => setGhostName(e.target.value)}
+                    placeholder="+ New Bid — start typing a project name…"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && ghostName.trim()) {
+                        setNewBidOpen(true)
+                      }
+                    }}
+                    onFocus={() => {}}
+                    style={{
+                      width: '100%',
+                      background: 'transparent',
+                      border: 'none',
+                      outline: 'none',
+                      color: ghostName ? 'var(--text)' : 'var(--text3)',
+                      fontSize: '0.8rem',
+                      fontStyle: ghostName ? 'normal' : 'italic',
+                    }}
+                  />
+                </TableCell>
+                {table.getVisibleLeafColumns().slice(1).map((col) => (
+                  <TableCell key={col.id} />
+                ))}
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </div>
+
+      {/* Hidden controlled NewBidDialog for ghost row */}
+      <NewBidDialog
+        open={newBidOpen}
+        onOpenChange={(o) => {
+          setNewBidOpen(o)
+          if (!o) setGhostName('')
+        }}
+        defaultProjectName={ghostName}
+      />
 
       {/* Footer */}
       <div className="flex items-center justify-between" style={{ fontSize: '0.8rem', color: 'var(--text3)' }}>
