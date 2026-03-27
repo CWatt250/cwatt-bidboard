@@ -1,17 +1,17 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useForm, Controller, useFieldArray } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { ExternalLinkIcon, PlusIcon, Trash2Icon, XIcon } from 'lucide-react'
+import { ExternalLinkIcon, XIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
-import { SCOPE_BADGE_CLASSES, STATUS_BADGE_CLASSES } from '@/config/colors'
-import type { BidScope, BidStatus, BidLineItem } from '@/hooks/useBids'
+import { STATUS_BADGE_CLASSES } from '@/config/colors'
+import type { BidStatus, BidLineItem } from '@/hooks/useBids'
 import type { Branch as BranchType } from '@/lib/supabase/types'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -46,17 +46,6 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const SCOPES: BidScope[] = ['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
-
-// ─── Zod Schema ───────────────────────────────────────────────────────────────
-
-const lineItemSchema = z.object({
-  id: z.string().optional(), // undefined = new row
-  client: z.string().min(1, 'Required'),
-  scope: z.enum(['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other'] as const),
-  price: z.string().optional(),
-})
-
 const BRANCHES = ['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const
 
 const BRANCH_LABELS: Record<string, string> = {
@@ -75,7 +64,6 @@ const bidDetailSchema = z.object({
   bid_due_date: z.string().min(1, 'Bid due date is required'),
   project_start_date: z.string().optional(),
   notes: z.string().optional(),
-  line_items: z.array(lineItemSchema).min(1, 'At least one line item is required'),
 })
 
 type BidDetailForm = z.infer<typeof bidDetailSchema>
@@ -129,7 +117,6 @@ export function BidDetailDrawer() {
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  const [deleteLineItemIndex, setDeleteLineItemIndex] = useState<number | null>(null)
 
   // Estimator dropdown options based on role
   const estimatorProfiles = (() => {
@@ -147,13 +134,10 @@ export function BidDetailDrawer() {
     handleSubmit,
     control,
     reset,
-    watch,
     formState: { errors },
   } = useForm<BidDetailForm>({
     resolver: zodResolver(bidDetailSchema),
   })
-
-  const { fields, append, remove } = useFieldArray({ control, name: 'line_items' })
 
   // Re-populate form whenever the selected bid changes
   useEffect(() => {
@@ -166,14 +150,6 @@ export function BidDetailDrawer() {
       bid_due_date: selectedBid.bid_due_date,
       project_start_date: selectedBid.project_start_date ?? '',
       notes: selectedBid.notes ?? '',
-      line_items: (selectedBid.line_items ?? []).length > 0
-        ? (selectedBid.line_items ?? []).map((li) => ({
-            id: li.id,
-            client: li.client,
-            scope: li.scope,
-            price: li.price?.toString() ?? '',
-          }))
-        : [{ id: undefined, client: '', scope: undefined as any, price: '' }],
     })
   }, [selectedBid, reset])
 
@@ -229,16 +205,6 @@ export function BidDetailDrawer() {
     return () => { supabase.removeChannel(channel) }
   }, [selectedBid?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const watchedItems = watch('line_items') ?? []
-  const totalPreview = watchedItems.reduce((sum, item) => {
-    const p = parseFloat(item.price ?? '')
-    return sum + (isNaN(p) ? 0 : p)
-  }, 0)
-  const hasAnyPrice = watchedItems.some((item) => {
-    const p = parseFloat(item.price ?? '')
-    return !isNaN(p)
-  })
-
   async function onSubmit(values: BidDetailForm) {
     if (!selectedBid) return
     setSaving(true)
@@ -262,35 +228,6 @@ export function BidDetailDrawer() {
       setSaving(false)
       toast.error('Failed to save changes. Please try again.')
       return
-    }
-
-    // Upsert line items
-    const lineItemsToUpsert = values.line_items.map((li) => ({
-      ...(li.id ? { id: li.id } : {}),
-      bid_id: selectedBid.id,
-      client: li.client,
-      scope: li.scope,
-      price: li.price?.trim() ? parseFloat(li.price) : null,
-    }))
-
-    const { error: liError } = await supabase
-      .from('bid_line_items')
-      .upsert(lineItemsToUpsert, { onConflict: 'id' })
-
-    if (liError) {
-      setSaving(false)
-      toast.error('Failed to save line items. Please try again.')
-      return
-    }
-
-    // Delete line items that were removed (present in DB but not in form)
-    const formIds = new Set(values.line_items.map((li) => li.id).filter(Boolean))
-    const deletedIds = (selectedBid.line_items ?? [])
-      .map((li) => li.id)
-      .filter((id) => !formIds.has(id))
-
-    if (deletedIds.length > 0) {
-      await supabase.from('bid_line_items').delete().in('id', deletedIds)
     }
 
     setSaving(false)
@@ -512,120 +449,6 @@ export function BidDetailDrawer() {
                   </div>
                 </div>
 
-                {/* Line Items */}
-                <div className="space-y-2">
-                  <Label>Line Items</Label>
-                  {errors.line_items?.root && (
-                    <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
-                  )}
-
-                  <div className="border rounded-md overflow-hidden">
-                    {/* Table header */}
-                    <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                      <span>Client</span>
-                      <span>Scope</span>
-                      <span>Price</span>
-                      <span />
-                    </div>
-
-                    {/* Table rows */}
-                    {fields.map((field, index) => (
-                      <div
-                        key={field.id}
-                        className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
-                      >
-                        {/* Hidden: preserve database ID for existing rows */}
-                        <input type="hidden" {...register(`line_items.${index}.id`)} />
-                        <div>
-                          <Input
-                            {...register(`line_items.${index}.client`)}
-                            placeholder="Client"
-                            className="h-7 text-xs px-2"
-                          />
-                          {errors.line_items?.[index]?.client && (
-                            <p className="text-xs text-destructive mt-0.5">
-                              {errors.line_items[index]?.client?.message}
-                            </p>
-                          )}
-                        </div>
-
-                        <div>
-                          <Controller
-                            name={`line_items.${index}.scope`}
-                            control={control}
-                            render={({ field: scopeField }) => (
-                              <Select value={scopeField.value} onValueChange={(v) => scopeField.onChange(v)}>
-                                <SelectTrigger className="w-full h-7 text-xs">
-                                  <SelectValue placeholder="Scope" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {SCOPES.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                      <span className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}>
-                                        {s}
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                          {errors.line_items?.[index]?.scope && (
-                            <p className="text-xs text-destructive mt-0.5">
-                              {errors.line_items[index]?.scope?.message}
-                            </p>
-                          )}
-                        </div>
-
-                        <Input
-                          {...register(`line_items.${index}.price`)}
-                          type="number"
-                          step="1"
-                          min="0"
-                          placeholder="TBD"
-                          className="h-7 text-xs px-2"
-                        />
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => {
-                            if (fields.length === 1) {
-                              setDeleteLineItemIndex(index)
-                            } else {
-                              remove(index)
-                            }
-                          }}
-                          aria-label="Remove line item"
-                        >
-                          <Trash2Icon className="size-3.5 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => append({ id: undefined, client: '', scope: undefined as any, price: '' })}
-                  >
-                    <PlusIcon className="size-3.5" />
-                    Add Line Item
-                  </Button>
-
-                  {/* Running total */}
-                  <div className="flex items-center justify-end pt-1 border-t">
-                    <span className="text-sm text-muted-foreground mr-2">Total:</span>
-                    <span className="text-sm font-semibold">
-                      {hasAnyPrice
-                        ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(totalPreview)
-                        : 'TBD'}
-                    </span>
-                  </div>
-                </div>
-
                 {/* Notes */}
                 <div className="space-y-1">
                   <Label htmlFor="dd-notes">Notes (optional)</Label>
@@ -673,35 +496,6 @@ export function BidDetailDrawer() {
         />
       )}
 
-      {/* Confirmation when trying to remove the last line item */}
-      <AlertDialog
-        open={deleteLineItemIndex !== null}
-        onOpenChange={(open) => { if (!open) setDeleteLineItemIndex(null) }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove last line item?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This bid will have no line items. You can add a new one after saving.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                if (deleteLineItemIndex !== null) {
-                  remove(deleteLineItemIndex)
-                  append({ id: undefined, client: '', scope: undefined as any, price: '' })
-                  setDeleteLineItemIndex(null)
-                }
-              }}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   )
 }

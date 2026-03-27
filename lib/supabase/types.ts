@@ -43,7 +43,7 @@ export type BidBranch = Branch
 export interface BidLineItem {
   id: string
   bid_id: string
-  client: string
+  client: string | null
   scope: BidScope
   price: number | null
   created_at: string

@@ -57,7 +57,7 @@ export default function CalendarPage() {
     if (isAdmin) {
       return [
         { value: 'All', label: 'All Branches' },
-        ...ALL_BRANCHES.map((b) => ({ value: b, label: BRANCH_LABELS[b] ?? b })),
+        ...ALL_BRANCHES.map((b) => ({ value: b, label: (BRANCH_LABELS as Record<string, string>)[b] ?? b })),
       ]
     }
     if (isBranchManager) {
