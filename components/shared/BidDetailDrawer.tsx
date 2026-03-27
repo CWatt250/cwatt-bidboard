@@ -366,7 +366,7 @@ export function BidDetailDrawer() {
               className="flex flex-1 overflow-hidden"
             >
               {/* Main fields */}
-              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 w-full">
                 {/* Project Name */}
                 <div className="space-y-1">
                   <Label htmlFor="dd-project_name">Project Name</Label>
@@ -638,15 +638,6 @@ export function BidDetailDrawer() {
                 </div>
               </div>
 
-              {/* Right Sidebar — activity log placeholder */}
-              <div className="w-64 shrink-0 border-l bg-muted/30 px-4 py-4 overflow-y-auto hidden lg:block">
-                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-3">
-                  Activity
-                </p>
-                <p className="text-sm text-muted-foreground italic">
-                  Activity log coming soon
-                </p>
-              </div>
             </form>
           )}
 
