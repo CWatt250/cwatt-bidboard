@@ -72,6 +72,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const [ghostName, setGhostName] = useState('')
   const [newBidOpen, setNewBidOpen] = useState(false)
   const ghostInputRef = useRef<HTMLInputElement>(null)
+  const ghostClientRef = useRef<HTMLInputElement>(null)
 
   const columns = useMemo<ColumnDef<Bid>[]>(
     () =>
@@ -250,36 +251,70 @@ export function DataTable({ bids, loading }: DataTableProps) {
             {/* Ghost row — quick-add new bid */}
             {!loading && (
               <TableRow
-                style={{ borderTop: '2px dashed var(--border)', background: 'var(--surface)', cursor: 'text' }}
+                className="hover:bg-[var(--accent-light)] cursor-text"
+                style={{ borderTop: '2px dashed var(--accent-border)', background: 'var(--surface)' }}
                 onClick={() => ghostInputRef.current?.focus()}
               >
-                <TableCell style={{ color: 'var(--text3)', fontSize: '0.8rem' }}>
-                  <input
-                    ref={ghostInputRef}
-                    type="text"
-                    value={ghostName}
-                    onChange={(e) => setGhostName(e.target.value)}
-                    placeholder="+ New Bid — start typing a project name…"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && ghostName.trim()) {
-                        setNewBidOpen(true)
-                      }
-                    }}
-                    onFocus={() => {}}
-                    style={{
-                      width: '100%',
-                      background: 'transparent',
-                      border: 'none',
-                      outline: 'none',
-                      color: ghostName ? 'var(--text)' : 'var(--text3)',
-                      fontSize: '0.8rem',
-                      fontStyle: ghostName ? 'normal' : 'italic',
-                    }}
-                  />
-                </TableCell>
-                {table.getVisibleLeafColumns().slice(1).map((col) => (
-                  <TableCell key={col.id} />
-                ))}
+                {table.getVisibleLeafColumns().map((col, idx) => {
+                  if (idx === 0) {
+                    return (
+                      <TableCell key={col.id} style={{ color: 'var(--accent)', fontSize: '0.72rem', fontStyle: 'italic', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                        + NEW
+                      </TableCell>
+                    )
+                  }
+                  if (idx === 1) {
+                    return (
+                      <TableCell key={col.id}>
+                        <input
+                          ref={ghostInputRef}
+                          type="text"
+                          value={ghostName}
+                          onChange={(e) => {
+                            const val = e.target.value
+                            setGhostName(val)
+                            if (val.length > 0 && !newBidOpen) {
+                              setNewBidOpen(true)
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          placeholder="Start typing a project name…"
+                          style={{
+                            width: '100%',
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none',
+                            color: ghostName ? 'var(--text)' : 'var(--text3)',
+                            fontSize: '0.8rem',
+                            fontStyle: ghostName ? 'normal' : 'italic',
+                          }}
+                        />
+                      </TableCell>
+                    )
+                  }
+                  if (idx === 2) {
+                    return (
+                      <TableCell key={col.id}>
+                        <input
+                          ref={ghostClientRef}
+                          type="text"
+                          onClick={(e) => e.stopPropagation()}
+                          placeholder="Client"
+                          style={{
+                            width: '100%',
+                            background: 'transparent',
+                            border: 'none',
+                            outline: 'none',
+                            color: 'var(--text3)',
+                            fontSize: '0.8rem',
+                            fontStyle: 'italic',
+                          }}
+                        />
+                      </TableCell>
+                    )
+                  }
+                  return <TableCell key={col.id} />
+                })}
               </TableRow>
             )}
           </TableBody>
