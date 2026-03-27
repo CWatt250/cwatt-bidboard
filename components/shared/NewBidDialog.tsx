@@ -7,6 +7,8 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/contexts/userRole'
+import { useBidDetail } from '@/contexts/bidDetail'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -160,6 +162,7 @@ const lineItemSchema = z.object({
 const newBidSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
   branch: z.enum(BRANCHES, { error: 'Branch is required' }),
+  estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
   notes: z.string().optional(),
   line_items: z.array(lineItemSchema).min(1, 'At least one line item is required'),
@@ -180,6 +183,10 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
   const open = externalOpen !== undefined ? externalOpen : internalOpen
   const setOpen = externalOnOpenChange ?? setInternalOpen
   const [submitting, setSubmitting] = useState(false)
+  const [createAsUnassigned, setCreateAsUnassigned] = useState(false)
+
+  const { profile } = useUserRole()
+  const { profiles } = useBidDetail()
 
   const {
     register,
@@ -193,6 +200,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     defaultValues: {
       project_name: defaultProjectName ?? '',
       branch: '' as any,
+      estimator_id: profile?.id ?? null,
       bid_due_date: '',
       notes: '',
       line_items: [{ client: '', scopes: [], price: '' }],
@@ -203,16 +211,18 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
 
   // Reset form with new defaultProjectName whenever the dialog opens
   useEffect(() => {
-    if (open && defaultProjectName) {
+    if (open) {
+      setCreateAsUnassigned(false)
       reset({
-        project_name: defaultProjectName,
+        project_name: defaultProjectName ?? '',
         branch: '' as any,
+        estimator_id: profile?.id ?? null,
         bid_due_date: '',
         notes: '',
         line_items: [{ client: '', scopes: [], price: '' }],
       })
     }
-  }, [open, defaultProjectName, reset])
+  }, [open, defaultProjectName, profile?.id, reset])
 
   const watchedItems = watch('line_items')
   const totalPreview = (watchedItems ?? []).reduce((sum, item) => {
@@ -228,6 +238,9 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     setSubmitting(true)
     const supabase = createClient()
 
+    const status = createAsUnassigned ? 'Unassigned' : 'Bidding'
+    const estimator_id = createAsUnassigned ? null : (values.estimator_id ?? null)
+
     const { data: bidData, error: bidError } = await supabase
       .from('bids')
       .insert({
@@ -235,7 +248,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
         branch: values.branch,
         bid_due_date: values.bid_due_date,
         notes: values.notes || null,
-        status: 'Unassigned',
+        status,
+        estimator_id,
       })
       .select('id')
       .single()
@@ -269,9 +283,11 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
 
     setSubmitting(false)
     toast.success('Bid created successfully.')
+    setCreateAsUnassigned(false)
     reset({
       project_name: '',
       branch: '' as any,
+      estimator_id: profile?.id ?? null,
       bid_due_date: '',
       notes: '',
       line_items: [{ client: '', scopes: [], price: '' }],
@@ -356,6 +372,51 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
               )}
             </div>
           </div>
+
+          {/* Estimator + Create as Unassigned */}
+          {!createAsUnassigned && (
+            <div className="space-y-1">
+              <Label>Estimator</Label>
+              <Controller
+                name="estimator_id"
+                control={control}
+                render={({ field }) => {
+                  const displayName = profiles.find(p => p.id === field.value)?.name
+                  return (
+                    <Select
+                      value={field.value ?? '__none__'}
+                      onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        {displayName
+                          ? <span>{displayName}</span>
+                          : <span className="italic text-muted-foreground">Unassigned</span>
+                        }
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          <span className="italic text-muted-foreground">Unassigned</span>
+                        </SelectItem>
+                        {profiles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                }}
+              />
+            </div>
+          )}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text2)' }}>
+            <input
+              type="checkbox"
+              checked={createAsUnassigned}
+              onChange={(e) => setCreateAsUnassigned(e.target.checked)}
+              style={{ accentColor: 'var(--accent2)', width: 15, height: 15 }}
+            />
+            Create as Unassigned
+          </label>
 
           {/* Line Items */}
           <div className="space-y-2">
