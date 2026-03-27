@@ -7,10 +7,10 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 
 const DEFAULTS = {
-  totalHours: '2500',
-  hoursPerDay: '8',
-  daysPerWeek: '5',
-  durationMonths: '3',
+  totalHours: '',
+  hoursPerDay: '',
+  daysPerWeek: '',
+  durationMonths: '',
 }
 
 function parsePositive(val: string): number | null {
@@ -68,6 +68,7 @@ export default function CrewSizePage() {
                 type="number"
                 min="0"
                 step="any"
+                placeholder="0"
                 value={totalHours}
                 onChange={(e) => setTotalHours(e.target.value)}
               />
@@ -79,6 +80,7 @@ export default function CrewSizePage() {
                 type="number"
                 min="0"
                 step="any"
+                placeholder="0"
                 value={hoursPerDay}
                 onChange={(e) => setHoursPerDay(e.target.value)}
               />
@@ -90,6 +92,7 @@ export default function CrewSizePage() {
                 type="number"
                 min="0"
                 step="any"
+                placeholder="0"
                 value={daysPerWeek}
                 onChange={(e) => setDaysPerWeek(e.target.value)}
               />
@@ -101,6 +104,7 @@ export default function CrewSizePage() {
                 type="number"
                 min="0"
                 step="any"
+                placeholder="0"
                 value={durationMonths}
                 onChange={(e) => setDurationMonths(e.target.value)}
               />
@@ -164,7 +168,7 @@ export default function CrewSizePage() {
           )}
 
           <Button variant="outline" onClick={handleReset} className="w-full">
-            Reset to Defaults
+            Reset
           </Button>
         </CardContent>
       </Card>
