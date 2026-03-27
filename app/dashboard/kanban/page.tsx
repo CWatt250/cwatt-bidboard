@@ -65,7 +65,7 @@ export default function KanbanPage() {
   return (
     <div className="flex flex-col h-full gap-4 min-h-0">
       <div className="flex items-center justify-between shrink-0">
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Kanban Board</h1>
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>My Workspace</h1>
         <NewBidDialog />
       </div>
 

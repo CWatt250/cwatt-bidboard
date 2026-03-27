@@ -16,7 +16,7 @@ const ibmPlexMono = IBM_Plex_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "cwatt-bidboard",
+  title: "BidWatt",
   description: "Bid management dashboard",
 };
 

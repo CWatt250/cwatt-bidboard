@@ -22,7 +22,7 @@ const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent
 
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
-  { href: '/dashboard/kanban', label: 'Kanban', Icon: LayoutGrid },
+  { href: '/dashboard/kanban', label: 'My Workspace', Icon: LayoutGrid },
   { href: '/dashboard/spreadsheet', label: 'Spreadsheet', Icon: Table2 },
   { href: '/dashboard/calendar', label: 'Calendar', Icon: Calendar },
 ]
@@ -94,7 +94,7 @@ export function Sidebar({ profiles }: { profiles: Profile[] }) {
           <span style={{ color: 'white', fontWeight: 800, fontSize: '0.8rem' }}>B</span>
         </div>
         <span style={{ color: 'var(--sb-text)', fontWeight: 700, fontSize: '0.875rem', letterSpacing: '-0.3px' }}>
-          cwatt-bidboard
+          BidWatt
         </span>
       </div>
 
