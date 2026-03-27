@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SmartDateInput } from '@/components/ui/SmartDateInput'
 import {
   Select,
   SelectContent,
@@ -196,7 +197,18 @@ export function NewBidDialog() {
 
             <div className="space-y-1">
               <Label htmlFor="bid_due_date">Bid Due Date</Label>
-              <Input id="bid_due_date" type="date" {...register('bid_due_date')} />
+              <Controller
+                name="bid_due_date"
+                control={control}
+                render={({ field }) => (
+                  <SmartDateInput
+                    id="bid_due_date"
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                )}
+              />
               {errors.bid_due_date && (
                 <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
               )}
