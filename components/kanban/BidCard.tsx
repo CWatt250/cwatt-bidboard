@@ -87,14 +87,14 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
               ? `${provided.draggableProps.style?.transform ?? ''} rotate(1.5deg)`
               : provided.draggableProps.style?.transform,
             opacity: snapshot.isDragging ? 0.95 : 1,
-            transition: snapshot.isDragging ? undefined : 'box-shadow 150ms ease, transform 150ms ease',
+            transition: snapshot.isDragging ? undefined : 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
           }}
           onMouseEnter={(e) => {
             if (!snapshot.isDragging) {
               const el = e.currentTarget as HTMLElement
-              el.style.boxShadow = '0 4px 16px rgba(56,189,248,0.2), 0 1px 4px rgba(0,0,0,0.06)'
-              el.style.borderColor = 'var(--accent-border)'
-              el.style.transform = 'translateY(-1px)'
+              el.style.boxShadow = '0 6px 20px rgba(56,189,248,0.28), 0 2px 8px rgba(0,0,0,0.08)'
+              el.style.borderColor = 'var(--accent)'
+              el.style.transform = 'translateY(-2px)'
             }
           }}
           onMouseLeave={(e) => {
