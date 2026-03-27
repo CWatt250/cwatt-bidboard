@@ -14,6 +14,13 @@ const STATUS_COLORS: Record<BidStatus, { bg: string; border: string; text: strin
   Lost:          { bg: 'rgba(239,68,68,0.1)',    border: '#ef4444', text: '#dc2626' },
 }
 
+// Unassigned overrides — rose/red color
+const UNASSIGNED_COLORS = {
+  bg: 'rgba(251,113,133,0.12)',
+  border: '#fb7185',
+  text: '#e11d48',
+}
+
 const SCOPE_COLORS: Record<string, string> = {
   'Plumbing Piping': '#0ea5e9',
   'HVAC Piping':     '#06b6d4',
@@ -30,6 +37,13 @@ function getUrgencyStyle(dueDate: Date): React.CSSProperties {
   return {}
 }
 
+function getInitials(name: string | null | undefined): string {
+  if (!name) return ''
+  const parts = name.trim().split(/\s+/)
+  if (parts.length === 1) return parts[0].charAt(0).toUpperCase()
+  return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
+}
+
 interface CalendarEventProps {
   event: CalendarEvent
 }
@@ -37,9 +51,11 @@ interface CalendarEventProps {
 export default function CalendarEventComponent({ event }: CalendarEventProps) {
   const { openBid } = useBidDetail()
   const { resource: bid } = event
-  const statusStyle = STATUS_COLORS[bid.status] ?? STATUS_COLORS.Unassigned
+  const isUnassigned = !bid.estimator_id
+  const statusStyle = isUnassigned ? UNASSIGNED_COLORS : (STATUS_COLORS[bid.status] ?? STATUS_COLORS.Unassigned)
   const urgencyOverride = getUrgencyStyle(event.start)
   const uniqueScopes = [...new Set((bid.line_items ?? []).map((li) => li.scope))]
+  const initials = getInitials(bid.estimator_name)
 
   return (
     <button
@@ -70,22 +86,35 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
           whiteSpace: 'nowrap',
         }}
       >
-        {bid.project_name}
+        {initials ? `${initials} — ${bid.project_name}` : bid.project_name}
       </span>
-      <span style={{ display: 'flex', gap: 3, marginTop: 2, flexWrap: 'wrap' }}>
-        {uniqueScopes.slice(0, 1).map((scope) => (
-          <span
-            key={scope}
-            style={{
-              fontSize: '0.6rem',
-              fontWeight: 600,
-              color: SCOPE_COLORS[scope] ?? 'var(--text3)',
-            }}
-          >
-            {scope}
-          </span>
-        ))}
-      </span>
+
+      {isUnassigned ? (
+        <span style={{
+          display: 'block',
+          fontSize: '0.6rem',
+          fontWeight: 600,
+          color: UNASSIGNED_COLORS.text,
+          marginTop: 1,
+        }}>
+          Unassigned
+        </span>
+      ) : (
+        <span style={{ display: 'flex', gap: 3, marginTop: 2, flexWrap: 'wrap' }}>
+          {uniqueScopes.slice(0, 1).map((scope) => (
+            <span
+              key={scope}
+              style={{
+                fontSize: '0.6rem',
+                fontWeight: 600,
+                color: SCOPE_COLORS[scope] ?? 'var(--text3)',
+              }}
+            >
+              {scope}
+            </span>
+          ))}
+        </span>
+      )}
     </button>
   )
 }
