@@ -73,7 +73,7 @@ function exportToCsv(bids: Bid[]) {
   const url = URL.createObjectURL(blob)
   const link = document.createElement('a')
   link.href = url
-  link.download = `cwatt-bids-${dateStr}.csv`
+  link.download = `bidwatt-bids-${dateStr}.csv`
   link.click()
   URL.revokeObjectURL(url)
 }
@@ -84,7 +84,7 @@ export default function SpreadsheetPage() {
   return (
     <div className="flex flex-col h-full gap-4">
       <div className="flex items-center justify-between">
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Spreadsheet</h1>
+        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Bid Board</h1>
         <div className="flex items-center gap-2">
           <Button
             variant="outline"

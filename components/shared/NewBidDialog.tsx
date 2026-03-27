@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { PlusIcon, XIcon } from 'lucide-react'
+import { ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/contexts/userRole'
+import { useBidDetail } from '@/contexts/bidDetail'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -18,6 +20,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SmartDateInput } from '@/components/ui/SmartDateInput'
 import {
   Select,
   SelectContent,
@@ -37,15 +40,129 @@ const BRANCH_LABELS: Record<string, string> = {
   SLC: 'Salt Lake City, UT',
 }
 
+// ─── Multi-Scope Checkbox Dropdown ───────────────────────────────────────────
+
+interface ScopePickerProps {
+  selected: string[]
+  onChange: (scopes: string[]) => void
+  error?: boolean
+}
+
+function ScopePicker({ selected, onChange, error }: ScopePickerProps) {
+  const [open, setOpen] = useState(false)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  function toggle(scope: string) {
+    if (selected.includes(scope)) {
+      onChange(selected.filter((s) => s !== scope))
+    } else {
+      onChange([...selected, scope])
+    }
+  }
+
+  const label = selected.length === 0
+    ? 'Select scopes…'
+    : selected.join(', ')
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          width: '100%',
+          height: 32,
+          padding: '0 8px',
+          borderRadius: 8,
+          border: `1px solid ${error ? 'var(--red)' : 'var(--border)'}`,
+          background: 'var(--surface)',
+          color: selected.length === 0 ? 'var(--text3)' : 'var(--text)',
+          fontSize: '0.875rem',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 4,
+          boxShadow: error ? '0 0 0 3px var(--red-light)' : undefined,
+        }}
+      >
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.8rem' }}>
+          {label}
+        </span>
+        <ChevronDownIcon size={13} style={{ flexShrink: 0, color: 'var(--text3)' }} />
+      </button>
+
+      {open && (
+        <div style={{
+          position: 'absolute',
+          top: '100%',
+          left: 0,
+          right: 0,
+          marginTop: 4,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 8,
+          boxShadow: 'var(--shadow)',
+          zIndex: 50,
+          padding: '4px 0',
+        }}>
+          {SCOPES.map((scope) => (
+            <label
+              key={scope}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 12px',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                color: 'var(--text)',
+                background: selected.includes(scope) ? 'var(--accent-light)' : 'transparent',
+              }}
+              onMouseEnter={(e) => {
+                if (!selected.includes(scope)) (e.currentTarget as HTMLElement).style.background = 'var(--surface2)'
+              }}
+              onMouseLeave={(e) => {
+                (e.currentTarget as HTMLElement).style.background = selected.includes(scope) ? 'var(--accent-light)' : 'transparent'
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={selected.includes(scope)}
+                onChange={() => toggle(scope)}
+                style={{ accentColor: 'var(--accent2)', width: 14, height: 14, flexShrink: 0 }}
+              />
+              {scope}
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Schema ───────────────────────────────────────────────────────────────────
+
 const lineItemSchema = z.object({
   client: z.string().min(1, 'Client is required'),
-  scope: z.enum(SCOPES, { error: 'Scope is required' }),
+  scopes: z.array(z.string()).min(1, 'At least one scope required'),
   price: z.string().optional(),
 })
 
 const newBidSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
-  branch: z.enum(BRANCHES),
+  branch: z.enum(BRANCHES, { error: 'Branch is required' }),
+  estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
   notes: z.string().optional(),
   line_items: z.array(lineItemSchema).min(1, 'At least one line item is required'),
@@ -53,9 +170,23 @@ const newBidSchema = z.object({
 
 type NewBidForm = z.infer<typeof newBidSchema>
 
-export function NewBidDialog() {
-  const [open, setOpen] = useState(false)
+// ─── NewBidDialog ─────────────────────────────────────────────────────────────
+
+interface NewBidDialogProps {
+  defaultProjectName?: string
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
+}
+
+export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenChange: externalOnOpenChange }: NewBidDialogProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false)
+  const open = externalOpen !== undefined ? externalOpen : internalOpen
+  const setOpen = externalOnOpenChange ?? setInternalOpen
   const [submitting, setSubmitting] = useState(false)
+  const [createAsUnassigned, setCreateAsUnassigned] = useState(false)
+
+  const { profile } = useUserRole()
+  const { profiles } = useBidDetail()
 
   const {
     register,
@@ -67,11 +198,31 @@ export function NewBidDialog() {
   } = useForm<NewBidForm>({
     resolver: zodResolver(newBidSchema),
     defaultValues: {
-      line_items: [{ client: '', scope: undefined, price: '' }],
+      project_name: defaultProjectName ?? '',
+      branch: '' as any,
+      estimator_id: profile?.id ?? null,
+      bid_due_date: '',
+      notes: '',
+      line_items: [{ client: '', scopes: [], price: '' }],
     },
   })
 
   const { fields, append, remove } = useFieldArray({ control, name: 'line_items' })
+
+  // Reset form with new defaultProjectName whenever the dialog opens
+  useEffect(() => {
+    if (open) {
+      setCreateAsUnassigned(false)
+      reset({
+        project_name: defaultProjectName ?? '',
+        branch: '' as any,
+        estimator_id: profile?.id ?? null,
+        bid_due_date: '',
+        notes: '',
+        line_items: [{ client: '', scopes: [], price: '' }],
+      })
+    }
+  }, [open, defaultProjectName, profile?.id, reset])
 
   const watchedItems = watch('line_items')
   const totalPreview = (watchedItems ?? []).reduce((sum, item) => {
@@ -87,7 +238,9 @@ export function NewBidDialog() {
     setSubmitting(true)
     const supabase = createClient()
 
-    // Insert the parent bid first
+    const status = createAsUnassigned ? 'Unassigned' : 'Bidding'
+    const estimator_id = createAsUnassigned ? null : (values.estimator_id ?? null)
+
     const { data: bidData, error: bidError } = await supabase
       .from('bids')
       .insert({
@@ -95,7 +248,8 @@ export function NewBidDialog() {
         branch: values.branch,
         bid_due_date: values.bid_due_date,
         notes: values.notes || null,
-        status: 'Unassigned',
+        status,
+        estimator_id,
       })
       .select('id')
       .single()
@@ -108,18 +262,19 @@ export function NewBidDialog() {
 
     const bidId = bidData.id
 
-    // Insert all line items
-    const lineItemsToInsert = values.line_items.map((li) => ({
-      bid_id: bidId,
-      client: li.client,
-      scope: li.scope,
-      price: li.price?.trim() ? parseFloat(li.price) : null,
-    }))
+    // Expand: one record per client+scope combination
+    const lineItemsToInsert = values.line_items.flatMap((li) =>
+      li.scopes.map((scope) => ({
+        bid_id: bidId,
+        client: li.client,
+        scope,
+        price: li.price?.trim() ? parseFloat(li.price) / li.scopes.length : null,
+      }))
+    )
 
     const { error: liError } = await supabase.from('bid_line_items').insert(lineItemsToInsert)
 
     if (liError) {
-      // Roll back: delete the parent bid (cascade will clean up any partial line items)
       await supabase.from('bids').delete().eq('id', bidId)
       setSubmitting(false)
       toast.error('Failed to save line items. Please try again.')
@@ -128,26 +283,30 @@ export function NewBidDialog() {
 
     setSubmitting(false)
     toast.success('Bid created successfully.')
+    setCreateAsUnassigned(false)
     reset({
       project_name: '',
-      branch: undefined,
+      branch: '' as any,
+      estimator_id: profile?.id ?? null,
       bid_due_date: '',
       notes: '',
-      line_items: [{ client: '', scope: undefined, price: '' }],
+      line_items: [{ client: '', scopes: [], price: '' }],
     })
     setOpen(false)
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button>
-            <PlusIcon />
-            New Bid
-          </Button>
-        }
-      />
+      {externalOpen === undefined && (
+        <DialogTrigger
+          render={
+            <Button>
+              <PlusIcon />
+              New Bid
+            </Button>
+          }
+        />
+      )}
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>New Bid</DialogTitle>
@@ -175,7 +334,7 @@ export function NewBidDialog() {
                 control={control}
                 render={({ field }) => (
                   <Select
-                    value={field.value}
+                    value={field.value ?? ''}
                     onValueChange={(v) => field.onChange(v ?? '')}
                   >
                     <SelectTrigger className="w-full">
@@ -196,12 +355,68 @@ export function NewBidDialog() {
 
             <div className="space-y-1">
               <Label htmlFor="bid_due_date">Bid Due Date</Label>
-              <Input id="bid_due_date" type="date" {...register('bid_due_date')} />
+              <Controller
+                name="bid_due_date"
+                control={control}
+                render={({ field }) => (
+                  <SmartDateInput
+                    id="bid_due_date"
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                )}
+              />
               {errors.bid_due_date && (
                 <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
               )}
             </div>
           </div>
+
+          {/* Estimator + Create as Unassigned */}
+          {!createAsUnassigned && (
+            <div className="space-y-1">
+              <Label>Estimator</Label>
+              <Controller
+                name="estimator_id"
+                control={control}
+                render={({ field }) => {
+                  const displayName = profiles.find(p => p.id === field.value)?.name
+                  return (
+                    <Select
+                      value={field.value ?? '__none__'}
+                      onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                    >
+                      <SelectTrigger className="w-full">
+                        {displayName
+                          ? <span>{displayName}</span>
+                          : <span className="italic text-muted-foreground">Unassigned</span>
+                        }
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">
+                          <span className="italic text-muted-foreground">Unassigned</span>
+                        </SelectItem>
+                        {profiles.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )
+                }}
+              />
+            </div>
+          )}
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontSize: '0.875rem', color: 'var(--text2)' }}>
+            <input
+              type="checkbox"
+              checked={createAsUnassigned}
+              onChange={(e) => setCreateAsUnassigned(e.target.checked)}
+              style={{ accentColor: 'var(--accent2)', width: 15, height: 15 }}
+            />
+            Create as Unassigned
+          </label>
 
           {/* Line Items */}
           <div className="space-y-2">
@@ -213,7 +428,7 @@ export function NewBidDialog() {
               {/* Header row */}
               <div className="grid grid-cols-[1fr_1fr_120px_32px] gap-2 text-xs text-muted-foreground px-1">
                 <span>Client</span>
-                <span>Scope</span>
+                <span>Scope(s)</span>
                 <span>Price (optional)</span>
                 <span />
               </div>
@@ -235,27 +450,19 @@ export function NewBidDialog() {
 
                   <div>
                     <Controller
-                      name={`line_items.${index}.scope`}
+                      name={`line_items.${index}.scopes`}
                       control={control}
                       render={({ field: scopeField }) => (
-                        <Select
-                          value={scopeField.value}
-                          onValueChange={(v) => scopeField.onChange(v)}
-                        >
-                          <SelectTrigger className="w-full h-8 text-sm">
-                            <SelectValue placeholder="Select scope" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {SCOPES.map((s) => (
-                              <SelectItem key={s} value={s}>{s}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <ScopePicker
+                          selected={scopeField.value ?? []}
+                          onChange={scopeField.onChange}
+                          error={!!errors.line_items?.[index]?.scopes}
+                        />
                       )}
                     />
-                    {errors.line_items?.[index]?.scope && (
+                    {errors.line_items?.[index]?.scopes && (
                       <p className="text-xs text-destructive mt-0.5">
-                        {errors.line_items[index]?.scope?.message}
+                        At least one scope required
                       </p>
                     )}
                   </div>
@@ -287,10 +494,10 @@ export function NewBidDialog() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => append({ client: '', scope: undefined as any, price: '' })}
+              onClick={() => append({ client: '', scopes: [], price: '' })}
             >
               <PlusIcon className="size-3.5" />
-              Add Line Item
+              Add Client
             </Button>
 
             {/* Total price preview */}

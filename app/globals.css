@@ -247,6 +247,12 @@
   background-color: var(--accent2);
 }
 
+/* ── Global transition ── */
+[data-slot="button"],
+a, button {
+  transition: all 0.18s cubic-bezier(0.4,0,0.2,1) !important;
+}
+
 /* ── Primary button: gradient ── */
 [data-slot="button"]:not([data-variant]):not([class*="bg-"]),
 [data-slot="button"].bg-primary {
@@ -257,8 +263,34 @@
 }
 [data-slot="button"]:not([data-variant]):hover:not(:disabled),
 [data-slot="button"].bg-primary:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 20px rgba(56,189,248,0.4) !important;
+  transform: scale(1.02) translateY(-1px) !important;
+  box-shadow: 0 6px 20px rgba(56,189,248,0.45) !important;
+}
+
+/* ── Ghost button hover: border brightens, bg tints ── */
+[data-slot="button"][data-variant="ghost"]:hover:not(:disabled) {
+  background: var(--accent-light) !important;
+  color: var(--accent2) !important;
+}
+
+/* ── Outline button hover: border brightens ── */
+[data-slot="button"][data-variant="outline"]:hover:not(:disabled) {
+  border-color: var(--accent-border) !important;
+  background: var(--accent-light) !important;
+  color: var(--accent2) !important;
+}
+
+/* ── Table row hover: subtle tint ── */
+[data-slot="table-row"]:hover,
+tr:hover td {
+  background: var(--surface2) !important;
+}
+
+/* ── Clickable text / links: accent color + underline ── */
+a:hover:not([data-slot="button"]):not(.no-underline):not([href^="#"]) {
+  color: var(--accent2) !important;
+  text-decoration: underline !important;
+  text-underline-offset: 2px !important;
 }
 
 /* ── Inputs: rounded with light blue focus ── */
@@ -343,6 +375,16 @@ main > * {
   color: var(--red);
   padding: 16px;
   font-size: 0.875rem;
+}
+
+/* ── Remove number input spinners ── */
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
 }
 
 /* Print styles */

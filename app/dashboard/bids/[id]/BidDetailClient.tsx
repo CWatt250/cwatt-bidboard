@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { SmartDateInput } from '@/components/ui/SmartDateInput'
 import {
   Select,
   SelectContent,
@@ -166,6 +167,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   const [deleteLineItemIndex, setDeleteLineItemIndex] = useState<number | null>(null)
   const [noteText, setNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
+  const [scopeItems, setScopeItems] = useState<{ id?: string; scope: BidScope | ''; price: string }[]>([])
 
   // Estimator dropdown options based on role
   const estimatorProfiles = (() => {
@@ -201,6 +203,19 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   // Populate form when bid loads
   useEffect(() => {
     if (!bid) return
+
+    // Separate scope-only items (client=null) from regular client line items
+    const regularItems = (bid.line_items ?? []).filter((li) => li.client)
+    const scopeOnlyItems = (bid.line_items ?? []).filter((li) => !li.client)
+
+    setScopeItems(
+      scopeOnlyItems.map((li) => ({
+        id: li.id,
+        scope: li.scope,
+        price: li.price?.toString() ?? '',
+      }))
+    )
+
     reset({
       project_name: bid.project_name,
       branch: bid.branch,
@@ -208,10 +223,10 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       bid_due_date: bid.bid_due_date,
       project_start_date: bid.project_start_date ?? '',
       line_items:
-        (bid.line_items ?? []).length > 0
-          ? (bid.line_items ?? []).map((li) => ({
+        regularItems.length > 0
+          ? regularItems.map((li) => ({
               id: li.id,
-              client: li.client,
+              client: li.client!,
               scope: li.scope,
               price: li.price?.toString() ?? '',
             }))
@@ -309,6 +324,31 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         ? `Reassigned to ${newName}`
         : `Assigned to ${newName}`
       await logActivity(bidId, profile.id, action)
+    }
+
+    // Upsert scope items (client=null)
+    const validScopeItems = scopeItems.filter((si) => si.scope)
+    if (validScopeItems.length > 0) {
+      const scopeUpsert = validScopeItems.map((si) => ({
+        ...(si.id ? { id: si.id } : {}),
+        bid_id: bidId,
+        client: null as null,
+        scope: si.scope as BidScope,
+        price: si.price.trim() ? parseFloat(si.price) : null,
+      }))
+      await supabase.from('bid_line_items').upsert(scopeUpsert as any, { onConflict: 'id' })
+    }
+
+    // Delete removed scope items
+    const keptScopeIds = new Set(scopeItems.map((si) => si.id).filter(Boolean))
+    const deletedScopeItems = (bid.line_items ?? []).filter(
+      (li) => !li.client && !keptScopeIds.has(li.id)
+    )
+    if (deletedScopeItems.length > 0) {
+      await supabase
+        .from('bid_line_items')
+        .delete()
+        .in('id', deletedScopeItems.map((li) => li.id))
     }
 
     setSaving(false)
@@ -545,28 +585,37 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                     <Controller
                       name="estimator_id"
                       control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value ?? '__none__'}
-                          onValueChange={(v) =>
-                            field.onChange(v === '__none__' ? null : v)
-                          }
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              <span className="italic text-muted-foreground">Unassigned</span>
-                            </SelectItem>
-                            {estimatorProfiles.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>
-                                {p.name}
+                      render={({ field }) => {
+                        const displayName = (() => {
+                          if (!field.value) return null
+                          return (
+                            estimatorProfiles.find(p => p.id === field.value)?.name ??
+                            profiles.find(p => p.id === field.value)?.name ??
+                            null
+                          )
+                        })()
+                        return (
+                          <Select
+                            value={field.value ?? '__none__'}
+                            onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                          >
+                            <SelectTrigger className="w-full">
+                              {displayName
+                                ? <span>{displayName}</span>
+                                : <span className="italic text-muted-foreground">Unassigned</span>
+                              }
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">
+                                <span className="italic text-muted-foreground">Unassigned</span>
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
+                              {estimatorProfiles.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )
+                      }}
                     />
                   )}
                 </div>
@@ -575,10 +624,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="bd-bid_due_date">Bid Due Date</Label>
-                    <Input
-                      id="bd-bid_due_date"
-                      type="date"
-                      {...register('bid_due_date')}
+                    <Controller
+                      name="bid_due_date"
+                      control={control}
+                      render={({ field }) => (
+                        <SmartDateInput
+                          id="bd-bid_due_date"
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      )}
                     />
                     {errors.bid_due_date && (
                       <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
@@ -586,10 +642,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   </div>
                   <div className="space-y-1">
                     <Label htmlFor="bd-project_start_date">Project Start (optional)</Label>
-                    <Input
-                      id="bd-project_start_date"
-                      type="date"
-                      {...register('project_start_date')}
+                    <Controller
+                      name="project_start_date"
+                      control={control}
+                      render={({ field }) => (
+                        <SmartDateInput
+                          id="bd-project_start_date"
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      )}
                     />
                   </div>
                 </div>
@@ -712,6 +775,170 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                     {hasAnyPrice ? formatCurrency(totalPreview) : 'TBD'}
                   </span>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Scopes Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Scopes</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="border rounded-md overflow-hidden">
+                  <div className="grid grid-cols-[1fr_120px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                    <span>Scope</span>
+                    <span>Price</span>
+                    <span />
+                  </div>
+                  {scopeItems.length === 0 && (
+                    <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
+                      No scopes added yet.
+                    </div>
+                  )}
+                  {scopeItems.map((item, idx) => (
+                    <div
+                      key={item.id ?? `new-scope-${idx}`}
+                      className="grid grid-cols-[1fr_120px_36px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
+                    >
+                      <Select
+                        value={item.scope}
+                        onValueChange={(v) =>
+                          setScopeItems((prev) =>
+                            prev.map((s, i) => (i === idx ? { ...s, scope: v as BidScope } : s))
+                          )
+                        }
+                      >
+                        <SelectTrigger className="h-7 text-xs w-full">
+                          <SelectValue placeholder="Select scope" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {SCOPES.map((s) => (
+                            <SelectItem key={s} value={s}>
+                              <span className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}>
+                                {s}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        type="number"
+                        step="1"
+                        min="0"
+                        placeholder="TBD"
+                        value={item.price}
+                        onChange={(e) =>
+                          setScopeItems((prev) =>
+                            prev.map((s, i) => (i === idx ? { ...s, price: e.target.value } : s))
+                          )
+                        }
+                        className="h-7 text-xs px-2"
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => setScopeItems((prev) => prev.filter((_, i) => i !== idx))}
+                        aria-label="Remove scope"
+                      >
+                        <Trash2Icon className="size-3.5 text-destructive" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
+                >
+                  <PlusIcon className="size-3.5" />
+                  Add Scope
+                </Button>
+                {scopeItems.some((s) => s.price.trim() && !isNaN(parseFloat(s.price))) && (
+                  <div className="flex items-center justify-end pt-2" style={{ borderTop: '1px solid var(--border)' }}>
+                    <span style={{ color: 'var(--text3)', fontSize: '0.8rem', marginRight: 8 }}>Total:</span>
+                    <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 700, color: 'var(--accent2)', fontSize: '0.95rem' }}>
+                      {formatCurrency(
+                        scopeItems.reduce((sum, s) => {
+                          const p = parseFloat(s.price)
+                          return sum + (isNaN(p) ? 0 : p)
+                        }, 0)
+                      )}
+                    </span>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Bid Breakdown */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bid Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {(() => {
+                  const clientItems = (bid.line_items ?? []).filter((li) => li.client)
+                  if (clientItems.length === 0) {
+                    return (
+                      <p className="text-sm text-muted-foreground italic">
+                        No line items yet. Add clients in the Line Items section above.
+                      </p>
+                    )
+                  }
+                  const grouped = clientItems.reduce<Record<string, typeof clientItems>>(
+                    (acc, li) => {
+                      const key = li.client!
+                      if (!acc[key]) acc[key] = []
+                      acc[key].push(li)
+                      return acc
+                    },
+                    {}
+                  )
+                  const grandTotal = clientItems.reduce((sum, li) => sum + (li.price ?? 0), 0)
+                  return (
+                    <div className="border rounded-md overflow-hidden text-sm">
+                      <div className="grid grid-cols-[1fr_2fr_120px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                        <span>Client</span>
+                        <span>Scopes Bid</span>
+                        <span className="text-right">Total Bid Price</span>
+                      </div>
+                      {Object.entries(grouped).map(([client, items]) => {
+                        const clientTotal = items.reduce((sum, li) => sum + (li.price ?? 0), 0)
+                        return (
+                          <div
+                            key={client}
+                            className="grid grid-cols-[1fr_2fr_120px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
+                          >
+                            <span className="font-medium truncate">{client}</span>
+                            <div className="flex flex-wrap gap-1">
+                              {items.map((li) => (
+                                <span
+                                  key={li.id}
+                                  className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${SCOPE_BADGE_CLASSES[li.scope]}`}
+                                >
+                                  {li.scope}
+                                </span>
+                              ))}
+                            </div>
+                            <span className="text-right tabular-nums font-semibold">
+                              {clientTotal > 0 ? formatCurrency(clientTotal) : 'TBD'}
+                            </span>
+                          </div>
+                        )
+                      })}
+                      <div className="grid grid-cols-[1fr_2fr_120px] gap-2 px-3 py-2 bg-muted/30 border-t">
+                        <span className="font-semibold col-span-2">Grand Total</span>
+                        <span
+                          className="text-right tabular-nums font-bold"
+                          style={{ color: 'var(--accent2)' }}
+                        >
+                          {grandTotal > 0 ? formatCurrency(grandTotal) : 'TBD'}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })()}
               </CardContent>
             </Card>
 

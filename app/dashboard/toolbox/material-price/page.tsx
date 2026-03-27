@@ -5,8 +5,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 
-type MaterialTab = 'ductwrap' | 'ductboard' | 'acoustic'
-
 const DUCTWRAP_THICKNESSES = [
   { label: '1.5"', sqft: 400 },
   { label: '2"', sqft: 300 },
@@ -42,6 +40,22 @@ function CostResult({ costPerSqft }: { costPerSqft: number | null }) {
   )
 }
 
+const selectStyle: React.CSSProperties = {
+  height: 36,
+  padding: '0 28px 0 8px',
+  borderRadius: 8,
+  border: '1px solid var(--border)',
+  background: 'var(--surface)',
+  color: 'var(--text)',
+  fontSize: '0.875rem',
+  cursor: 'pointer',
+  appearance: 'none',
+  width: '100%',
+  backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238892b0' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+  backgroundRepeat: 'no-repeat',
+  backgroundPosition: 'right 8px center',
+}
+
 function DuctwrapCalc() {
   const [price, setPrice] = useState('')
   const [thicknessIdx, setThicknessIdx] = useState(0)
@@ -51,36 +65,41 @@ function DuctwrapCalc() {
   const costPerSqft = priceVal !== null ? priceVal / sqft : null
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Price per Roll</Label>
-          <Input
-            type="number"
-            min="0"
-            step="any"
-            placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
+    <Card>
+      <CardHeader>
+        <CardTitle>Ductwrap</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Price per Roll</Label>
+            <Input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Thickness</Label>
+            <select
+              style={selectStyle}
+              value={thicknessIdx}
+              onChange={(e) => setThicknessIdx(Number(e.target.value))}
+            >
+              {DUCTWRAP_THICKNESSES.map((t, i) => (
+                <option key={t.label} value={i}>
+                  {t.label} — {t.sqft} sqft/roll
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label>Thickness</Label>
-          <select
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            value={thicknessIdx}
-            onChange={(e) => setThicknessIdx(Number(e.target.value))}
-          >
-            {DUCTWRAP_THICKNESSES.map((t, i) => (
-              <option key={t.label} value={i}>
-                {t.label} — {t.sqft} sqft/roll
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <CostResult costPerSqft={costPerSqft} />
-    </div>
+        <CostResult costPerSqft={costPerSqft} />
+      </CardContent>
+    </Card>
   )
 }
 
@@ -93,36 +112,41 @@ function DuctboardCalc() {
   const costPerSqft = priceVal !== null ? priceVal / sqft : null
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Price per Board</Label>
-          <Input
-            type="number"
-            min="0"
-            step="any"
-            placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
+    <Card>
+      <CardHeader>
+        <CardTitle>Duct Board</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Price per Board</Label>
+            <Input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Board Size</Label>
+            <select
+              style={selectStyle}
+              value={sizeIdx}
+              onChange={(e) => setSizeIdx(Number(e.target.value))}
+            >
+              {DUCTBOARD_SIZES.map((s, i) => (
+                <option key={s.label} value={i}>
+                  {s.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label>Board Size</Label>
-          <select
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            value={sizeIdx}
-            onChange={(e) => setSizeIdx(Number(e.target.value))}
-          >
-            {DUCTBOARD_SIZES.map((s, i) => (
-              <option key={s.label} value={i}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <CostResult costPerSqft={costPerSqft} />
-    </div>
+        <CostResult costPerSqft={costPerSqft} />
+      </CardContent>
+    </Card>
   )
 }
 
@@ -135,76 +159,55 @@ function AcousticCalc() {
   const costPerSqft = priceVal !== null ? priceVal / sqft : null
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5">
-          <Label>Price per Roll</Label>
-          <Input
-            type="number"
-            min="0"
-            step="any"
-            placeholder="0.00"
-            value={price}
-            onChange={(e) => setPrice(e.target.value)}
-          />
+    <Card>
+      <CardHeader>
+        <CardTitle>Acoustic Wrap</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Price per Roll</Label>
+            <Input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Product</Label>
+            <select
+              style={selectStyle}
+              value={productIdx}
+              onChange={(e) => setProductIdx(Number(e.target.value))}
+            >
+              {ACOUSTIC_PRODUCTS.map((p, i) => (
+                <option key={p.label} value={i}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label>Product</Label>
-          <select
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
-            value={productIdx}
-            onChange={(e) => setProductIdx(Number(e.target.value))}
-          >
-            {ACOUSTIC_PRODUCTS.map((p, i) => (
-              <option key={p.label} value={i}>
-                {p.label}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-      <CostResult costPerSqft={costPerSqft} />
-    </div>
+        <CostResult costPerSqft={costPerSqft} />
+      </CardContent>
+    </Card>
   )
 }
 
-const TABS: { key: MaterialTab; label: string }[] = [
-  { key: 'ductwrap', label: 'Ductwrap' },
-  { key: 'ductboard', label: 'Duct Board' },
-  { key: 'acoustic', label: 'Acoustic Wrap' },
-]
-
 export default function MaterialPricePage() {
-  const [activeTab, setActiveTab] = useState<MaterialTab>('ductwrap')
-
   return (
-    <div className="max-w-lg space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Material Price Calculator</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex border-b">
-            {TABS.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                  activeTab === key
-                    ? 'border-primary text-foreground'
-                    : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          {activeTab === 'ductwrap' && <DuctwrapCalc />}
-          {activeTab === 'ductboard' && <DuctboardCalc />}
-          {activeTab === 'acoustic' && <AcousticCalc />}
-        </CardContent>
-      </Card>
+    <div className="space-y-6">
+      <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>
+        Material Price Calculator
+      </h1>
+      <div className="grid gap-6" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))' }}>
+        <DuctwrapCalc />
+        <DuctboardCalc />
+        <AcousticCalc />
+      </div>
     </div>
   )
 }
