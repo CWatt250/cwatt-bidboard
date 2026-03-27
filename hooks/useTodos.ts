@@ -45,20 +45,32 @@ export function useTodos(): UseTodosResult {
 
     const supabase = createClient()
     const channel = supabase
-      .channel('workspace_todos-realtime')
+      .channel(`workspace_todos-${userId}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'workspace_todos', filter: `user_id=eq.${userId}` },
+        { event: 'INSERT', schema: 'public', table: 'workspace_todos', filter: `user_id=eq.${userId}` },
         (payload) => {
-          if (payload.eventType === 'INSERT') {
-            setTodos((prev) => [...prev, payload.new as WorkspaceTodo])
-          } else if (payload.eventType === 'UPDATE') {
-            setTodos((prev) =>
-              prev.map((t) => (t.id === payload.new.id ? (payload.new as WorkspaceTodo) : t))
-            )
-          } else if (payload.eventType === 'DELETE') {
-            setTodos((prev) => prev.filter((t) => t.id !== payload.old.id))
-          }
+          setTodos((prev) => {
+            // Avoid duplicates (optimistic update may have already added it)
+            if (prev.some((t) => t.id === payload.new.id)) return prev
+            return [...prev, payload.new as WorkspaceTodo]
+          })
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'workspace_todos', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          setTodos((prev) =>
+            prev.map((t) => (t.id === payload.new.id ? (payload.new as WorkspaceTodo) : t))
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'workspace_todos', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          setTodos((prev) => prev.filter((t) => t.id !== payload.old.id))
         }
       )
       .subscribe()
@@ -72,33 +84,78 @@ export function useTodos(): UseTodosResult {
     if (!userId) return
     const trimmed = text.trim()
     if (!trimmed) return
-    const supabase = createClient()
-    await supabase.from('workspace_todos').insert({
+
+    // Optimistic: add immediately with a temp id
+    const tempId = `temp-${Date.now()}`
+    const now = new Date().toISOString()
+    const optimistic: WorkspaceTodo = {
+      id: tempId,
       user_id: userId,
       text: trimmed,
       is_completed: false,
-    })
+      created_at: now,
+      updated_at: now,
+    }
+    setTodos((prev) => [...prev, optimistic])
+
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from('workspace_todos')
+      .insert({ user_id: userId, text: trimmed, is_completed: false })
+      .select()
+      .single()
+
+    if (error || !data) {
+      // Roll back optimistic update
+      setTodos((prev) => prev.filter((t) => t.id !== tempId))
+      return
+    }
+
+    // Replace temp with real record
+    setTodos((prev) =>
+      prev.map((t) => (t.id === tempId ? (data as WorkspaceTodo) : t))
+    )
   }, [userId])
 
   const toggleTodo = useCallback(async (id: string) => {
     const todo = todos.find((t) => t.id === id)
     if (!todo) return
+    // Optimistic toggle
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, is_completed: !t.is_completed } : t))
+    )
     const supabase = createClient()
-    await supabase
+    const { error } = await supabase
       .from('workspace_todos')
       .update({ is_completed: !todo.is_completed })
       .eq('id', id)
+    if (error) {
+      // Roll back
+      setTodos((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, is_completed: todo.is_completed } : t))
+      )
+    }
   }, [todos])
 
   const clearCompleted = useCallback(async () => {
     if (!userId) return
+    const completed = todos.filter((t) => t.is_completed)
+    if (completed.length === 0) return
+    // Optimistic remove
+    setTodos((prev) => prev.filter((t) => !t.is_completed))
     const supabase = createClient()
-    await supabase
+    const { error } = await supabase
       .from('workspace_todos')
       .delete()
       .eq('user_id', userId)
       .eq('is_completed', true)
-  }, [userId])
+    if (error) {
+      // Roll back
+      setTodos((prev) => [...prev, ...completed].sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      ))
+    }
+  }, [userId, todos])
 
   return { todos, loading, addTodo, toggleTodo, clearCompleted }
 }

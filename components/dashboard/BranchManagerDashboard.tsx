@@ -3,7 +3,6 @@
 import { useState } from 'react'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useBidDetail } from '@/contexts/bidDetail'
-import { TodoList } from '@/components/workspace/TodoList'
 import { useUserRole } from '@/contexts/userRole'
 import { STATUS_BADGE_CLASSES, DUE_DATE_URGENT_CLASS, DUE_DATE_WARNING_CLASS, BRANCH_BADGE_CLASSES } from '@/config/colors'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
@@ -154,16 +153,13 @@ export function BranchManagerDashboard() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-[1fr_280px] gap-6">
-        <div className="space-y-6">
-          <div className="grid grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-            ))}
-          </div>
-          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+      <div className="space-y-6">
+        <div className="grid grid-cols-4 gap-4">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+          ))}
         </div>
-        <div className="rounded-lg h-40 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+        <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
       </div>
     )
   }
@@ -192,8 +188,8 @@ export function BranchManagerDashboard() {
   })
 
   return (
-    <div className="grid grid-cols-[1fr_280px] gap-6">
-      {/* Left / Main column */}
+    <div className="space-y-6">
+      {/* Main content */}
       <div className="space-y-6 min-w-0">
         {/* Stats row */}
         <div className="grid grid-cols-4 gap-4">
@@ -341,10 +337,6 @@ export function BranchManagerDashboard() {
         </div>
       </div>
 
-      {/* Right column */}
-      <div className="space-y-4">
-        <TodoList />
-      </div>
     </div>
   )
 }
