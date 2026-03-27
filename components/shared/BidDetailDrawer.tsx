@@ -440,24 +440,37 @@ export function BidDetailDrawer() {
                     <Controller
                       name="estimator_id"
                       control={control}
-                      render={({ field }) => (
-                        <Select
-                          value={field.value ?? '__none__'}
-                          onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
-                        >
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Unassigned" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">
-                              <span className="italic text-muted-foreground">Unassigned</span>
-                            </SelectItem>
-                            {estimatorProfiles.map((p) => (
-                              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      )}
+                      render={({ field }) => {
+                        const displayName = (() => {
+                          if (!field.value) return null
+                          return (
+                            estimatorProfiles.find(p => p.id === field.value)?.name ??
+                            profiles.find(p => p.id === field.value)?.name ??
+                            null
+                          )
+                        })()
+                        return (
+                          <Select
+                            value={field.value ?? '__none__'}
+                            onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                          >
+                            <SelectTrigger className="w-full">
+                              {displayName
+                                ? <span>{displayName}</span>
+                                : <span className="italic text-muted-foreground">Unassigned</span>
+                              }
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">
+                                <span className="italic text-muted-foreground">Unassigned</span>
+                              </SelectItem>
+                              {estimatorProfiles.map((p) => (
+                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )
+                      }}
                     />
                   )}
                 </div>
