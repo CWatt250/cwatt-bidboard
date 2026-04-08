@@ -266,23 +266,20 @@ export function AdminDashboard() {
 
   if (loading) {
     return (
-      <div className="grid grid-cols-[1fr_280px] gap-6">
-        <div className="space-y-6">
-          <div className="grid grid-cols-3 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-            ))}
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-            <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-          </div>
+      <div className="space-y-6">
+        <div className="grid grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+          ))}
         </div>
-        <div className="rounded-lg h-40 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+        </div>
       </div>
     )
   }
@@ -301,7 +298,7 @@ export function AdminDashboard() {
   })
 
   return (
-    <div className="grid grid-cols-[1fr_280px] gap-6">
+    <div className="space-y-6 min-w-0">
       {/* Main bento area */}
       <div className="space-y-6 min-w-0">
         {/* Top row — 6 metric cards in 3×2 grid */}
@@ -408,11 +405,16 @@ export function AdminDashboard() {
                         <td className="px-4 py-2 font-medium text-sm">{e.name}</td>
                         <td className="px-3 py-2">
                           {e.branch ? (
-                            <span
-                              className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[e.branch] ?? ''}`}
-                            >
-                              {e.branch}
-                            </span>
+                            <div className="flex flex-wrap gap-1">
+                              {e.branch.split(', ').map((b) => (
+                                <span
+                                  key={b}
+                                  className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[b as Branch] ?? ''}`}
+                                >
+                                  {b}
+                                </span>
+                              ))}
+                            </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
                           )}
@@ -442,14 +444,6 @@ export function AdminDashboard() {
               <ScopeDonut scopeBreakdown={scopeBreakdown} />
             </div>
           </div>
-        </div>
-      </div>
-
-      {/* Right column */}
-      <div className="space-y-4">
-        <div className="rounded-lg p-4" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
-          <h2 className="text-sm font-semibold mb-1">To-Do List</h2>
-          <p className="text-xs text-muted-foreground">Coming in Phase 6G</p>
         </div>
       </div>
     </div>

@@ -240,8 +240,8 @@ export function useDashboard(): UseDashboardResult {
       if (profileData) {
         totalActiveEstimators = profileData.length
         for (const p of profileData as any[]) {
-          const firstBranch = (p.user_branches?.[0]?.branch) ?? ''
-          profileBranches[p.id] = firstBranch
+          const branches = (p.user_branches ?? []).map((ub: any) => ub.branch).filter(Boolean)
+          profileBranches[p.id] = branches.join(', ')
         }
       }
     }
