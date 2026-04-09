@@ -87,7 +87,7 @@ const cardTitleStyle: React.CSSProperties = {
 
 // ─── SegmentedControl ───────────────────────────────────────────────────────
 
-function SegmentedControl<T extends string>({
+function SegmentedControl<T extends string | number>({
   options,
   value,
   onChange,
