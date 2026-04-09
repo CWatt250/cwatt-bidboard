@@ -98,32 +98,71 @@ export function RecentActivity() {
               <div
                 key={entry.id}
                 className="px-3 py-2 rounded-md hover:bg-muted/40 transition-colors"
+                style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}
               >
-                {/* Action text */}
-                <p className="text-xs text-foreground leading-snug">
-                  {entry.action}
-                  {entry.project_name && (
-                    <>
-                      {' '}—{' '}
-                      <Link
-                        href={`/dashboard/bids/${entry.bid_id}`}
-                        className="font-medium hover:underline"
-                        style={{ color: 'var(--accent)' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        {entry.project_name}
-                      </Link>
-                    </>
-                  )}
-                </p>
-                {/* Author + timestamp */}
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {entry.author_name ?? 'Unknown'} · {relativeTime(entry.created_at)}
-                </p>
+                {/* Activity icon */}
+                <div style={{
+                  flexShrink: 0,
+                  width: 24,
+                  height: 24,
+                  borderRadius: '50%',
+                  background: 'var(--surface2)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  marginTop: 1,
+                }}>
+                  <svg viewBox="0 0 16 16" fill="none" width={12} height={12}>
+                    <circle cx="8" cy="8" r="3" fill="var(--accent)" />
+                  </svg>
+                </div>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  {/* Action text */}
+                  <p className="text-xs text-foreground leading-snug">
+                    {entry.action}
+                    {entry.project_name && (
+                      <>
+                        {' '}—{' '}
+                        <Link
+                          href={`/dashboard/bids/${entry.bid_id}`}
+                          className="font-medium hover:underline"
+                          style={{ color: 'var(--accent)' }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          {entry.project_name}
+                        </Link>
+                      </>
+                    )}
+                  </p>
+                  {/* Author + timestamp */}
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {entry.author_name ?? 'Unknown'} · {relativeTime(entry.created_at)}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         )}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        padding: '8px 16px',
+        borderTop: '1px solid var(--border)',
+        display: 'flex',
+        justifyContent: 'flex-end',
+      }}>
+        <button style={{
+          fontSize: '0.7rem',
+          color: 'var(--accent)',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
+          padding: 0,
+          fontWeight: 500,
+        }}>
+          View all activity →
+        </button>
       </div>
     </div>
   )
