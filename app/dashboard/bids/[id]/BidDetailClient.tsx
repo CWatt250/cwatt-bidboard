@@ -568,7 +568,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <CardTitle>Scope Breakdown</CardTitle>
+                  <CardTitle className="font-bold text-[var(--text)]">Scope Breakdown</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Source of truth for scope pricing
                     {scopeItems.length > 0 && (
@@ -680,17 +680,14 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 className="flex items-center justify-end pt-2"
                 style={{ borderTop: '1px solid var(--border)' }}
               >
-                <span className="text-xs mr-2" style={{ color: 'var(--text3)' }}>
-                  Running Total:
-                </span>
                 <span
-                  className="font-bold text-sm tabular-nums"
+                  className="font-bold text-base tabular-nums"
                   style={{
                     fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                     color: 'var(--accent2)',
                   }}
                 >
-                  {scopeTotal > 0 ? formatCurrency(scopeTotal) : 'TBD'}
+                  {scopeTotal > 0 ? formatCurrency(scopeTotal) : '—'}
                 </span>
               </div>
             </CardContent>
@@ -701,7 +698,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <CardTitle>Client Bids</CardTitle>
+                  <CardTitle className="font-bold text-[var(--text)]">Client Bids</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Which clients are getting which scopes
                     {uniqueClientCount > 0 && (
@@ -776,7 +773,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 style={{ borderTop: '1px solid var(--border)' }}
               >
                 <span
-                  className="font-bold text-sm tabular-nums"
+                  className="font-bold text-base tabular-nums"
                   style={{
                     fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                     color: 'var(--accent2)',
@@ -914,7 +911,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         <div className="mt-6">
           <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
-              <CardTitle>Bid Information</CardTitle>
+              <CardTitle className="font-bold text-[var(--text)]">Bid Information</CardTitle>
             </CardHeader>
             <CardContent className="p-6">
               <div className="grid grid-cols-2 gap-6">
@@ -1066,7 +1063,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           onClick={() => setNotesOpen((o) => !o)}
         >
           <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none py-4">
-            <CardTitle>Notes</CardTitle>
+            <CardTitle className="font-bold text-[var(--text)]">Notes</CardTitle>
             {notesOpen ? (
               <ChevronUpIcon className="size-4 text-muted-foreground" />
             ) : (
@@ -1128,7 +1125,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       {activity.length > 0 && (
         <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardHeader>
-            <CardTitle>Activity</CardTitle>
+            <CardTitle className="font-bold text-[var(--text)]">Activity</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="max-h-72 overflow-y-auto">
