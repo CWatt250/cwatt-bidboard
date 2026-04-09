@@ -485,36 +485,30 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       <div className="grid grid-cols-4 gap-4">
         {/* KPI: Total Bid Value — sum of scope-only line items */}
         <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Total Bid Value
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums truncate"
+              className="text-[28px] font-bold mt-1.5 tabular-nums truncate leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color: 'var(--accent2)',
               }}
             >
-              {scopeTotal > 0 ? formatCurrency(scopeTotal) : 'TBD'}
+              {scopeTotal > 0 ? formatCurrency(scopeTotal) : '—'}
             </p>
           </CardContent>
         </Card>
 
         {/* KPI: Line Items — total count including scope-only items */}
         <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Line Items
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums"
+              className="text-[28px] font-bold mt-1.5 tabular-nums leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color: 'var(--text)',
@@ -527,15 +521,12 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
         {/* KPI: Clients — unique clients with line items */}
         <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Clients
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums"
+              className="text-[28px] font-bold mt-1.5 tabular-nums leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color: 'var(--text)',
@@ -548,23 +539,20 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
         {/* KPI: Due In — green >7d, amber ≤7d, red ≤3d or overdue */}
         <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Due In
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums truncate"
+              className="text-[28px] font-bold mt-1.5 tabular-nums truncate leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color:
                   days <= 3
-                    ? 'var(--red, #dc2626)'
+                    ? 'var(--red)'
                     : days <= 7
-                    ? 'var(--yellow, #d97706)'
-                    : 'var(--green, #16a34a)',
+                    ? 'var(--yellow)'
+                    : 'var(--green)',
               }}
             >
               {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
