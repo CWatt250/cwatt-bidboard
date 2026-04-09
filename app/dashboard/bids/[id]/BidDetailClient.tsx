@@ -344,6 +344,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     await logActivity(bidId, profile.id, `Status changed from ${prevStatus} to ${newStatus}`)
     setChangingStatus(null)
     toast.success(`Status updated to ${newStatus}.`)
+    refetch()
   }
 
   async function handleAddNote() {
@@ -482,16 +483,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       {/* ── Task 2: KPI Bar ─────────────────────────────────────────────────── */}
 
       <div className="grid grid-cols-4 gap-4">
-        <Card>
+        {/* KPI: Total Bid Value — sum of scope-only line items */}
+        <Card className="overflow-hidden">
           <CardContent className="py-4">
             <p
-              className="text-xs font-medium uppercase tracking-wide"
+              className="text-xs font-medium uppercase tracking-wide truncate"
               style={{ color: 'var(--text3)' }}
             >
               Total Bid Value
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums"
+              className="text-xl font-bold mt-1 tabular-nums truncate"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color: 'var(--accent2)',
@@ -502,10 +504,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* KPI: Line Items — total count including scope-only items */}
+        <Card className="overflow-hidden">
           <CardContent className="py-4">
             <p
-              className="text-xs font-medium uppercase tracking-wide"
+              className="text-xs font-medium uppercase tracking-wide truncate"
               style={{ color: 'var(--text3)' }}
             >
               Line Items
@@ -522,10 +525,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* KPI: Clients — unique clients with line items */}
+        <Card className="overflow-hidden">
           <CardContent className="py-4">
             <p
-              className="text-xs font-medium uppercase tracking-wide"
+              className="text-xs font-medium uppercase tracking-wide truncate"
               style={{ color: 'var(--text3)' }}
             >
               Clients
@@ -542,16 +546,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </CardContent>
         </Card>
 
-        <Card>
+        {/* KPI: Due In — green >7d, amber ≤7d, red ≤3d or overdue */}
+        <Card className="overflow-hidden">
           <CardContent className="py-4">
             <p
-              className="text-xs font-medium uppercase tracking-wide"
+              className="text-xs font-medium uppercase tracking-wide truncate"
               style={{ color: 'var(--text3)' }}
             >
               Due In
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums"
+              className="text-xl font-bold mt-1 tabular-nums truncate"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color:
