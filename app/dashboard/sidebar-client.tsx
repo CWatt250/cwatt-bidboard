@@ -238,7 +238,7 @@ export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
 
 export function TopBar({ userName }: { userName: string }) {
   const router = useRouter()
-  const { isAdmin, branches } = useUserRole()
+  const { isAdmin, branches, loading } = useUserRole()
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -274,27 +274,12 @@ export function TopBar({ userName }: { userName: string }) {
           </span>
         </div>
         <span style={{ color: 'var(--text)', fontWeight: 500, fontSize: '0.875rem' }}>{userName}</span>
-        {isAdmin ? (
-          <span
-            style={{
-              background: 'rgba(56,189,248,0.12)',
-              color: '#38bdf8',
-              fontSize: '0.6rem',
-              fontWeight: 700,
-              padding: '2px 6px',
-              borderRadius: '4px',
-              letterSpacing: '0.02em',
-            }}
-          >
-            All Branches
-          </span>
-        ) : (
-          branches.map((b) => (
+        {!loading && (
+          isAdmin ? (
             <span
-              key={b}
               style={{
-                background: 'var(--surface2)',
-                color: 'var(--text2)',
+                background: 'rgba(56,189,248,0.12)',
+                color: '#38bdf8',
                 fontSize: '0.6rem',
                 fontWeight: 700,
                 padding: '2px 6px',
@@ -302,9 +287,26 @@ export function TopBar({ userName }: { userName: string }) {
                 letterSpacing: '0.02em',
               }}
             >
-              {b}
+              All Branches
             </span>
-          ))
+          ) : branches.length > 0 ? (
+            branches.map((b) => (
+              <span
+                key={b}
+                style={{
+                  background: 'var(--surface2)',
+                  color: 'var(--text2)',
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {b}
+              </span>
+            ))
+          ) : null
         )}
       </div>
       <button
