@@ -81,7 +81,7 @@ export function TodoList() {
     <div className="bg-card border rounded-lg flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-        <h2 className="text-sm font-semibold">To-Do</h2>
+        <h2 className="text-sm font-semibold">To-Do List</h2>
         {!loading && incomplete.length > 0 && (
           <span className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-xs font-semibold bg-primary text-primary-foreground">
             {incomplete.length}
