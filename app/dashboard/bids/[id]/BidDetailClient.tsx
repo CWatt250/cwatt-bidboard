@@ -701,14 +701,73 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           {/* ── Task 4: Client Bids ── */}
           <Card>
             <CardHeader>
-              <CardTitle>Client Bids</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Which clients are getting which scopes
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Client Bids</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Which clients are getting which scopes
+                    {uniqueClientCount > 0 && (
+                      <span className="ml-1.5 text-muted-foreground/60">
+                        · {uniqueClientCount} client{uniqueClientCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {errors.line_items?.root && (
                 <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
+              )}
+
+              {/* Grouped client summary (read from saved bid data) */}
+              {clientLineItems.length > 0 && (
+                <div className="border rounded-md overflow-hidden mb-1">
+                  <div className="grid grid-cols-[1fr_2fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                    <span>Client</span>
+                    <span>Scopes Included</span>
+                    <span className="text-right">Total Bid</span>
+                  </div>
+                  {Object.entries(
+                    clientLineItems.reduce<Record<string, typeof clientLineItems>>(
+                      (acc, li) => {
+                        const key = li.client!
+                        if (!acc[key]) acc[key] = []
+                        acc[key].push(li)
+                        return acc
+                      },
+                      {}
+                    )
+                  ).map(([client, items]) => {
+                    const clientTotal = items.reduce((s, li) => s + (li.price ?? 0), 0)
+                    return (
+                      <div
+                        key={client}
+                        className="grid grid-cols-[1fr_2fr_100px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
+                      >
+                        <span className="text-sm font-medium truncate">{client}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {items.map((li) => (
+                            <span
+                              key={li.id}
+                              className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${SCOPE_BADGE_CLASSES[li.scope]}`}
+                            >
+                              {li.scope}
+                            </span>
+                          ))}
+                        </div>
+                        <span
+                          className="text-right text-sm font-semibold tabular-nums"
+                          style={{
+                            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                          }}
+                        >
+                          {clientTotal > 0 ? formatCurrency(clientTotal) : 'TBD'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
 
               <div className="border rounded-md overflow-hidden">
