@@ -21,7 +21,7 @@ interface Profile {
 
 export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
   const pathname = usePathname()
-  const { isAdmin, isBranchManager } = useUserRole()
+  const { isAdmin, isBranchManager, branches, profile } = useUserRole()
 
   return (
     <aside
@@ -186,12 +186,59 @@ export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
           )
         })()}
       </nav>
+
+      {/* User info + branch badges */}
+      {profile && (
+        <div
+          style={{ borderTop: '1px solid var(--sb-border)' }}
+          className="px-4 py-3 shrink-0"
+        >
+          <p style={{ color: 'var(--sb-text)', fontSize: '0.75rem', fontWeight: 600 }} className="truncate mb-1.5">
+            {profile.name}
+          </p>
+          <div className="flex flex-wrap gap-1">
+            {isAdmin && branches.length >= 5 ? (
+              <span
+                style={{
+                  background: 'rgba(56,189,248,0.12)',
+                  color: '#38bdf8',
+                  fontSize: '0.6rem',
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  letterSpacing: '0.02em',
+                }}
+              >
+                All Branches
+              </span>
+            ) : (
+              branches.map((b) => (
+                <span
+                  key={b}
+                  style={{
+                    background: 'var(--sb-hover)',
+                    color: 'var(--sb-text2)',
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    letterSpacing: '0.02em',
+                  }}
+                >
+                  {b}
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+      )}
     </aside>
   )
 }
 
 export function TopBar({ userName }: { userName: string }) {
   const router = useRouter()
+  const { isAdmin, branches } = useUserRole()
 
   async function handleSignOut() {
     const supabase = createClient()
@@ -227,6 +274,38 @@ export function TopBar({ userName }: { userName: string }) {
           </span>
         </div>
         <span style={{ color: 'var(--text)', fontWeight: 500, fontSize: '0.875rem' }}>{userName}</span>
+        {isAdmin && branches.length >= 5 ? (
+          <span
+            style={{
+              background: 'rgba(56,189,248,0.12)',
+              color: '#38bdf8',
+              fontSize: '0.6rem',
+              fontWeight: 700,
+              padding: '2px 6px',
+              borderRadius: '4px',
+              letterSpacing: '0.02em',
+            }}
+          >
+            All Branches
+          </span>
+        ) : (
+          branches.map((b) => (
+            <span
+              key={b}
+              style={{
+                background: 'var(--surface2)',
+                color: 'var(--text2)',
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                padding: '2px 6px',
+                borderRadius: '4px',
+                letterSpacing: '0.02em',
+              }}
+            >
+              {b}
+            </span>
+          ))
+        )}
       </div>
       <button
         onClick={handleSignOut}
