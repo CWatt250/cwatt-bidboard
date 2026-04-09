@@ -1,11 +1,9 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDashboard } from '@/hooks/useDashboard'
 import {
-  LineChart,
-  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -15,14 +13,20 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
 } from 'recharts'
 import {
   STATUS_BADGE_CLASSES,
   BRANCH_BADGE_CLASSES,
 } from '@/config/colors'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
-import type { Bid, BidScope, Branch } from '@/lib/supabase/types'
+import type { Bid, BidScope, Branch, BidStatus } from '@/lib/supabase/types'
+
+// ─── types ──────────────────────────────────────────────────────────────────
+
+export type TimeRange = 'this-month' | 'this-quarter' | 'this-year' | 'all-time'
+
+type TrendWeeks = 4 | 8 | 12
+type BranchMetric = 'Pipeline' | 'Awarded'
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -38,6 +42,24 @@ function formatCurrencyFull(value: number): string {
   return `$${value.toFixed(0)}`
 }
 
+function getTimeRangeStart(range: TimeRange): string | null {
+  if (range === 'all-time') return null
+  const now = new Date()
+  if (range === 'this-month') {
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  }
+  if (range === 'this-quarter') {
+    const qMonth = Math.floor(now.getMonth() / 3) * 3
+    return `${now.getFullYear()}-${String(qMonth + 1).padStart(2, '0')}-01`
+  }
+  if (range === 'this-year') {
+    return `${now.getFullYear()}-01-01`
+  }
+  return null
+}
+
+const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
+
 // ─── card shell ────────────────────────────────────────────────────────────
 
 const cardStyle: React.CSSProperties = {
@@ -51,12 +73,66 @@ const cardStyle: React.CSSProperties = {
 const cardHeaderStyle: React.CSSProperties = {
   padding: '10px 16px',
   borderBottom: '0.5px solid var(--border)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
 }
 
 const cardTitleStyle: React.CSSProperties = {
   fontSize: '13px',
   fontWeight: 500,
   color: 'var(--text)',
+}
+
+// ─── SegmentedControl ───────────────────────────────────────────────────────
+
+function SegmentedControl<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { label: string; value: T }[]
+  value: T
+  onChange: (v: T) => void
+}) {
+  return (
+    <div
+      style={{
+        display: 'inline-flex',
+        background: 'white',
+        border: '0.5px solid var(--border)',
+        borderRadius: '8px',
+        padding: '2px',
+        gap: '2px',
+        flexShrink: 0,
+      }}
+    >
+      {options.map((opt) => (
+        <button
+          key={opt.value}
+          onClick={() => onChange(opt.value)}
+          style={{
+            fontSize: '13px',
+            fontWeight: 500,
+            padding: '3px 10px',
+            borderRadius: '6px',
+            border:
+              value === opt.value
+                ? '0.5px solid var(--border)'
+                : '0.5px solid transparent',
+            background: value === opt.value ? 'var(--surface2)' : 'transparent',
+            color: value === opt.value ? 'var(--text)' : 'var(--text3)',
+            cursor: 'pointer',
+            transition: 'all 0.1s ease',
+            lineHeight: 1.5,
+          }}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
 }
 
 // ─── KPI card ──────────────────────────────────────────────────────────────
@@ -188,11 +264,11 @@ function ActivePipelineChart({ bids }: { bids: Bid[] }) {
 
 // ─── Pipeline Trend line chart ──────────────────────────────────────────────
 
-function getPipelineTrendData(bids: Bid[]) {
+function getPipelineTrendData(bids: Bid[], weeks: TrendWeeks) {
   const now = new Date()
-  const weeks: { label: string; weekStart: Date; weekEnd: Date }[] = []
+  const buckets: { label: string; weekStart: Date; weekEnd: Date }[] = []
 
-  for (let i = 7; i >= 0; i--) {
+  for (let i = weeks - 1; i >= 0; i--) {
     const weekStart = new Date(now)
     weekStart.setDate(now.getDate() - i * 7)
     weekStart.setHours(0, 0, 0, 0)
@@ -202,10 +278,10 @@ function getPipelineTrendData(bids: Bid[]) {
 
     const month = weekStart.toLocaleString('default', { month: 'short' })
     const day = weekStart.getDate()
-    weeks.push({ label: `${month} ${day}`, weekStart, weekEnd })
+    buckets.push({ label: `${month} ${day}`, weekStart, weekEnd })
   }
 
-  return weeks.map(({ label, weekStart, weekEnd }) => {
+  return buckets.map(({ label, weekStart, weekEnd }) => {
     const activeBids = bids.filter((b) => {
       if (b.status === 'Lost') return false
       const updatedAt = new Date(b.updated_at)
@@ -216,8 +292,8 @@ function getPipelineTrendData(bids: Bid[]) {
   })
 }
 
-function PipelineTrendChart({ bids }: { bids: Bid[] }) {
-  const data = useMemo(() => getPipelineTrendData(bids), [bids])
+function PipelineTrendChart({ bids, weeks }: { bids: Bid[]; weeks: TrendWeeks }) {
+  const data = useMemo(() => getPipelineTrendData(bids, weeks), [bids, weeks])
 
   return (
     <div style={{ padding: '8px 16px 16px' }}>
@@ -268,15 +344,36 @@ function PipelineTrendChart({ bids }: { bids: Bid[] }) {
 // ─── Branch Performance ─────────────────────────────────────────────────────
 
 function BranchPerformanceChart({
-  branchBreakdown,
+  bids,
+  metric,
 }: {
-  branchBreakdown: { branch: Branch; pipelineValue: number; activeCount: number }[]
+  bids: Bid[]
+  metric: BranchMetric
 }) {
-  const maxValue = Math.max(...branchBreakdown.map((b) => b.pipelineValue), 1)
+  const breakdown = useMemo(() => {
+    return ALL_BRANCHES.map((branch) => {
+      const branchBids = bids.filter((b) => b.branch === branch)
+      const pipelineBids = branchBids.filter(
+        (b) => b.status === 'Bidding' || b.status === 'In Progress' || b.status === 'Sent'
+      )
+      const awardedBids = branchBids.filter((b) => b.status === 'Awarded')
+      const value =
+        metric === 'Pipeline'
+          ? pipelineBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+          : awardedBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+      const activeCount = branchBids.filter(
+        (b) => b.status === 'Bidding' || b.status === 'In Progress'
+      ).length
+      return { branch, value, activeCount }
+    })
+  }, [bids, metric])
+
+  const maxValue = Math.max(...breakdown.map((b) => b.value), 1)
+
   return (
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {branchBreakdown.map((item) => {
-        const pct = Math.round((item.pipelineValue / maxValue) * 100)
+      {breakdown.map((item) => {
+        const pct = Math.round((item.value / maxValue) * 100)
         return (
           <div key={item.branch}>
             <div
@@ -308,7 +405,7 @@ function BranchPerformanceChart({
                     fontFamily: '"IBM Plex Mono", monospace',
                   }}
                 >
-                  {formatCurrency(item.pipelineValue)}
+                  {formatCurrency(item.value)}
                 </span>
               </div>
             </div>
@@ -327,7 +424,7 @@ function BranchPerformanceChart({
                   width: `${pct}%`,
                   borderRadius: '5px',
                   background: 'linear-gradient(90deg, #38bdf8, #0ea5e9)',
-                  transition: 'width 0.5s ease',
+                  transition: 'width 300ms ease',
                 }}
               />
             </div>
@@ -474,11 +571,27 @@ function getDueDateBadge(
   return { label, bg: '#EAF3DE', color: '#3B6D11' }
 }
 
-function RecentBidsTable({ bids }: { bids: Bid[] }) {
-  const router = useRouter()
-  const rows = bids.slice(0, 8)
+const BID_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
 
-  if (rows.length === 0) {
+function RecentBidsTable({
+  bids,
+  statusFilter,
+  branchFilter,
+}: {
+  bids: Bid[]
+  statusFilter: string
+  branchFilter: string
+}) {
+  const router = useRouter()
+
+  const filtered = useMemo(() => {
+    let result = bids
+    if (statusFilter !== 'all') result = result.filter((b) => b.status === statusFilter)
+    if (branchFilter !== 'all') result = result.filter((b) => b.branch === branchFilter)
+    return result.slice(0, 8)
+  }, [bids, statusFilter, branchFilter])
+
+  if (filtered.length === 0) {
     return (
       <p style={{ padding: '24px 16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text3)' }}>
         No bids found.
@@ -511,7 +624,7 @@ function RecentBidsTable({ bids }: { bids: Bid[] }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((bid) => {
+          {filtered.map((bid) => {
             const clients = [...new Set((bid.line_items ?? []).map((li) => li.client).filter(Boolean))]
             const dueBadge = getDueDateBadge(bid.bid_due_date)
             return (
@@ -594,8 +707,38 @@ function RecentBidsTable({ bids }: { bids: Bid[] }) {
 
 // ─── AdminDashboard ─────────────────────────────────────────────────────────
 
-export function AdminDashboard() {
-  const { stats, recentBids, allBids, branchBreakdown, loading, error } = useDashboard()
+const selectStyle: React.CSSProperties = {
+  fontSize: '13px',
+  fontWeight: 500,
+  padding: '3px 8px',
+  borderRadius: '6px',
+  border: '0.5px solid var(--border)',
+  background: 'white',
+  color: 'var(--text)',
+  cursor: 'pointer',
+  outline: 'none',
+  appearance: 'auto',
+}
+
+export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeRange }) {
+  const { allBids, loading, error } = useDashboard()
+
+  // Step 2: Pipeline trend range
+  const [trendWeeks, setTrendWeeks] = useState<TrendWeeks>(8)
+
+  // Step 3: Branch metric toggle
+  const [branchMetric, setBranchMetric] = useState<BranchMetric>('Pipeline')
+
+  // Step 4: Recent bids filters
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [branchFilter, setBranchFilter] = useState<string>('all')
+
+  // Filter allBids by global timeRange (for charts + KPIs)
+  const filteredBids = useMemo(() => {
+    const start = getTimeRangeStart(timeRange)
+    if (!start) return allBids
+    return allBids.filter((b) => b.updated_at >= start)
+  }, [allBids, timeRange])
 
   if (loading) {
     return (
@@ -626,44 +769,40 @@ export function AdminDashboard() {
     return <div className="error-card">Failed to load dashboard: {error}</div>
   }
 
-  // ── KPI calculations ────────────────────────────────────────────────────
-  const now = new Date()
-  const yearStart = `${now.getFullYear()}-01-01`
-  const ninetyDaysAgo = new Date(now)
-  ninetyDaysAgo.setDate(now.getDate() - 90)
-  const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().slice(0, 10)
-
-  const totalSecuredValue = allBids
-    .filter((b) => b.status === 'Awarded' && b.updated_at >= yearStart)
+  // ── KPI calculations (from filteredBids) ────────────────────────────────
+  const totalSecuredValue = filteredBids
+    .filter((b) => b.status === 'Awarded')
     .reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-  const totalSecuredJobs = allBids.filter(
-    (b) => b.status === 'Awarded' && b.updated_at >= yearStart
+  const totalSecuredJobs = filteredBids.filter((b) => b.status === 'Awarded').length
+
+  const openBidsCount = filteredBids.filter(
+    (b) => b.status === 'Bidding' || b.status === 'In Progress'
   ).length
 
-  const openBidsCount = stats?.activeCount ?? 0
-  const sentThisMonth = stats?.sentThisMonth ?? 0
+  const sentCount = filteredBids.filter((b) => b.status === 'Sent').length
 
-  // Win rate — Awarded / (Awarded + Lost) where updated_at in last 90 days
-  const awardedLast90 = allBids.filter(
-    (b) => b.status === 'Awarded' && b.updated_at >= ninetyDaysAgoStr
-  ).length
-  const lostLast90 = allBids.filter(
-    (b) => b.status === 'Lost' && b.updated_at >= ninetyDaysAgoStr
-  ).length
-  const winRateDenominator = awardedLast90 + lostLast90
+  const awardedCount = filteredBids.filter((b) => b.status === 'Awarded').length
+  const lostCount = filteredBids.filter((b) => b.status === 'Lost').length
+  const winRateDenominator = awardedCount + lostCount
   const winRate =
     winRateDenominator > 0
-      ? Math.round((awardedLast90 / winRateDenominator) * 100)
+      ? Math.round((awardedCount / winRateDenominator) * 100)
       : null
+
+  const timeRangeLabel =
+    timeRange === 'this-month' ? 'This Month'
+    : timeRange === 'this-quarter' ? 'This Quarter'
+    : timeRange === 'this-year' ? 'This Year'
+    : 'All Time'
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* ── Row 1: KPI cards ─────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
         <KpiCard
-          label="Total Secured (YTD)"
+          label="Total Secured"
           value={formatCurrency(totalSecuredValue)}
-          subtext={`${totalSecuredJobs} jobs`}
+          subtext={`${totalSecuredJobs} jobs · ${timeRangeLabel}`}
         />
         <KpiCard
           label="Open Bids"
@@ -671,14 +810,14 @@ export function AdminDashboard() {
           subtext="Bidding + In Progress"
         />
         <KpiCard
-          label="Bids Sent (This Month)"
-          value={sentThisMonth}
-          subtext="Status updated this month"
+          label="Bids Sent"
+          value={sentCount}
+          subtext={timeRangeLabel}
         />
         <KpiCard
           label="Win Rate"
           value={winRate !== null ? `${winRate}%` : '—'}
-          subtext="Last 90 days"
+          subtext={`${awardedCount}W / ${lostCount}L · ${timeRangeLabel}`}
         />
       </div>
 
@@ -686,22 +825,35 @@ export function AdminDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div style={cardStyle}>
           <div style={cardHeaderStyle}>
-            <p style={cardTitleStyle}>Active Pipeline</p>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-              Total bid value by stage
-            </p>
+            <div>
+              <p style={cardTitleStyle}>Active Pipeline</p>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+                Total bid value by stage
+              </p>
+            </div>
           </div>
-          <ActivePipelineChart bids={allBids} />
+          <ActivePipelineChart bids={filteredBids} />
         </div>
 
         <div style={cardStyle}>
           <div style={cardHeaderStyle}>
-            <p style={cardTitleStyle}>Pipeline Trend</p>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-              Active bid value — last 8 weeks
-            </p>
+            <div>
+              <p style={cardTitleStyle}>Pipeline Trend</p>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+                Active bid value — last {trendWeeks} weeks
+              </p>
+            </div>
+            <SegmentedControl<TrendWeeks>
+              options={[
+                { label: '4W', value: 4 },
+                { label: '8W', value: 8 },
+                { label: '12W', value: 12 },
+              ]}
+              value={trendWeeks}
+              onChange={setTrendWeeks}
+            />
           </div>
-          <PipelineTrendChart bids={allBids} />
+          <PipelineTrendChart bids={filteredBids} weeks={trendWeeks} />
         </div>
       </div>
 
@@ -709,40 +861,74 @@ export function AdminDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
         <div style={cardStyle}>
           <div style={cardHeaderStyle}>
-            <p style={cardTitleStyle}>Branch Performance</p>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-              Pipeline value by branch
-            </p>
+            <div>
+              <p style={cardTitleStyle}>Branch Performance</p>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+                {branchMetric === 'Pipeline' ? 'Pipeline value' : 'Awarded value'} by branch
+              </p>
+            </div>
+            <SegmentedControl<BranchMetric>
+              options={[
+                { label: 'Pipeline', value: 'Pipeline' },
+                { label: 'Awarded', value: 'Awarded' },
+              ]}
+              value={branchMetric}
+              onChange={setBranchMetric}
+            />
           </div>
-          {branchBreakdown.every((b) => b.pipelineValue === 0) ? (
-            <p style={{ padding: '24px 16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text3)' }}>
-              No active bids.
-            </p>
-          ) : (
-            <BranchPerformanceChart branchBreakdown={branchBreakdown} />
-          )}
+          <BranchPerformanceChart bids={filteredBids} metric={branchMetric} />
         </div>
 
         <div style={cardStyle}>
           <div style={cardHeaderStyle}>
-            <p style={cardTitleStyle}>Revenue by Scope</p>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-              Awarded bids grouped by scope
-            </p>
+            <div>
+              <p style={cardTitleStyle}>Revenue by Scope</p>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+                Awarded bids grouped by scope
+              </p>
+            </div>
           </div>
-          <RevenueByScope bids={allBids} />
+          <RevenueByScope bids={filteredBids} />
         </div>
       </div>
 
       {/* ── Row 4: Recent Bids ───────────────────────────────────────── */}
       <div style={cardStyle}>
         <div style={cardHeaderStyle}>
-          <p style={cardTitleStyle}>Recent Bids</p>
-          <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-            8 most recent, sorted by last updated
-          </p>
+          <div>
+            <p style={cardTitleStyle}>Recent Bids</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+              Up to 8 bids, sorted by last updated
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <select
+              style={selectStyle}
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+            >
+              <option value="all">All Statuses</option>
+              {BID_STATUSES.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
+              style={selectStyle}
+              value={branchFilter}
+              onChange={(e) => setBranchFilter(e.target.value)}
+            >
+              <option value="all">All Branches</option>
+              {ALL_BRANCHES.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
         </div>
-        <RecentBidsTable bids={recentBids} />
+        <RecentBidsTable
+          bids={allBids}
+          statusFilter={statusFilter}
+          branchFilter={branchFilter}
+        />
       </div>
     </div>
   )
