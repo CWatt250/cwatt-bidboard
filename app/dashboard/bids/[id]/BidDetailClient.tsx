@@ -13,6 +13,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  LayersIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -592,8 +593,19 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 </div>
 
                 {scopeItems.length === 0 && (
-                  <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
-                    No scopes added yet.
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <LayersIcon className="size-8 text-muted-foreground/30" />
+                    <p className="text-sm font-medium" style={{ color: 'var(--text3)' }}>No scopes yet</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-1"
+                      style={{ background: 'var(--accent2)', color: '#fff' }}
+                      onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
+                    >
+                      <PlusIcon className="size-3.5" />
+                      Add First Scope
+                    </Button>
                   </div>
                 )}
 
@@ -655,15 +667,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 ))}
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
-              >
-                <PlusIcon className="size-3.5" />
-                Add Scope
-              </Button>
+              {scopeItems.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
+                >
+                  <PlusIcon className="size-3.5" />
+                  Add Scope
+                </Button>
+              )}
 
               {/* Running Total */}
               <div
