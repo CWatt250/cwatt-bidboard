@@ -153,6 +153,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   const [addingNote, setAddingNote] = useState(false)
   const [scopeItems, setScopeItems] = useState<{ id?: string; scope: BidScope | ''; price: string }[]>([])
   const [notesOpen, setNotesOpen] = useState(false)
+  const [clientsEditOpen, setClientsEditOpen] = useState(false)
 
   const estimatorProfiles = (() => {
     if (isAdmin) return profiles
@@ -722,15 +723,19 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
               )}
 
-              {/* Grouped client summary (read from saved bid data) */}
-              {clientLineItems.length > 0 && (
-                <div className="border rounded-md overflow-hidden mb-1">
-                  <div className="grid grid-cols-[1fr_2fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                    <span>Client</span>
-                    <span>Scopes Included</span>
-                    <span className="text-right">Total Bid</span>
+              {/* Summary table — always visible */}
+              <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_2fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span>Client</span>
+                  <span>Scopes Included</span>
+                  <span className="text-right">Total Bid</span>
+                </div>
+                {clientLineItems.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
+                    No clients added yet.
                   </div>
-                  {Object.entries(
+                ) : (
+                  Object.entries(
                     clientLineItems.reduce<Record<string, typeof clientLineItems>>(
                       (acc, li) => {
                         const key = li.client!
@@ -760,127 +765,21 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                         </div>
                         <span
                           className="text-right text-sm font-semibold tabular-nums"
-                          style={{
-                            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-                          }}
+                          style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
                         >
-                          {clientTotal > 0 ? formatCurrency(clientTotal) : 'TBD'}
+                          {clientTotal > 0 ? formatCurrency(clientTotal) : '—'}
                         </span>
                       </div>
                     )
-                  })}
-                </div>
-              )}
-
-              <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                  <span>Client</span>
-                  <span>Scope</span>
-                  <span>Price</span>
-                  <span />
-                </div>
-
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
-                  >
-                    <input type="hidden" {...register(`line_items.${index}.id`)} />
-
-                    <div>
-                      <Input
-                        {...register(`line_items.${index}.client`)}
-                        placeholder="Client"
-                        className="h-7 text-xs px-2"
-                      />
-                      {errors.line_items?.[index]?.client && (
-                        <p className="text-xs text-destructive mt-0.5">
-                          {errors.line_items[index]?.client?.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Controller
-                        name={`line_items.${index}.scope`}
-                        control={control}
-                        render={({ field: scopeField }) => (
-                          <Select
-                            value={scopeField.value}
-                            onValueChange={scopeField.onChange}
-                          >
-                            <SelectTrigger className="w-full h-7 text-xs">
-                              <SelectValue placeholder="Scope" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {SCOPES.map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  <span
-                                    className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
-                                  >
-                                    {s}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                      {errors.line_items?.[index]?.scope && (
-                        <p className="text-xs text-destructive mt-0.5">
-                          {errors.line_items[index]?.scope?.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <Input
-                      {...register(`line_items.${index}.price`)}
-                      type="number"
-                      step="1"
-                      min="0"
-                      placeholder="TBD"
-                      className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => {
-                        if (fields.length === 1) {
-                          setDeleteLineItemIndex(index)
-                        } else {
-                          remove(index)
-                        }
-                      }}
-                      aria-label="Remove client bid"
-                    >
-                      <Trash2Icon className="size-3.5 text-destructive" />
-                    </Button>
-                  </div>
-                ))}
+                  })
+                )}
               </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  append({ id: undefined, client: '', scope: undefined as any, price: '' })
-                }
-              >
-                <PlusIcon className="size-3.5" />
-                Add Client
-              </Button>
 
               {/* Running Total */}
               <div
-                className="flex items-center justify-end pt-2"
+                className="flex items-center justify-end pt-1"
                 style={{ borderTop: '1px solid var(--border)' }}
               >
-                <span className="text-xs mr-2" style={{ color: 'var(--text3)' }}>
-                  Running Total:
-                </span>
                 <span
                   className="font-bold text-sm tabular-nums"
                   style={{
@@ -888,8 +787,129 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                     color: 'var(--accent2)',
                   }}
                 >
-                  {clientRunningTotal > 0 ? formatCurrency(clientRunningTotal) : 'TBD'}
+                  {clientRunningTotal > 0 ? formatCurrency(clientRunningTotal) : '—'}
                 </span>
+              </div>
+
+              {/* Collapsible edit section */}
+              <div className="border rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium bg-muted/40 hover:bg-muted/60 transition-colors"
+                  onClick={() => setClientsEditOpen((o) => !o)}
+                >
+                  <span style={{ color: 'var(--text2)' }}>Edit Client Scopes</span>
+                  {clientsEditOpen ? (
+                    <ChevronUpIcon className="size-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDownIcon className="size-3.5 text-muted-foreground" />
+                  )}
+                </button>
+
+                {clientsEditOpen && (
+                  <div>
+                    <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground border-t border-b">
+                      <span>Client</span>
+                      <span>Scope</span>
+                      <span>Price</span>
+                      <span />
+                    </div>
+
+                    {fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
+                      >
+                        <input type="hidden" {...register(`line_items.${index}.id`)} />
+
+                        <div>
+                          <Input
+                            {...register(`line_items.${index}.client`)}
+                            placeholder="Client"
+                            className="h-7 text-xs px-2"
+                          />
+                          {errors.line_items?.[index]?.client && (
+                            <p className="text-xs text-destructive mt-0.5">
+                              {errors.line_items[index]?.client?.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <Controller
+                            name={`line_items.${index}.scope`}
+                            control={control}
+                            render={({ field: scopeField }) => (
+                              <Select
+                                value={scopeField.value}
+                                onValueChange={scopeField.onChange}
+                              >
+                                <SelectTrigger className="w-full h-7 text-xs">
+                                  <SelectValue placeholder="Scope" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {SCOPES.map((s) => (
+                                    <SelectItem key={s} value={s}>
+                                      <span
+                                        className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
+                                      >
+                                        {s}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                          {errors.line_items?.[index]?.scope && (
+                            <p className="text-xs text-destructive mt-0.5">
+                              {errors.line_items[index]?.scope?.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <Input
+                          {...register(`line_items.${index}.price`)}
+                          type="number"
+                          step="1"
+                          min="0"
+                          placeholder="—"
+                          className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (fields.length === 1) {
+                              setDeleteLineItemIndex(index)
+                            } else {
+                              remove(index)
+                            }
+                          }}
+                          aria-label="Remove client bid"
+                        >
+                          <Trash2Icon className="size-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+
+                    <div className="px-3 py-2 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          append({ id: undefined, client: '', scope: undefined as any, price: '' })
+                        }
+                      >
+                        <PlusIcon className="size-3.5" />
+                        Add Client
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
