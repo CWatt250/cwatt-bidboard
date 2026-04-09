@@ -174,16 +174,18 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
             Due: {new Date(bid.bid_due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
           </div>
 
-          {/* Price */}
-          <div style={{
-            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-            fontSize: '0.8rem',
-            fontWeight: 600,
-            color: hasPrice ? 'var(--accent2)' : 'var(--text3)',
-            marginBottom: bid.status === 'Unassigned' ? 8 : 0,
-          }}>
-            {totalPriceDisplay}
-          </div>
+          {/* Price — only for In Progress, Sent, Awarded */}
+          {(bid.status === 'In Progress' || bid.status === 'Sent' || bid.status === 'Awarded') && (
+            <div style={{
+              fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              color: hasPrice ? 'var(--accent2)' : 'var(--text3)',
+              marginBottom: 0,
+            }}>
+              {totalPriceDisplay}
+            </div>
+          )}
 
           {/* Claim button */}
           {bid.status === 'Unassigned' && (

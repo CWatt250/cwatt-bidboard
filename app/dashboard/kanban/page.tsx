@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { KanbanColumn } from '@/components/kanban/KanbanColumn'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { TodoList } from '@/components/workspace/TodoList'
+import { RecentActivity } from '@/components/workspace/RecentActivity'
 import { useBids, type Bid, type BidStatus } from '@/hooks/useBids'
 import { createClient } from '@/lib/supabase/client'
 
@@ -111,9 +112,14 @@ export default function KanbanPage() {
           )}
         </div>
 
-        {/* Right: To-Do sidebar — fixed width, does not scroll with board */}
-        <div className="w-[280px] shrink-0 flex flex-col min-h-0">
-          <TodoList />
+        {/* Right: sidebar — fixed width, does not scroll with board */}
+        <div className="w-[280px] shrink-0 flex flex-col gap-4 min-h-0 overflow-y-auto">
+          <div className="shrink-0">
+            <TodoList />
+          </div>
+          <div className="shrink-0">
+            <RecentActivity />
+          </div>
         </div>
       </div>
     </div>
