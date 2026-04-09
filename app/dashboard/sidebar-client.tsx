@@ -274,7 +274,7 @@ export function TopBar({ userName }: { userName: string }) {
           </span>
         </div>
         <span style={{ color: 'var(--text)', fontWeight: 500, fontSize: '0.875rem' }}>{userName}</span>
-        {isAdmin && branches.length >= 5 ? (
+        {isAdmin ? (
           <span
             style={{
               background: 'rgba(56,189,248,0.12)',
