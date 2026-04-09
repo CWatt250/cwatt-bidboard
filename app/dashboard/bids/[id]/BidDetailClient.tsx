@@ -413,7 +413,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl space-y-5 pb-20">
+    <div className="max-w-7xl space-y-5 pb-20 bg-[var(--bg)]">
 
       {/* ── Task 1: Header ─────────────────────────────────────────────────── */}
 
@@ -484,7 +484,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
       <div className="grid grid-cols-4 gap-4">
         {/* KPI: Total Bid Value — sum of scope-only line items */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardContent className="py-4">
             <p
               className="text-xs font-medium uppercase tracking-wide truncate"
@@ -505,7 +505,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         </Card>
 
         {/* KPI: Line Items — total count including scope-only items */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardContent className="py-4">
             <p
               className="text-xs font-medium uppercase tracking-wide truncate"
@@ -526,7 +526,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         </Card>
 
         {/* KPI: Clients — unique clients with line items */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardContent className="py-4">
             <p
               className="text-xs font-medium uppercase tracking-wide truncate"
@@ -547,7 +547,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         </Card>
 
         {/* KPI: Due In — green >7d, amber ≤7d, red ≤3d or overdue */}
-        <Card className="overflow-hidden">
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardContent className="py-4">
             <p
               className="text-xs font-medium uppercase tracking-wide truncate"
@@ -579,7 +579,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         <div className="grid grid-cols-2 gap-6">
 
           {/* ── Task 3: Scope Breakdown ── */}
-          <Card>
+          <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -595,7 +595,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-6">
               <div className="border rounded-md overflow-hidden">
                 <div className="grid grid-cols-[1fr_140px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
                   <span>Scope</span>
@@ -699,7 +699,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </Card>
 
           {/* ── Task 4: Client Bids ── */}
-          <Card>
+          <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
@@ -715,7 +715,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-6">
               {errors.line_items?.root && (
                 <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
               )}
@@ -895,11 +895,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
         {/* Bid Information (project metadata) */}
         <div className="mt-6">
-          <Card>
+          <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
               <CardTitle>Bid Information</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-6">
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-4">
                   <div className="space-y-1">
@@ -1042,7 +1042,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
       {/* ── Task 5: Notes (collapsible, collapsed by default) ────────────────── */}
 
-      <Card>
+      <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
         <button
           type="button"
           className="w-full text-left"
@@ -1109,7 +1109,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
       {/* Activity — only rendered when entries exist */}
       {activity.length > 0 && (
-        <Card>
+        <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardHeader>
             <CardTitle>Activity</CardTitle>
           </CardHeader>
