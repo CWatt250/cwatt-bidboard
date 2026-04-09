@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useDashboard } from '@/hooks/useDashboard'
 import { useBidDetail } from '@/contexts/bidDetail'
 import {
@@ -85,12 +86,13 @@ function MetricCard({
   )
 }
 
-function BidRow({ bid, onClick }: { bid: Bid; onClick: () => void }) {
+function BidRow({ bid }: { bid: Bid }) {
+  const router = useRouter()
   const clients = [...new Set((bid.line_items ?? []).map((li) => li.client).filter(Boolean))]
   return (
     <button
-      onClick={onClick}
-      className="w-full text-left px-3 py-3 hover:bg-muted/60 transition-colors border-b last:border-b-0"
+      onClick={() => router.push(`/dashboard/bids/${bid.id}`)}
+      className="w-full text-left px-3 py-3 hover:bg-muted/60 transition-colors border-b last:border-b-0 cursor-pointer"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -362,7 +364,7 @@ export function AdminDashboard() {
                 <p className="px-4 py-6 text-sm text-muted-foreground text-center">No bids found.</p>
               ) : (
                 recentBids.map((bid) => (
-                  <BidRow key={bid.id} bid={bid} onClick={() => openBid(bid)} />
+                  <BidRow key={bid.id} bid={bid} />
                 ))
               )}
             </div>
