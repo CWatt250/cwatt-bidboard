@@ -44,6 +44,7 @@ export interface ScopeBreakdownItem {
 export interface UseDashboardResult {
   stats: DashboardStats | null
   recentBids: Bid[]
+  allBids: Bid[]
   branchBreakdown: BranchBreakdownItem[]
   estimatorBreakdown: EstimatorBreakdown[]
   scopeBreakdown: ScopeBreakdownItem[]
@@ -175,6 +176,7 @@ export function useDashboard(): UseDashboardResult {
   const [result, setResult] = useState<UseDashboardResult>({
     stats: null,
     recentBids: [],
+    allBids: [],
     branchBreakdown: [],
     estimatorBreakdown: [],
     scopeBreakdown: [],
@@ -249,7 +251,7 @@ export function useDashboard(): UseDashboardResult {
     const stats = computeStats(bids)
     stats.totalActiveEstimators = totalActiveEstimators
 
-    const recentBids = bids.slice(0, 5)
+    const recentBids = bids.slice(0, 8)
     const branchBreakdown = isAdmin ? computeBranchBreakdown(bids) : []
     const estimatorBreakdown =
       isAdmin || isBranchManager ? computeEstimatorBreakdown(bids, profileBranches) : []
@@ -258,6 +260,7 @@ export function useDashboard(): UseDashboardResult {
     setResult({
       stats,
       recentBids,
+      allBids: bids,
       branchBreakdown,
       estimatorBreakdown,
       scopeBreakdown,

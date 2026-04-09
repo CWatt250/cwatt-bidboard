@@ -1,29 +1,30 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { useDashboard } from '@/hooks/useDashboard'
-import { useBidDetail } from '@/contexts/bidDetail'
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Area,
+  AreaChart,
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from 'recharts'
 import {
   STATUS_BADGE_CLASSES,
   BRANCH_BADGE_CLASSES,
-  DUE_DATE_URGENT_CLASS,
-  DUE_DATE_WARNING_CLASS,
 } from '@/config/colors'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
 import type { Bid, BidScope, Branch } from '@/lib/supabase/types'
-import type { EstimatorBreakdown } from '@/hooks/useDashboard'
 
-type SortKey = keyof Pick<EstimatorBreakdown, 'activeBids' | 'sentCount' | 'awardedCount' | 'pipelineValue'>
-
-const SCOPE_COLORS: Record<BidScope, string> = {
-  'Plumbing Piping': '#3b82f6',
-  'HVAC Piping':     '#06b6d4',
-  'HVAC Ductwork':   '#f97316',
-  'Fire Stopping':   '#ef4444',
-  'Equipment':       '#a855f7',
-  'Other':           '#6b7280',
-}
+// ─── helpers ───────────────────────────────────────────────────────────────
 
 function formatCurrency(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
@@ -31,136 +32,151 @@ function formatCurrency(value: number): string {
   return `$${value.toFixed(0)}`
 }
 
-function dueDateClass(dateStr: string): string {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dateStr + 'T00:00:00')
-  const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diff <= 3) return DUE_DATE_URGENT_CLASS
-  if (diff <= 7) return DUE_DATE_WARNING_CLASS
-  return 'text-muted-foreground'
+function formatCurrencyFull(value: number): string {
+  if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
+  if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`
+  return `$${value.toFixed(0)}`
 }
 
-function MetricCard({
+// ─── card shell ────────────────────────────────────────────────────────────
+
+const cardStyle: React.CSSProperties = {
+  background: 'var(--surface)',
+  border: '0.5px solid var(--border)',
+  borderRadius: 'var(--radius-lg, var(--radius))',
+  boxShadow: 'var(--shadow-sm)',
+  overflow: 'hidden',
+}
+
+const cardHeaderStyle: React.CSSProperties = {
+  padding: '10px 16px',
+  borderBottom: '0.5px solid var(--border)',
+}
+
+const cardTitleStyle: React.CSSProperties = {
+  fontSize: '13px',
+  fontWeight: 500,
+  color: 'var(--text)',
+}
+
+// ─── KPI card ──────────────────────────────────────────────────────────────
+
+function KpiCard({
   label,
   value,
   subtext,
-  accent,
 }: {
   label: string
   value: string | number
   subtext?: string
-  accent?: 'green' | 'blue'
 }) {
-  const valueColor =
-    accent === 'green'
-      ? 'var(--green)'
-      : accent === 'blue'
-      ? 'var(--accent2)'
-      : 'var(--text)'
   return (
-    <div
-      style={{
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        padding: '16px',
-        boxShadow: 'var(--shadow-sm)',
-      }}
-    >
-      <p style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}>{label}</p>
-      <p
-        style={{
-          fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-          fontSize: '1.5rem',
-          fontWeight: 600,
-          marginTop: '4px',
-          color: valueColor,
-          letterSpacing: '-0.5px',
-        }}
-      >
-        {value}
-      </p>
-      {subtext && <p style={{ color: 'var(--text3)', fontSize: '0.72rem', marginTop: '4px' }}>{subtext}</p>}
+    <div style={cardStyle}>
+      <div style={{ padding: '16px' }}>
+        <p
+          style={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            letterSpacing: '0.07em',
+            textTransform: 'uppercase',
+            color: 'var(--text3)',
+          }}
+        >
+          {label}
+        </p>
+        <p
+          style={{
+            fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
+            fontSize: '1.6rem',
+            fontWeight: 500,
+            marginTop: '6px',
+            color: 'var(--text)',
+            letterSpacing: '-0.5px',
+            lineHeight: 1,
+          }}
+        >
+          {value}
+        </p>
+        {subtext && (
+          <p
+            style={{
+              color: 'var(--text3)',
+              fontSize: '0.72rem',
+              marginTop: '5px',
+            }}
+          >
+            {subtext}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
 
-function BidRow({ bid }: { bid: Bid }) {
-  const router = useRouter()
-  const clients = [...new Set((bid.line_items ?? []).map((li) => li.client).filter(Boolean))]
-  return (
-    <button
-      onClick={() => router.push(`/dashboard/bids/${bid.id}`)}
-      className="w-full text-left px-3 py-3 hover:bg-muted/60 transition-colors border-b last:border-b-0 cursor-pointer"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <p className="text-sm font-medium truncate">{bid.project_name}</p>
-          {clients.length > 0 && (
-            <p className="text-xs text-muted-foreground truncate">{clients.join(', ')}</p>
-          )}
-          <div className="flex items-center gap-2 mt-0.5">
-            {bid.estimator_name && (
-              <p className="text-xs text-muted-foreground">{bid.estimator_name}</p>
-            )}
-            <span
-              className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[bid.branch] ?? ''}`}
-            >
-              {bid.branch}
-            </span>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span
-            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_BADGE_CLASSES[bid.status]}`}
-          >
-            {bid.status}
-          </span>
-          {bid.total_price != null && bid.total_price > 0 && (
-            <span className="text-xs font-semibold">{formatCurrency(bid.total_price)}</span>
-          )}
-        </div>
-      </div>
-      {bid.bid_due_date && (
-        <p className={`text-xs mt-1 ${dueDateClass(bid.bid_due_date)}`}>
-          Due {new Date(bid.bid_due_date + 'T00:00:00').toLocaleDateString()}
-        </p>
-      )}
-    </button>
-  )
-}
+// ─── Active Pipeline bar chart (CSS bars) ──────────────────────────────────
 
-function BranchPerformanceChart({
-  branchBreakdown,
-}: {
-  branchBreakdown: { branch: Branch; pipelineValue: number; activeCount: number }[]
-}) {
-  const maxValue = Math.max(...branchBreakdown.map((b) => b.pipelineValue), 1)
+const PIPELINE_STAGES: { status: string; color: string }[] = [
+  { status: 'In Progress', color: '#378ADD' },
+  { status: 'Sent',        color: '#185FA5' },
+  { status: 'Awarded',     color: '#639922' },
+  { status: 'Lost',        color: '#E24B4A' },
+]
+
+function ActivePipelineChart({ bids }: { bids: Bid[] }) {
+  const stageTotals = PIPELINE_STAGES.map(({ status, color }) => {
+    const total = bids
+      .filter((b) => b.status === status)
+      .reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+    return { status, color, total }
+  })
+
+  const maxVal = Math.max(...stageTotals.map((s) => s.total), 1)
+
   return (
-    <div className="space-y-3">
-      {branchBreakdown.map((item) => {
-        const pct = Math.round((item.pipelineValue / maxValue) * 100)
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {stageTotals.map(({ status, color, total }) => {
+        const pct = Math.round((total / maxVal) * 100)
         return (
-          <div key={item.branch}>
-            <div className="flex items-center justify-between mb-1">
-              <div className="flex items-center gap-2">
-                <span
-                  className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[item.branch] ?? ''}`}
-                >
-                  {item.branch}
-                </span>
-                <span className="text-xs text-muted-foreground">{BRANCH_LABELS[item.branch]}</span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-right">
-                <span className="text-muted-foreground">{item.activeCount} active</span>
-                <span className="font-semibold">{formatCurrency(item.pipelineValue)}</span>
-              </div>
+          <div key={status}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+                marginBottom: '5px',
+              }}
+            >
+              <span style={{ fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 500 }}>
+                {status}
+              </span>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                  color: 'var(--text)',
+                  fontFamily: '"IBM Plex Mono", monospace',
+                }}
+              >
+                {formatCurrency(total)}
+              </span>
             </div>
-            <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: 'var(--surface2)' }}>
+            <div
+              style={{
+                width: '100%',
+                height: '10px',
+                borderRadius: '5px',
+                background: 'var(--surface2)',
+                overflow: 'hidden',
+              }}
+            >
               <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${pct}%`, background: 'linear-gradient(90deg, #38bdf8, #0ea5e9)' }}
+                style={{
+                  height: '100%',
+                  width: `${pct}%`,
+                  borderRadius: '5px',
+                  background: color,
+                  transition: 'width 0.5s ease',
+                }}
               />
             </div>
           </div>
@@ -170,281 +186,564 @@ function BranchPerformanceChart({
   )
 }
 
-function ScopeDonut({
-  scopeBreakdown,
-}: {
-  scopeBreakdown: { scope: BidScope; count: number }[]
-}) {
-  const total = scopeBreakdown.reduce((s, i) => s + i.count, 0)
-  if (total === 0) {
-    return <p className="text-xs text-muted-foreground text-center py-4">No active bids.</p>
+// ─── Pipeline Trend line chart ──────────────────────────────────────────────
+
+function getPipelineTrendData(bids: Bid[]) {
+  const now = new Date()
+  const weeks: { label: string; weekStart: Date; weekEnd: Date }[] = []
+
+  for (let i = 7; i >= 0; i--) {
+    const weekStart = new Date(now)
+    weekStart.setDate(now.getDate() - i * 7)
+    weekStart.setHours(0, 0, 0, 0)
+    const weekEnd = new Date(weekStart)
+    weekEnd.setDate(weekStart.getDate() + 6)
+    weekEnd.setHours(23, 59, 59, 999)
+
+    const month = weekStart.toLocaleString('default', { month: 'short' })
+    const day = weekStart.getDate()
+    weeks.push({ label: `${month} ${day}`, weekStart, weekEnd })
   }
 
-  let cumulative = 0
-  const segments = scopeBreakdown.map((item) => {
-    const pct = (item.count / total) * 100
-    const start = cumulative
-    cumulative += pct
-    return { ...item, start, pct }
+  return weeks.map(({ label, weekStart, weekEnd }) => {
+    const activeBids = bids.filter((b) => {
+      if (b.status === 'Lost') return false
+      const updatedAt = new Date(b.updated_at)
+      return updatedAt >= weekStart && updatedAt <= weekEnd
+    })
+    const value = activeBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+    return { label, value }
   })
+}
 
-  const gradient = segments
-    .map((s) => `${SCOPE_COLORS[s.scope]} ${s.start.toFixed(1)}% ${(s.start + s.pct).toFixed(1)}%`)
-    .join(', ')
+function PipelineTrendChart({ bids }: { bids: Bid[] }) {
+  const data = useMemo(() => getPipelineTrendData(bids), [bids])
 
   return (
-    <div className="flex items-center gap-6">
-      <div className="shrink-0 relative w-28 h-28">
-        <div
-          className="w-28 h-28 rounded-full"
-          style={{ background: `conic-gradient(${gradient})` }}
-        />
-        {/* Donut hole */}
-        <div className="absolute inset-0 m-auto w-16 h-16 rounded-full flex items-center justify-center" style={{ background: 'var(--surface)' }}>
-          <span className="text-xs font-semibold">{total}</span>
-        </div>
-      </div>
-      <div className="space-y-1.5 min-w-0">
-        {segments.map((s) => (
-          <div key={s.scope} className="flex items-center gap-2">
-            <span
-              className="w-2.5 h-2.5 rounded-sm shrink-0"
-              style={{ background: SCOPE_COLORS[s.scope] }}
-            />
-            <span className="text-xs text-muted-foreground truncate">{s.scope}</span>
-            <span className="text-xs font-medium ml-auto pl-2">{s.count}</span>
+    <div style={{ padding: '8px 16px 16px' }}>
+      <ResponsiveContainer width="100%" height={180}>
+        <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.18} />
+              <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            dataKey="label"
+            tick={{ fontSize: 10, fill: 'var(--text3)' }}
+            axisLine={false}
+            tickLine={false}
+          />
+          <YAxis
+            tickFormatter={(v: number) => formatCurrency(v)}
+            tick={{ fontSize: 10, fill: 'var(--text3)' }}
+            axisLine={false}
+            tickLine={false}
+            width={52}
+          />
+          <Tooltip
+            formatter={(v) => [formatCurrencyFull(Number(v)), 'Pipeline']}
+            contentStyle={{
+              fontSize: '11px',
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: '6px',
+            }}
+          />
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#38bdf8"
+            strokeWidth={2}
+            fill="url(#trendGradient)"
+            dot={false}
+          />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  )
+}
+
+// ─── Branch Performance ─────────────────────────────────────────────────────
+
+function BranchPerformanceChart({
+  branchBreakdown,
+}: {
+  branchBreakdown: { branch: Branch; pipelineValue: number; activeCount: number }[]
+}) {
+  const maxValue = Math.max(...branchBreakdown.map((b) => b.pipelineValue), 1)
+  return (
+    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+      {branchBreakdown.map((item) => {
+        const pct = Math.round((item.pipelineValue / maxValue) * 100)
+        return (
+          <div key={item.branch}>
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '5px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span
+                  className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[item.branch] ?? ''}`}
+                >
+                  {item.branch}
+                </span>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
+                  {BRANCH_LABELS[item.branch]}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
+                  {item.activeCount} active
+                </span>
+                <span
+                  style={{
+                    fontSize: '0.75rem',
+                    fontWeight: 500,
+                    fontFamily: '"IBM Plex Mono", monospace',
+                  }}
+                >
+                  {formatCurrency(item.pipelineValue)}
+                </span>
+              </div>
+            </div>
+            <div
+              style={{
+                width: '100%',
+                height: '10px',
+                borderRadius: '5px',
+                background: 'var(--surface2)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  height: '100%',
+                  width: `${pct}%`,
+                  borderRadius: '5px',
+                  background: 'linear-gradient(90deg, #38bdf8, #0ea5e9)',
+                  transition: 'width 0.5s ease',
+                }}
+              />
+            </div>
           </div>
-        ))}
+        )
+      })}
+    </div>
+  )
+}
+
+// ─── Revenue by Scope donut chart ───────────────────────────────────────────
+
+const SCOPE_CHART_COLORS: Record<string, string> = {
+  'HVAC Piping':     '#378ADD',
+  'HVAC Ductwork':   '#60a5fa',
+  'Plumbing Piping': '#639922',
+  'Fire Stopping':   '#f59e0b',
+  'Equipment':       '#a855f7',
+  'Other':           '#9ca3af',
+}
+
+function RevenueByScope({ bids }: { bids: Bid[] }) {
+  const awardedBids = bids.filter((b) => b.status === 'Awarded')
+
+  const scopeMap = new Map<string, number>()
+  for (const bid of awardedBids) {
+    for (const li of bid.line_items ?? []) {
+      const prev = scopeMap.get(li.scope) ?? 0
+      scopeMap.set(li.scope, prev + (bid.total_price ?? 0))
+    }
+  }
+
+  const data = Array.from(scopeMap.entries())
+    .map(([scope, value]) => ({ scope, value }))
+    .filter((d) => d.value > 0)
+    .sort((a, b) => b.value - a.value)
+
+  if (data.length === 0) {
+    return (
+      <div style={{ padding: '16px' }}>
+        <p style={{ fontSize: '0.75rem', color: 'var(--text3)', textAlign: 'center', paddingTop: 24 }}>
+          No awarded bids yet.
+        </p>
+      </div>
+    )
+  }
+
+  const total = data.reduce((sum, d) => sum + d.value, 0)
+
+  const CustomLegend = () => (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '8px' }}>
+      {data.map((d) => (
+        <div key={d.scope} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+          <span
+            style={{
+              width: 10,
+              height: 10,
+              borderRadius: 2,
+              background: SCOPE_CHART_COLORS[d.scope] ?? '#9ca3af',
+              flexShrink: 0,
+            }}
+          />
+          <span style={{ fontSize: '0.72rem', color: 'var(--text3)', flex: 1 }}>{d.scope}</span>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 500,
+              fontFamily: '"IBM Plex Mono", monospace',
+              color: 'var(--text)',
+            }}
+          >
+            {formatCurrency(d.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+
+  return (
+    <div style={{ padding: '8px 16px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
+      <div style={{ flexShrink: 0, width: 160 }}>
+        <ResponsiveContainer width={160} height={160}>
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="scope"
+              cx="50%"
+              cy="50%"
+              outerRadius={72}
+              innerRadius={44}
+              strokeWidth={0}
+            >
+              {data.map((entry) => (
+                <Cell
+                  key={entry.scope}
+                  fill={SCOPE_CHART_COLORS[entry.scope] ?? '#9ca3af'}
+                />
+              ))}
+            </Pie>
+            <Tooltip
+              formatter={(v) => [formatCurrencyFull(Number(v))]}
+              contentStyle={{
+                fontSize: '11px',
+                background: 'var(--surface)',
+                border: '1px solid var(--border)',
+                borderRadius: '6px',
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+        <p
+          style={{
+            textAlign: 'center',
+            fontSize: '0.7rem',
+            color: 'var(--text3)',
+            marginTop: '-8px',
+          }}
+        >
+          Total: {formatCurrency(total)}
+        </p>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <CustomLegend />
       </div>
     </div>
   )
 }
 
-function SortableHeader({
-  col,
-  label,
-  sortKey,
-  sortDir,
-  onSort,
-}: {
-  col: SortKey
-  label: string
-  sortKey: SortKey
-  sortDir: 'asc' | 'desc'
-  onSort: (col: SortKey) => void
-}) {
-  const active = col === sortKey
+// ─── Recent Bids table (full width) ─────────────────────────────────────────
+
+function getDueDateBadge(
+  dueDateStr: string | null | undefined
+): { label: string; bg: string; color: string } | null {
+  if (!dueDateStr) return null
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDateStr + 'T00:00:00')
+  const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (diff < 0) return null
+  const label = `${diff}d`
+  if (diff <= 2) return { label, bg: '#FCEBEB', color: '#A32D2D' }
+  if (diff <= 5) return { label, bg: '#FAEEDA', color: '#854F0B' }
+  return { label, bg: '#EAF3DE', color: '#3B6D11' }
+}
+
+function RecentBidsTable({ bids }: { bids: Bid[] }) {
+  const router = useRouter()
+  const rows = bids.slice(0, 8)
+
+  if (rows.length === 0) {
+    return (
+      <p style={{ padding: '24px 16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text3)' }}>
+        No bids found.
+      </p>
+    )
+  }
+
   return (
-    <th className="text-right">
-      <button
-        onClick={() => onSort(col)}
-        className={`text-xs font-semibold uppercase tracking-wide px-3 py-2 w-full text-right transition-colors ${
-          active ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
-        }`}
-      >
-        {label}
-        {active && <span className="ml-1">{sortDir === 'desc' ? '↓' : '↑'}</span>}
-      </button>
-    </th>
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
+        <thead>
+          <tr style={{ borderBottom: '0.5px solid var(--border)', background: 'var(--surface2)' }}>
+            {['Project Name', 'Client', 'Bid Value', 'Status', 'Due'].map((h) => (
+              <th
+                key={h}
+                style={{
+                  padding: '8px 14px',
+                  textAlign: 'left',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.06em',
+                  textTransform: 'uppercase',
+                  color: 'var(--text3)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((bid) => {
+            const clients = [...new Set((bid.line_items ?? []).map((li) => li.client).filter(Boolean))]
+            const dueBadge = getDueDateBadge(bid.bid_due_date)
+            return (
+              <tr
+                key={bid.id}
+                onClick={() => router.push(`/dashboard/bids/${bid.id}`)}
+                style={{
+                  borderBottom: '0.5px solid var(--border)',
+                  cursor: 'pointer',
+                  transition: 'background 0.1s',
+                }}
+                onMouseEnter={(e) => {
+                  ;(e.currentTarget as HTMLElement).style.background = 'var(--surface2)'
+                }}
+                onMouseLeave={(e) => {
+                  ;(e.currentTarget as HTMLElement).style.background = ''
+                }}
+              >
+                <td style={{ padding: '10px 14px', fontWeight: 500, maxWidth: 260 }}>
+                  <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {bid.project_name}
+                  </span>
+                </td>
+                <td
+                  style={{
+                    padding: '10px 14px',
+                    color: 'var(--text3)',
+                    maxWidth: 160,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {clients.join(', ') || '—'}
+                </td>
+                <td
+                  style={{
+                    padding: '10px 14px',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontWeight: 500,
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {bid.total_price ? formatCurrency(bid.total_price) : '—'}
+                </td>
+                <td style={{ padding: '10px 14px' }}>
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_BADGE_CLASSES[bid.status]}`}
+                  >
+                    {bid.status}
+                  </span>
+                </td>
+                <td style={{ padding: '10px 14px' }}>
+                  {dueBadge ? (
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        borderRadius: '999px',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        background: dueBadge.bg,
+                        color: dueBadge.color,
+                      }}
+                    >
+                      {dueBadge.label}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--text3)' }}>—</span>
+                  )}
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
   )
 }
 
+// ─── AdminDashboard ─────────────────────────────────────────────────────────
+
 export function AdminDashboard() {
-  const { stats, recentBids, branchBreakdown, estimatorBreakdown, scopeBreakdown, loading, error } =
-    useDashboard()
-  const { openBid } = useBidDetail()
-
-  const [sortKey, setSortKey] = useState<SortKey>('pipelineValue')
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-
-  function handleSort(col: SortKey) {
-    if (col === sortKey) {
-      setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'))
-    } else {
-      setSortKey(col)
-      setSortDir('desc')
-    }
-  }
+  const { stats, recentBids, allBids, branchBreakdown, loading, error } = useDashboard()
 
   if (loading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => (
-            <div key={i} className="rounded-lg p-4 h-24 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+      <div className="space-y-3">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+          {[...Array(4)].map((_, i) => (
+            <div
+              key={i}
+              className="animate-pulse"
+              style={{ height: 96, ...cardStyle }}
+            />
           ))}
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
+          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
         </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
-          <div className="rounded-lg h-64 animate-pulse" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }} />
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
+          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
         </div>
+        <div className="animate-pulse" style={{ height: 280, ...cardStyle }} />
       </div>
     )
   }
 
   if (error) {
-    return (
-      <div className="error-card">
-        Failed to load dashboard: {error}
-      </div>
-    )
+    return <div className="error-card">Failed to load dashboard: {error}</div>
   }
 
-  const sortedEstimators = [...estimatorBreakdown].sort((a, b) => {
-    const diff = a[sortKey] - b[sortKey]
-    return sortDir === 'desc' ? -diff : diff
-  })
+  // ── KPI calculations ────────────────────────────────────────────────────
+  const now = new Date()
+  const yearStart = `${now.getFullYear()}-01-01`
+  const ninetyDaysAgo = new Date(now)
+  ninetyDaysAgo.setDate(now.getDate() - 90)
+  const ninetyDaysAgoStr = ninetyDaysAgo.toISOString().slice(0, 10)
+
+  const totalSecuredValue = allBids
+    .filter((b) => b.status === 'Awarded' && b.updated_at >= yearStart)
+    .reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+  const totalSecuredJobs = allBids.filter(
+    (b) => b.status === 'Awarded' && b.updated_at >= yearStart
+  ).length
+
+  const openBidsCount = stats?.activeCount ?? 0
+  const sentThisMonth = stats?.sentThisMonth ?? 0
+
+  // Win rate — Awarded / (Awarded + Lost) where updated_at in last 90 days
+  const awardedLast90 = allBids.filter(
+    (b) => b.status === 'Awarded' && b.updated_at >= ninetyDaysAgoStr
+  ).length
+  const lostLast90 = allBids.filter(
+    (b) => b.status === 'Lost' && b.updated_at >= ninetyDaysAgoStr
+  ).length
+  const winRateDenominator = awardedLast90 + lostLast90
+  const winRate =
+    winRateDenominator > 0
+      ? Math.round((awardedLast90 / winRateDenominator) * 100)
+      : null
 
   return (
-    <div className="space-y-6 min-w-0">
-        {/* Top row — 6 metric cards in 3×2 grid */}
-        <div className="grid grid-cols-3 gap-4">
-          <MetricCard
-            label="Total Pipeline Value"
-            value={formatCurrency(stats?.pipelineValue ?? 0)}
-            subtext="Active bids"
-          />
-          <MetricCard
-            label="Active Bids"
-            value={stats?.activeCount ?? 0}
-            subtext="Bidding + In Progress"
-          />
-          <MetricCard
-            label="Sent This Month"
-            value={stats?.sentThisMonth ?? 0}
-            subtext="Status updated this month"
-          />
-          <MetricCard
-            label="Awarded YTD"
-            value={stats?.awardedYTD ?? 0}
-            accent="green"
-            subtext="Year to date"
-          />
-          <MetricCard
-            label="Bids Due This Week"
-            value={stats?.bidsDueThisWeek.length ?? 0}
-            accent="blue"
-            subtext="Next 7 days"
-          />
-          <MetricCard
-            label="Estimators Active"
-            value={stats?.totalActiveEstimators ?? 0}
-            subtext="Active accounts"
-          />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* ── Row 1: KPI cards ─────────────────────────────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
+        <KpiCard
+          label="Total Secured (YTD)"
+          value={formatCurrency(totalSecuredValue)}
+          subtext={`${totalSecuredJobs} jobs`}
+        />
+        <KpiCard
+          label="Open Bids"
+          value={openBidsCount}
+          subtext="Bidding + In Progress"
+        />
+        <KpiCard
+          label="Bids Sent (This Month)"
+          value={sentThisMonth}
+          subtext="Status updated this month"
+        />
+        <KpiCard
+          label="Win Rate"
+          value={winRate !== null ? `${winRate}%` : '—'}
+          subtext="Last 90 days"
+        />
+      </div>
+
+      {/* ── Row 2: Active Pipeline + Pipeline Trend ───────────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <p style={cardTitleStyle}>Active Pipeline</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+              Total bid value by stage
+            </p>
+          </div>
+          <ActivePipelineChart bids={allBids} />
         </div>
 
-        {/* Middle row — Branch Performance + Recent Bids */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
-            <div className="px-4 py-3 border-b">
-              <h2 className="text-sm font-semibold">Branch Performance</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Pipeline value by branch</p>
-            </div>
-            <div className="p-4">
-              {branchBreakdown.every((b) => b.pipelineValue === 0) ? (
-                <p className="text-xs text-muted-foreground text-center py-4">No active bids.</p>
-              ) : (
-                <BranchPerformanceChart branchBreakdown={branchBreakdown} />
-              )}
-            </div>
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <p style={cardTitleStyle}>Pipeline Trend</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+              Active bid value — last 8 weeks
+            </p>
           </div>
-
-          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
-            <div className="px-4 py-3 border-b">
-              <h2 className="text-sm font-semibold">Recent Bids</h2>
-            </div>
-            <div>
-              {recentBids.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-muted-foreground text-center">No bids found.</p>
-              ) : (
-                recentBids.map((bid) => (
-                  <BidRow key={bid.id} bid={bid} />
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom row — Estimator Leaderboard + Scope Breakdown */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
-            <div className="px-4 py-3 border-b">
-              <h2 className="text-sm font-semibold">Estimator Leaderboard</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Sorted by pipeline value</p>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="border-b bg-muted/40">
-                  <tr>
-                    <th className="text-left px-4 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Name
-                    </th>
-                    <th className="text-left px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Branch
-                    </th>
-                    <SortableHeader col="activeBids" label="Active" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortableHeader col="sentCount" label="Sent" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortableHeader col="awardedCount" label="Won" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                    <SortableHeader col="pipelineValue" label="Pipeline" sortKey={sortKey} sortDir={sortDir} onSort={handleSort} />
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {sortedEstimators.length === 0 ? (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-muted-foreground text-xs">
-                        No estimator data.
-                      </td>
-                    </tr>
-                  ) : (
-                    sortedEstimators.map((e) => (
-                      <tr key={e.id} className="hover:bg-muted/30">
-                        <td className="px-4 py-2 font-medium text-sm">{e.name}</td>
-                        <td className="px-3 py-2">
-                          {e.branch ? (
-                            <div className="flex flex-wrap gap-1">
-                              {e.branch.split(', ').map((b) => (
-                                <span
-                                  key={b}
-                                  className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[b as Branch] ?? ''}`}
-                                >
-                                  {b}
-                                </span>
-                              ))}
-                            </div>
-                          ) : (
-                            <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right text-sm">{e.activeBids}</td>
-                        <td className="px-3 py-2 text-right text-sm">{e.sentCount}</td>
-                        <td className="px-3 py-2 text-right text-sm text-emerald-600 dark:text-emerald-400 font-medium">
-                          {e.awardedCount}
-                        </td>
-                        <td className="px-3 py-2 text-right text-sm font-semibold">
-                          {formatCurrency(e.pipelineValue)}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          <div className="rounded-lg" style={{ background: "var(--surface)", border: "1px solid var(--border)", boxShadow: "var(--shadow-sm)" }}>
-            <div className="px-4 py-3 border-b">
-              <h2 className="text-sm font-semibold">Scope Breakdown</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Active bids by scope</p>
-            </div>
-            <div className="p-4">
-              <ScopeDonut scopeBreakdown={scopeBreakdown} />
-            </div>
-          </div>
+          <PipelineTrendChart bids={allBids} />
         </div>
       </div>
+
+      {/* ── Row 3: Branch Performance + Revenue by Scope ─────────────── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <p style={cardTitleStyle}>Branch Performance</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+              Pipeline value by branch
+            </p>
+          </div>
+          {branchBreakdown.every((b) => b.pipelineValue === 0) ? (
+            <p style={{ padding: '24px 16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text3)' }}>
+              No active bids.
+            </p>
+          ) : (
+            <BranchPerformanceChart branchBreakdown={branchBreakdown} />
+          )}
+        </div>
+
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <p style={cardTitleStyle}>Revenue by Scope</p>
+            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+              Awarded bids grouped by scope
+            </p>
+          </div>
+          <RevenueByScope bids={allBids} />
+        </div>
+      </div>
+
+      {/* ── Row 4: Recent Bids ───────────────────────────────────────── */}
+      <div style={cardStyle}>
+        <div style={cardHeaderStyle}>
+          <p style={cardTitleStyle}>Recent Bids</p>
+          <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
+            8 most recent, sorted by last updated
+          </p>
+        </div>
+        <RecentBidsTable bids={recentBids} />
+      </div>
+    </div>
   )
 }
