@@ -13,6 +13,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  LayersIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -25,7 +26,6 @@ import {
 } from '@/config/colors'
 import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -152,6 +152,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   const [addingNote, setAddingNote] = useState(false)
   const [scopeItems, setScopeItems] = useState<{ id?: string; scope: BidScope | ''; price: string }[]>([])
   const [notesOpen, setNotesOpen] = useState(false)
+  const [clientsEditOpen, setClientsEditOpen] = useState(false)
 
   const estimatorProfiles = (() => {
     if (isAdmin) return profiles
@@ -413,7 +414,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl space-y-5 pb-20">
+    <div className="max-w-7xl space-y-5 pb-20 bg-[var(--bg)]">
 
       {/* ── Task 1: Header ─────────────────────────────────────────────────── */}
 
@@ -448,21 +449,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </p>
         </div>
 
-        {/* Right side: status badge + change status dropdown */}
+        {/* Right side: single pill status control */}
         <div className="flex items-center gap-3 shrink-0">
-          <Badge
-            className={`${STATUS_BADGE_CLASSES[bid.status]} rounded-full px-3 py-1 text-xs font-semibold`}
-            variant="outline"
-          >
-            {displayStatus}
-          </Badge>
           <Select
             value={bid.status}
             onValueChange={(v) => handleStatusChange(v as BidStatus)}
             disabled={changingStatus !== null}
           >
-            <SelectTrigger className="w-40 h-8 text-sm">
-              <SelectValue placeholder="Change Status" />
+            <SelectTrigger
+              className={`h-8 px-3 rounded-full text-xs font-semibold border ${STATUS_BADGE_CLASSES[displayStatus]} w-auto gap-1.5`}
+            >
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {ALL_STATUSES.map((s) => (
@@ -484,37 +481,31 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
       <div className="grid grid-cols-4 gap-4">
         {/* KPI: Total Bid Value — sum of scope-only line items */}
-        <Card className="overflow-hidden">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Total Bid Value
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums truncate"
+              className="text-[28px] font-bold mt-1.5 tabular-nums truncate leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color: 'var(--accent2)',
               }}
             >
-              {scopeTotal > 0 ? formatCurrency(scopeTotal) : 'TBD'}
+              {scopeTotal > 0 ? formatCurrency(scopeTotal) : '—'}
             </p>
           </CardContent>
         </Card>
 
         {/* KPI: Line Items — total count including scope-only items */}
-        <Card className="overflow-hidden">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Line Items
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums"
+              className="text-[28px] font-bold mt-1.5 tabular-nums leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color: 'var(--text)',
@@ -526,16 +517,13 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         </Card>
 
         {/* KPI: Clients — unique clients with line items */}
-        <Card className="overflow-hidden">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Clients
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums"
+              className="text-[28px] font-bold mt-1.5 tabular-nums leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color: 'var(--text)',
@@ -547,24 +535,21 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         </Card>
 
         {/* KPI: Due In — green >7d, amber ≤7d, red ≤3d or overdue */}
-        <Card className="overflow-hidden">
-          <CardContent className="py-4">
-            <p
-              className="text-xs font-medium uppercase tracking-wide truncate"
-              style={{ color: 'var(--text3)' }}
-            >
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
               Due In
             </p>
             <p
-              className="text-xl font-bold mt-1 tabular-nums truncate"
+              className="text-[28px] font-bold mt-1.5 tabular-nums truncate leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                 color:
                   days <= 3
-                    ? 'var(--red, #dc2626)'
+                    ? 'var(--red)'
                     : days <= 7
-                    ? 'var(--yellow, #d97706)'
-                    : 'var(--green, #16a34a)',
+                    ? 'var(--yellow)'
+                    : 'var(--green)',
               }}
             >
               {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
@@ -579,11 +564,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         <div className="grid grid-cols-2 gap-6">
 
           {/* ── Task 3: Scope Breakdown ── */}
-          <Card>
+          <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <CardTitle>Scope Breakdown</CardTitle>
+                  <CardTitle className="font-bold text-[var(--text)]">Scope Breakdown</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Source of truth for scope pricing
                     {scopeItems.length > 0 && (
@@ -595,7 +580,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-6">
               <div className="border rounded-md overflow-hidden">
                 <div className="grid grid-cols-[1fr_140px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
                   <span>Scope</span>
@@ -604,8 +589,19 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 </div>
 
                 {scopeItems.length === 0 && (
-                  <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
-                    No scopes added yet.
+                  <div className="flex flex-col items-center justify-center py-8 gap-2">
+                    <LayersIcon className="size-8 text-muted-foreground/30" />
+                    <p className="text-sm font-medium" style={{ color: 'var(--text3)' }}>No scopes yet</p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="mt-1"
+                      style={{ background: 'var(--accent2)', color: '#fff' }}
+                      onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
+                    >
+                      <PlusIcon className="size-3.5" />
+                      Add First Scope
+                    </Button>
                   </div>
                 )}
 
@@ -667,43 +663,42 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 ))}
               </div>
 
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
-              >
-                <PlusIcon className="size-3.5" />
-                Add Scope
-              </Button>
+              {scopeItems.length > 0 && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
+                >
+                  <PlusIcon className="size-3.5" />
+                  Add Scope
+                </Button>
+              )}
 
               {/* Running Total */}
               <div
                 className="flex items-center justify-end pt-2"
                 style={{ borderTop: '1px solid var(--border)' }}
               >
-                <span className="text-xs mr-2" style={{ color: 'var(--text3)' }}>
-                  Running Total:
-                </span>
                 <span
-                  className="font-bold text-sm tabular-nums"
+                  className="font-bold text-base tabular-nums"
                   style={{
                     fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                     color: 'var(--accent2)',
                   }}
                 >
-                  {scopeTotal > 0 ? formatCurrency(scopeTotal) : 'TBD'}
+                  {scopeTotal > 0 ? formatCurrency(scopeTotal) : '—'}
                 </span>
               </div>
             </CardContent>
           </Card>
 
           {/* ── Task 4: Client Bids ── */}
-          <Card>
+          <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <CardTitle>Client Bids</CardTitle>
+                  <CardTitle className="font-bold text-[var(--text)]">Client Bids</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Which clients are getting which scopes
                     {uniqueClientCount > 0 && (
@@ -715,20 +710,24 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="space-y-3 p-6">
               {errors.line_items?.root && (
                 <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
               )}
 
-              {/* Grouped client summary (read from saved bid data) */}
-              {clientLineItems.length > 0 && (
-                <div className="border rounded-md overflow-hidden mb-1">
-                  <div className="grid grid-cols-[1fr_2fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                    <span>Client</span>
-                    <span>Scopes Included</span>
-                    <span className="text-right">Total Bid</span>
+              {/* Summary table — always visible */}
+              <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_2fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span>Client</span>
+                  <span>Scopes Included</span>
+                  <span className="text-right">Total Bid</span>
+                </div>
+                {clientLineItems.length === 0 ? (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
+                    No clients added yet.
                   </div>
-                  {Object.entries(
+                ) : (
+                  Object.entries(
                     clientLineItems.reduce<Record<string, typeof clientLineItems>>(
                       (acc, li) => {
                         const key = li.client!
@@ -758,136 +757,151 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                         </div>
                         <span
                           className="text-right text-sm font-semibold tabular-nums"
-                          style={{
-                            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-                          }}
+                          style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
                         >
-                          {clientTotal > 0 ? formatCurrency(clientTotal) : 'TBD'}
+                          {clientTotal > 0 ? formatCurrency(clientTotal) : '—'}
                         </span>
                       </div>
                     )
-                  })}
-                </div>
-              )}
-
-              <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                  <span>Client</span>
-                  <span>Scope</span>
-                  <span>Price</span>
-                  <span />
-                </div>
-
-                {fields.map((field, index) => (
-                  <div
-                    key={field.id}
-                    className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
-                  >
-                    <input type="hidden" {...register(`line_items.${index}.id`)} />
-
-                    <div>
-                      <Input
-                        {...register(`line_items.${index}.client`)}
-                        placeholder="Client"
-                        className="h-7 text-xs px-2"
-                      />
-                      {errors.line_items?.[index]?.client && (
-                        <p className="text-xs text-destructive mt-0.5">
-                          {errors.line_items[index]?.client?.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <div>
-                      <Controller
-                        name={`line_items.${index}.scope`}
-                        control={control}
-                        render={({ field: scopeField }) => (
-                          <Select
-                            value={scopeField.value}
-                            onValueChange={scopeField.onChange}
-                          >
-                            <SelectTrigger className="w-full h-7 text-xs">
-                              <SelectValue placeholder="Scope" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {SCOPES.map((s) => (
-                                <SelectItem key={s} value={s}>
-                                  <span
-                                    className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
-                                  >
-                                    {s}
-                                  </span>
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        )}
-                      />
-                      {errors.line_items?.[index]?.scope && (
-                        <p className="text-xs text-destructive mt-0.5">
-                          {errors.line_items[index]?.scope?.message}
-                        </p>
-                      )}
-                    </div>
-
-                    <Input
-                      {...register(`line_items.${index}.price`)}
-                      type="number"
-                      step="1"
-                      min="0"
-                      placeholder="TBD"
-                      className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => {
-                        if (fields.length === 1) {
-                          setDeleteLineItemIndex(index)
-                        } else {
-                          remove(index)
-                        }
-                      }}
-                      aria-label="Remove client bid"
-                    >
-                      <Trash2Icon className="size-3.5 text-destructive" />
-                    </Button>
-                  </div>
-                ))}
+                  })
+                )}
               </div>
-
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  append({ id: undefined, client: '', scope: undefined as any, price: '' })
-                }
-              >
-                <PlusIcon className="size-3.5" />
-                Add Client
-              </Button>
 
               {/* Running Total */}
               <div
-                className="flex items-center justify-end pt-2"
+                className="flex items-center justify-end pt-1"
                 style={{ borderTop: '1px solid var(--border)' }}
               >
-                <span className="text-xs mr-2" style={{ color: 'var(--text3)' }}>
-                  Running Total:
-                </span>
                 <span
-                  className="font-bold text-sm tabular-nums"
+                  className="font-bold text-base tabular-nums"
                   style={{
                     fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
                     color: 'var(--accent2)',
                   }}
                 >
-                  {clientRunningTotal > 0 ? formatCurrency(clientRunningTotal) : 'TBD'}
+                  {clientRunningTotal > 0 ? formatCurrency(clientRunningTotal) : '—'}
                 </span>
+              </div>
+
+              {/* Collapsible edit section */}
+              <div className="border rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium bg-muted/40 hover:bg-muted/60 transition-colors"
+                  onClick={() => setClientsEditOpen((o) => !o)}
+                >
+                  <span style={{ color: 'var(--text2)' }}>Edit Client Scopes</span>
+                  {clientsEditOpen ? (
+                    <ChevronUpIcon className="size-3.5 text-muted-foreground" />
+                  ) : (
+                    <ChevronDownIcon className="size-3.5 text-muted-foreground" />
+                  )}
+                </button>
+
+                {clientsEditOpen && (
+                  <div>
+                    <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground border-t border-b">
+                      <span>Client</span>
+                      <span>Scope</span>
+                      <span>Price</span>
+                      <span />
+                    </div>
+
+                    {fields.map((field, index) => (
+                      <div
+                        key={field.id}
+                        className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
+                      >
+                        <input type="hidden" {...register(`line_items.${index}.id`)} />
+
+                        <div>
+                          <Input
+                            {...register(`line_items.${index}.client`)}
+                            placeholder="Client"
+                            className="h-7 text-xs px-2"
+                          />
+                          {errors.line_items?.[index]?.client && (
+                            <p className="text-xs text-destructive mt-0.5">
+                              {errors.line_items[index]?.client?.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <div>
+                          <Controller
+                            name={`line_items.${index}.scope`}
+                            control={control}
+                            render={({ field: scopeField }) => (
+                              <Select
+                                value={scopeField.value}
+                                onValueChange={scopeField.onChange}
+                              >
+                                <SelectTrigger className="w-full h-7 text-xs">
+                                  <SelectValue placeholder="Scope" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {SCOPES.map((s) => (
+                                    <SelectItem key={s} value={s}>
+                                      <span
+                                        className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
+                                      >
+                                        {s}
+                                      </span>
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          />
+                          {errors.line_items?.[index]?.scope && (
+                            <p className="text-xs text-destructive mt-0.5">
+                              {errors.line_items[index]?.scope?.message}
+                            </p>
+                          )}
+                        </div>
+
+                        <Input
+                          {...register(`line_items.${index}.price`)}
+                          type="number"
+                          step="1"
+                          min="0"
+                          placeholder="—"
+                          className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        />
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            if (fields.length === 1) {
+                              setDeleteLineItemIndex(index)
+                            } else {
+                              remove(index)
+                            }
+                          }}
+                          aria-label="Remove client bid"
+                        >
+                          <Trash2Icon className="size-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    ))}
+
+                    <div className="px-3 py-2 border-t">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          append({ id: undefined, client: '', scope: undefined as any, price: '' })
+                        }
+                      >
+                        <PlusIcon className="size-3.5" />
+                        Add Client
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -895,19 +909,25 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
         {/* Bid Information (project metadata) */}
         <div className="mt-6">
-          <Card>
+          <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
-              <CardTitle>Bid Information</CardTitle>
+              <CardTitle className="font-bold text-[var(--text)]">Bid Information</CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
+            <CardContent className="p-6 space-y-6">
+              {/* Project Info group */}
+              <div>
+                <p className="text-xs uppercase tracking-wider font-medium mb-3" style={{ color: 'var(--text3)' }}>
+                  Project Info
+                </p>
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <Label htmlFor="bd-project_name">Project Name</Label>
+                    <Label htmlFor="bd-project_name" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      Project Name
+                    </Label>
                     <Input
                       id="bd-project_name"
                       {...register('project_name')}
-                      placeholder="Project name"
+                      className="border-[var(--border)]"
                     />
                     {errors.project_name && (
                       <p className="text-xs text-destructive">{errors.project_name.message}</p>
@@ -915,13 +935,13 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   </div>
 
                   <div className="space-y-1">
-                    <Label>Branch</Label>
+                    <Label className="text-sm" style={{ color: 'var(--text3)' }}>Branch</Label>
                     <Controller
                       name="branch"
                       control={control}
                       render={({ field }) => (
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full border-[var(--border)]">
                             <SelectValue placeholder="Select branch" />
                           </SelectTrigger>
                           <SelectContent>
@@ -941,13 +961,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                       <p className="text-xs text-destructive">{errors.branch.message}</p>
                     )}
                   </div>
-                </div>
 
-                <div className="space-y-4">
                   <div className="space-y-1">
-                    <Label>Estimator</Label>
+                    <Label className="text-sm" style={{ color: 'var(--text3)' }}>Estimator</Label>
                     {isEstimator ? (
-                      <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
+                      <div className="h-9 px-3 flex items-center rounded-md border border-[var(--border)] bg-muted/40 text-sm" style={{ color: 'var(--text)' }}>
                         {bid.estimator_name ?? 'Unassigned'}
                       </div>
                     ) : (
@@ -970,7 +988,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                                 field.onChange(v === '__none__' ? null : v)
                               }
                             >
-                              <SelectTrigger className="w-full">
+                              <SelectTrigger className="w-full border-[var(--border)]">
                                 {displayName ? (
                                   <span>{displayName}</span>
                                 ) : (
@@ -997,41 +1015,51 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                       />
                     )}
                   </div>
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label htmlFor="bd-bid_due_date">Bid Due Date</Label>
-                      <Controller
-                        name="bid_due_date"
-                        control={control}
-                        render={({ field }) => (
-                          <SmartDateInput
-                            id="bd-bid_due_date"
-                            value={field.value ?? ''}
-                            onChange={field.onChange}
-                            className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                        )}
-                      />
-                      {errors.bid_due_date && (
-                        <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+              {/* Dates group */}
+              <div>
+                <p className="text-xs uppercase tracking-wider font-medium mb-3" style={{ color: 'var(--text3)' }}>
+                  Dates
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="bd-bid_due_date" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      Bid Due Date
+                    </Label>
+                    <Controller
+                      name="bid_due_date"
+                      control={control}
+                      render={({ field }) => (
+                        <SmartDateInput
+                          id="bd-bid_due_date"
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          className="flex h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
                       )}
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="bd-project_start_date">Project Start (optional)</Label>
-                      <Controller
-                        name="project_start_date"
-                        control={control}
-                        render={({ field }) => (
-                          <SmartDateInput
-                            id="bd-project_start_date"
-                            value={field.value ?? ''}
-                            onChange={field.onChange}
-                            className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                        )}
-                      />
-                    </div>
+                    />
+                    {errors.bid_due_date && (
+                      <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="bd-project_start_date" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      Project Start <span className="font-normal opacity-60">(optional)</span>
+                    </Label>
+                    <Controller
+                      name="project_start_date"
+                      control={control}
+                      render={({ field }) => (
+                        <SmartDateInput
+                          id="bd-project_start_date"
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          className="flex h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      )}
+                    />
                   </div>
                 </div>
               </div>
@@ -1042,14 +1070,14 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
       {/* ── Task 5: Notes (collapsible, collapsed by default) ────────────────── */}
 
-      <Card>
+      <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
         <button
           type="button"
           className="w-full text-left"
           onClick={() => setNotesOpen((o) => !o)}
         >
           <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none py-4">
-            <CardTitle>Notes</CardTitle>
+            <CardTitle className="font-bold text-[var(--text)]">Notes</CardTitle>
             {notesOpen ? (
               <ChevronUpIcon className="size-4 text-muted-foreground" />
             ) : (
@@ -1109,9 +1137,9 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
       {/* Activity — only rendered when entries exist */}
       {activity.length > 0 && (
-        <Card>
+        <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardHeader>
-            <CardTitle>Activity</CardTitle>
+            <CardTitle className="font-bold text-[var(--text)]">Activity</CardTitle>
           </CardHeader>
           <CardContent>
             <ul className="max-h-72 overflow-y-auto">
