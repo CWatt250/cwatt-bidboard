@@ -26,7 +26,6 @@ import {
 } from '@/config/colors'
 import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -450,21 +449,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </p>
         </div>
 
-        {/* Right side: status badge + change status dropdown */}
+        {/* Right side: single pill status control */}
         <div className="flex items-center gap-3 shrink-0">
-          <Badge
-            className={`${STATUS_BADGE_CLASSES[bid.status]} rounded-full px-3 py-1 text-xs font-semibold`}
-            variant="outline"
-          >
-            {displayStatus}
-          </Badge>
           <Select
             value={bid.status}
             onValueChange={(v) => handleStatusChange(v as BidStatus)}
             disabled={changingStatus !== null}
           >
-            <SelectTrigger className="w-40 h-8 text-sm">
-              <SelectValue placeholder="Change Status" />
+            <SelectTrigger
+              className={`h-8 px-3 rounded-full text-xs font-semibold border ${STATUS_BADGE_CLASSES[displayStatus]} w-auto gap-1.5`}
+            >
+              <SelectValue />
             </SelectTrigger>
             <SelectContent>
               {ALL_STATUSES.map((s) => (
