@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm, Controller, useFieldArray } from 'react-hook-form'
@@ -8,10 +8,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import {
-  ArrowLeftIcon,
   PlusIcon,
   Trash2Icon,
   ChevronRightIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -21,9 +22,6 @@ import { useUserRole } from '@/contexts/userRole'
 import {
   STATUS_BADGE_CLASSES,
   SCOPE_BADGE_CLASSES,
-  BRANCH_BADGE_CLASSES,
-  DUE_DATE_URGENT_CLASS,
-  DUE_DATE_WARNING_CLASS,
 } from '@/config/colors'
 import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
@@ -70,23 +68,14 @@ const SCOPES: BidScope[] = [
 
 const BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 
-const STATUS_TRANSITIONS: Record<BidStatus, BidStatus[]> = {
-  Unassigned: ['Bidding'],
-  Bidding: ['In Progress', 'Sent', 'Lost'],
-  'In Progress': ['Sent', 'Lost'],
-  Sent: ['Awarded', 'Lost'],
-  Awarded: [],
-  Lost: [],
-}
-
-const STATUS_TRANSITION_LABELS: Record<BidStatus, string> = {
-  Unassigned: '→ Start Bidding',
-  Bidding: '→ In Progress',
-  'In Progress': '→ In Progress',
-  Sent: '→ Awarded',
-  Awarded: '',
-  Lost: '→ Lost',
-}
+const ALL_STATUSES: BidStatus[] = [
+  'Unassigned',
+  'Bidding',
+  'In Progress',
+  'Sent',
+  'Awarded',
+  'Lost',
+]
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
@@ -148,12 +137,6 @@ function daysUntilDue(dateStr: string): number {
   return Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
 }
 
-function dueDateClass(days: number): string {
-  if (days <= 3) return DUE_DATE_URGENT_CLASS
-  if (days <= 7) return DUE_DATE_WARNING_CLASS
-  return ''
-}
-
 // ─── BidDetailClient ──────────────────────────────────────────────────────────
 
 export default function BidDetailClient({ bidId }: { bidId: string }) {
@@ -168,8 +151,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   const [noteText, setNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
   const [scopeItems, setScopeItems] = useState<{ id?: string; scope: BidScope | ''; price: string }[]>([])
+  const [notesOpen, setNotesOpen] = useState(false)
 
-  // Estimator dropdown options based on role
   const estimatorProfiles = (() => {
     if (isAdmin) return profiles
     if (isBranchManager) {
@@ -193,18 +176,15 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   const { fields, append, remove } = useFieldArray({ control, name: 'line_items' })
 
-  // Redirect if bid not found or unauthorized
   useEffect(() => {
     if (!loading && notFound) {
       router.replace('/dashboard')
     }
   }, [loading, notFound, router])
 
-  // Populate form when bid loads
   useEffect(() => {
     if (!bid) return
 
-    // Separate scope-only items (client=null) from regular client line items
     const regularItems = (bid.line_items ?? []).filter((li) => li.client)
     const scopeOnlyItems = (bid.line_items ?? []).filter((li) => !li.client)
 
@@ -235,11 +215,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   }, [bid, reset])
 
   const watchedItems = watch('line_items') ?? []
-  const totalPreview = watchedItems.reduce((sum, item) => {
-    const p = parseFloat(item.price ?? '')
-    return sum + (isNaN(p) ? 0 : p)
-  }, 0)
-  const hasAnyPrice = watchedItems.some((item) => !isNaN(parseFloat(item.price ?? '')))
 
   // ─── Handlers ────────────────────────────────────────────────────────────
 
@@ -249,7 +224,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     const supabase = createClient()
 
     const prevEstimatorId = bid.estimator_id
-    const prevEstimatorName = bid.estimator_name
 
     const { error: bidError } = await supabase
       .from('bids')
@@ -268,7 +242,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       return
     }
 
-    // Upsert line items
     const lineItemsToUpsert = values.line_items.map((li) => ({
       ...(li.id ? { id: li.id } : {}),
       bid_id: bidId,
@@ -287,9 +260,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       return
     }
 
-    // Delete line items that were removed and log each removal
     const formIds = new Set(values.line_items.map((li) => li.id).filter(Boolean))
-    const deletedLineItems = (bid.line_items ?? []).filter((li) => !formIds.has(li.id))
+    const deletedLineItems = (bid.line_items ?? []).filter((li) => li.client && !formIds.has(li.id))
 
     if (deletedLineItems.length > 0) {
       await supabase
@@ -306,7 +278,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       }
     }
 
-    // Log newly added line items (those without an existing id)
     if (profile) {
       const newItems = values.line_items.filter((li) => !li.id)
       await Promise.all(
@@ -316,7 +287,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       )
     }
 
-    // Log estimator change if applicable
     if (profile && values.estimator_id !== prevEstimatorId) {
       const newProfile = profiles.find((p) => p.id === values.estimator_id)
       const newName = newProfile?.name ?? 'Unknown'
@@ -326,7 +296,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       await logActivity(bidId, profile.id, action)
     }
 
-    // Upsert scope items (client=null)
     const validScopeItems = scopeItems.filter((si) => si.scope)
     if (validScopeItems.length > 0) {
       const scopeUpsert = validScopeItems.map((si) => ({
@@ -339,7 +308,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       await supabase.from('bid_line_items').upsert(scopeUpsert as any, { onConflict: 'id' })
     }
 
-    // Delete removed scope items
     const keptScopeIds = new Set(scopeItems.map((si) => si.id).filter(Boolean))
     const deletedScopeItems = (bid.line_items ?? []).filter(
       (li) => !li.client && !keptScopeIds.has(li.id)
@@ -353,10 +321,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
     setSaving(false)
     toast.success('Bid saved successfully.')
+    refetch()
   }
 
   async function handleStatusChange(newStatus: BidStatus) {
-    if (!bid || !profile) return
+    if (!bid || !profile || newStatus === bid.status) return
     setChangingStatus(newStatus)
     const supabase = createClient()
     const prevStatus = bid.status
@@ -373,9 +342,9 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     }
 
     await logActivity(bidId, profile.id, `Status changed from ${prevStatus} to ${newStatus}`)
-
     setChangingStatus(null)
     toast.success(`Status updated to ${newStatus}.`)
+    refetch()
   }
 
   async function handleAddNote() {
@@ -396,7 +365,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     }
 
     await logActivity(bidId, profile.id, 'Added a note')
-
     setNoteText('')
     setAddingNote(false)
     refetch()
@@ -406,29 +374,15 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   if (loading) {
     return (
-      <div className="space-y-4 max-w-7xl">
+      <div className="space-y-4 max-w-7xl pb-20">
         <Skeleton className="h-4 w-80" />
-        <div className="flex items-center gap-3">
-          <Skeleton className="h-8 w-96" />
-          <Skeleton className="h-6 w-20" />
+        <Skeleton className="h-20 w-full" />
+        <div className="grid grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24 w-full" />)}
         </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-8 w-28" />
-          <Skeleton className="h-8 w-28" />
-        </div>
-        <div className="grid grid-cols-[5fr_3fr_2fr] gap-6 mt-6">
-          <div className="space-y-4">
-            <Skeleton className="h-64 w-full" />
-            <Skeleton className="h-72 w-full" />
-          </div>
-          <div className="space-y-4">
-            <Skeleton className="h-56 w-full" />
-            <Skeleton className="h-48 w-full" />
-          </div>
-          <div className="space-y-4">
-            <Skeleton className="h-44 w-full" />
-            <Skeleton className="h-36 w-full" />
-          </div>
+        <div className="grid grid-cols-2 gap-6">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
         </div>
       </div>
     )
@@ -436,14 +390,33 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   if (!bid) return null
 
+  // ─── Derived Values ───────────────────────────────────────────────────────
+
   const days = daysUntilDue(bid.bid_due_date)
-  const nextStatuses = STATUS_TRANSITIONS[bid.status] ?? []
-  const uniqueClients = new Set((bid.line_items ?? []).map((li) => li.client)).size
+
+  const scopeTotal = scopeItems.reduce((sum, s) => {
+    const p = parseFloat(s.price)
+    return sum + (isNaN(p) ? 0 : p)
+  }, 0)
+
+  const clientLineItems = (bid.line_items ?? []).filter((li) => li.client)
+  const uniqueClientCount = new Set(clientLineItems.map((li) => li.client)).size
+  const totalLineItems = (bid.line_items ?? []).length
+
+  const clientRunningTotal = watchedItems.reduce((sum, item) => {
+    const p = parseFloat(item.price ?? '')
+    return sum + (isNaN(p) ? 0 : p)
+  }, 0)
+
+  const displayStatus = changingStatus ?? bid.status
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
   return (
-    <div className="max-w-7xl space-y-5">
+    <div className="max-w-7xl space-y-5 pb-20">
+
+      {/* ── Task 1: Header ─────────────────────────────────────────────────── */}
+
       {/* Breadcrumb */}
       <nav className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/dashboard" className="hover:text-foreground transition-colors">
@@ -458,644 +431,746 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       </nav>
 
       {/* Page Header */}
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-start gap-3">
-          <Link href="/dashboard">
-            <Button variant="ghost" size="sm" className="gap-1.5 -ml-2">
-              <ArrowLeftIcon className="size-4" />
-              Back
-            </Button>
-          </Link>
-          <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2.5">
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.4px', lineHeight: 1.2 }}>{bid.project_name}</h1>
-              <Badge
-                className={STATUS_BADGE_CLASSES[bid.status]}
-                variant="outline"
-              >
-                {bid.status}
-              </Badge>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">
-              Last updated {formatDateTime(bid.updated_at)}
-            </p>
-          </div>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        {/* Left side */}
+        <div className="flex-1 min-w-0 space-y-1">
+          <h1
+            className="text-2xl font-extrabold tracking-tight leading-tight"
+            style={{ color: 'var(--text)' }}
+          >
+            {bid.project_name}
+          </h1>
+          <p className="text-sm" style={{ color: 'var(--text3)' }}>
+            Branch: {bid.branch} · Estimator: {bid.estimator_name ?? 'Unassigned'}
+          </p>
+          <p className="text-sm font-medium" style={{ color: 'var(--accent2)' }}>
+            Due: {formatDate(bid.bid_due_date)}
+          </p>
         </div>
 
-        {/* Status Change Buttons */}
-        {nextStatuses.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {nextStatuses.map((next) => {
-              const statusColors: Record<string, { bg: string; text: string; shadow: string }> = {
-                'Bidding':     { bg: 'linear-gradient(135deg, #38bdf8, #0ea5e9)', text: 'white', shadow: '0 4px 14px rgba(56,189,248,0.35)' },
-                'In Progress': { bg: 'linear-gradient(135deg, #fbbf24, #f59e0b)', text: 'white', shadow: '0 4px 14px rgba(245,158,11,0.35)' },
-                'Sent':        { bg: 'linear-gradient(135deg, #34d399, #10b981)', text: 'white', shadow: '0 4px 14px rgba(16,185,129,0.35)' },
-                'Awarded':     { bg: 'linear-gradient(135deg, #6ee7b7, #10b981)', text: 'white', shadow: '0 4px 14px rgba(16,185,129,0.35)' },
-                'Lost':        { bg: 'linear-gradient(135deg, #fca5a5, #ef4444)', text: 'white', shadow: '0 4px 14px rgba(239,68,68,0.35)' },
-              }
-              const c = statusColors[next] ?? { bg: 'var(--surface2)', text: 'var(--text2)', shadow: 'none' }
-              return (
-                <button
-                  key={next}
-                  disabled={changingStatus !== null}
-                  onClick={() => handleStatusChange(next)}
-                  style={{
-                    padding: '6px 16px',
-                    borderRadius: '100px',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    cursor: changingStatus !== null ? 'not-allowed' : 'pointer',
-                    background: c.bg,
-                    color: c.text,
-                    border: 'none',
-                    boxShadow: c.shadow,
-                    transition: 'all 150ms ease',
-                    opacity: changingStatus !== null ? 0.7 : 1,
-                  }}
-                >
-                  {changingStatus === next ? 'Updating…' : `→ ${next}`}
-                </button>
-              )
-            })}
-          </div>
-        )}
+        {/* Right side: status badge + change status dropdown */}
+        <div className="flex items-center gap-3 shrink-0">
+          <Badge
+            className={`${STATUS_BADGE_CLASSES[bid.status]} rounded-full px-3 py-1 text-xs font-semibold`}
+            variant="outline"
+          >
+            {displayStatus}
+          </Badge>
+          <Select
+            value={bid.status}
+            onValueChange={(v) => handleStatusChange(v as BidStatus)}
+            disabled={changingStatus !== null}
+          >
+            <SelectTrigger className="w-40 h-8 text-sm">
+              <SelectValue placeholder="Change Status" />
+            </SelectTrigger>
+            <SelectContent>
+              {ALL_STATUSES.map((s) => (
+                <SelectItem key={s} value={s}>
+                  <span className="flex items-center gap-2">
+                    <span
+                      className={`size-2 rounded-full ${STATUS_BADGE_CLASSES[s].split(' ')[0]}`}
+                    />
+                    {s}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
-      {/* Three Column Layout */}
+      {/* ── Task 2: KPI Bar ─────────────────────────────────────────────────── */}
+
+      <div className="grid grid-cols-4 gap-4">
+        {/* KPI: Total Bid Value — sum of scope-only line items */}
+        <Card className="overflow-hidden">
+          <CardContent className="py-4">
+            <p
+              className="text-xs font-medium uppercase tracking-wide truncate"
+              style={{ color: 'var(--text3)' }}
+            >
+              Total Bid Value
+            </p>
+            <p
+              className="text-xl font-bold mt-1 tabular-nums truncate"
+              style={{
+                fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                color: 'var(--accent2)',
+              }}
+            >
+              {scopeTotal > 0 ? formatCurrency(scopeTotal) : 'TBD'}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* KPI: Line Items — total count including scope-only items */}
+        <Card className="overflow-hidden">
+          <CardContent className="py-4">
+            <p
+              className="text-xs font-medium uppercase tracking-wide truncate"
+              style={{ color: 'var(--text3)' }}
+            >
+              Line Items
+            </p>
+            <p
+              className="text-xl font-bold mt-1 tabular-nums"
+              style={{
+                fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                color: 'var(--text)',
+              }}
+            >
+              {totalLineItems}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* KPI: Clients — unique clients with line items */}
+        <Card className="overflow-hidden">
+          <CardContent className="py-4">
+            <p
+              className="text-xs font-medium uppercase tracking-wide truncate"
+              style={{ color: 'var(--text3)' }}
+            >
+              Clients
+            </p>
+            <p
+              className="text-xl font-bold mt-1 tabular-nums"
+              style={{
+                fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                color: 'var(--text)',
+              }}
+            >
+              {uniqueClientCount}
+            </p>
+          </CardContent>
+        </Card>
+
+        {/* KPI: Due In — green >7d, amber ≤7d, red ≤3d or overdue */}
+        <Card className="overflow-hidden">
+          <CardContent className="py-4">
+            <p
+              className="text-xs font-medium uppercase tracking-wide truncate"
+              style={{ color: 'var(--text3)' }}
+            >
+              Due In
+            </p>
+            <p
+              className="text-xl font-bold mt-1 tabular-nums truncate"
+              style={{
+                fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                color:
+                  days <= 3
+                    ? 'var(--red, #dc2626)'
+                    : days <= 7
+                    ? 'var(--yellow, #d97706)'
+                    : 'var(--green, #16a34a)',
+              }}
+            >
+              {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* ── Tasks 3 & 4: Scope Breakdown + Client Bids ──────────────────────── */}
+
       <form id="bid-detail-form" onSubmit={handleSubmit(onSubmit)}>
-        <div className="grid grid-cols-[5fr_3fr_2fr] gap-6 items-start">
-          {/* ── Left Column ── */}
-          <div className="flex flex-col gap-4">
-            {/* Bid Information Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Bid Information</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Project Name */}
-                <div className="space-y-1">
-                  <Label htmlFor="bd-project_name">Project Name</Label>
-                  <Input
-                    id="bd-project_name"
-                    {...register('project_name')}
-                    placeholder="Project name"
-                  />
-                  {errors.project_name && (
-                    <p className="text-xs text-destructive">{errors.project_name.message}</p>
-                  )}
-                </div>
+        <div className="grid grid-cols-2 gap-6">
 
-                {/* Branch */}
-                <div className="space-y-1">
-                  <Label>Branch</Label>
-                  <Controller
-                    name="branch"
-                    control={control}
-                    render={({ field }) => (
-                      <Select value={field.value} onValueChange={field.onChange}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="Select branch" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {(isAdmin
-                            ? BRANCHES
-                            : BRANCHES.filter((b) => userBranches.includes(b))
-                          ).map((b) => (
-                            <SelectItem key={b} value={b}>
-                              {BRANCH_LABELS[b]}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+          {/* ── Task 3: Scope Breakdown ── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Scope Breakdown</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Source of truth for scope pricing
+                    {scopeItems.length > 0 && (
+                      <span className="ml-1.5 text-muted-foreground/60">
+                        · {scopeItems.length} scope{scopeItems.length !== 1 ? 's' : ''}
+                      </span>
                     )}
-                  />
-                  {errors.branch && (
-                    <p className="text-xs text-destructive">{errors.branch.message}</p>
-                  )}
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_140px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span>Scope</span>
+                  <span>Price</span>
+                  <span />
                 </div>
 
-                {/* Estimator */}
-                <div className="space-y-1">
-                  <Label>Estimator</Label>
-                  {isEstimator ? (
-                    <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
-                      {bid.estimator_name ?? 'Unassigned'}
+                {scopeItems.length === 0 && (
+                  <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
+                    No scopes added yet.
+                  </div>
+                )}
+
+                {scopeItems.map((item, idx) => (
+                  <div
+                    key={item.id ?? `new-scope-${idx}`}
+                    className="grid grid-cols-[1fr_140px_36px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
+                  >
+                    <Select
+                      value={item.scope}
+                      onValueChange={(v) =>
+                        setScopeItems((prev) =>
+                          prev.map((s, i) => (i === idx ? { ...s, scope: v as BidScope } : s))
+                        )
+                      }
+                    >
+                      <SelectTrigger className="h-7 text-xs w-full">
+                        <SelectValue placeholder="Select scope" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {SCOPES.map((s) => (
+                          <SelectItem key={s} value={s}>
+                            <span
+                              className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
+                            >
+                              {s}
+                            </span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Input
+                      type="number"
+                      step="1"
+                      min="0"
+                      placeholder="TBD"
+                      value={item.price}
+                      onChange={(e) =>
+                        setScopeItems((prev) =>
+                          prev.map((s, i) => (i === idx ? { ...s, price: e.target.value } : s))
+                        )
+                      }
+                      className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    />
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() =>
+                        setScopeItems((prev) => prev.filter((_, i) => i !== idx))
+                      }
+                      aria-label="Remove scope"
+                    >
+                      <Trash2Icon className="size-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
+              >
+                <PlusIcon className="size-3.5" />
+                Add Scope
+              </Button>
+
+              {/* Running Total */}
+              <div
+                className="flex items-center justify-end pt-2"
+                style={{ borderTop: '1px solid var(--border)' }}
+              >
+                <span className="text-xs mr-2" style={{ color: 'var(--text3)' }}>
+                  Running Total:
+                </span>
+                <span
+                  className="font-bold text-sm tabular-nums"
+                  style={{
+                    fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                    color: 'var(--accent2)',
+                  }}
+                >
+                  {scopeTotal > 0 ? formatCurrency(scopeTotal) : 'TBD'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* ── Task 4: Client Bids ── */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Client Bids</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Which clients are getting which scopes
+                    {uniqueClientCount > 0 && (
+                      <span className="ml-1.5 text-muted-foreground/60">
+                        · {uniqueClientCount} client{uniqueClientCount !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {errors.line_items?.root && (
+                <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
+              )}
+
+              {/* Grouped client summary (read from saved bid data) */}
+              {clientLineItems.length > 0 && (
+                <div className="border rounded-md overflow-hidden mb-1">
+                  <div className="grid grid-cols-[1fr_2fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                    <span>Client</span>
+                    <span>Scopes Included</span>
+                    <span className="text-right">Total Bid</span>
+                  </div>
+                  {Object.entries(
+                    clientLineItems.reduce<Record<string, typeof clientLineItems>>(
+                      (acc, li) => {
+                        const key = li.client!
+                        if (!acc[key]) acc[key] = []
+                        acc[key].push(li)
+                        return acc
+                      },
+                      {}
+                    )
+                  ).map(([client, items]) => {
+                    const clientTotal = items.reduce((s, li) => s + (li.price ?? 0), 0)
+                    return (
+                      <div
+                        key={client}
+                        className="grid grid-cols-[1fr_2fr_100px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
+                      >
+                        <span className="text-sm font-medium truncate">{client}</span>
+                        <div className="flex flex-wrap gap-1">
+                          {items.map((li) => (
+                            <span
+                              key={li.id}
+                              className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${SCOPE_BADGE_CLASSES[li.scope]}`}
+                            >
+                              {li.scope}
+                            </span>
+                          ))}
+                        </div>
+                        <span
+                          className="text-right text-sm font-semibold tabular-nums"
+                          style={{
+                            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                          }}
+                        >
+                          {clientTotal > 0 ? formatCurrency(clientTotal) : 'TBD'}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span>Client</span>
+                  <span>Scope</span>
+                  <span>Price</span>
+                  <span />
+                </div>
+
+                {fields.map((field, index) => (
+                  <div
+                    key={field.id}
+                    className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
+                  >
+                    <input type="hidden" {...register(`line_items.${index}.id`)} />
+
+                    <div>
+                      <Input
+                        {...register(`line_items.${index}.client`)}
+                        placeholder="Client"
+                        className="h-7 text-xs px-2"
+                      />
+                      {errors.line_items?.[index]?.client && (
+                        <p className="text-xs text-destructive mt-0.5">
+                          {errors.line_items[index]?.client?.message}
+                        </p>
+                      )}
                     </div>
-                  ) : (
-                    <Controller
-                      name="estimator_id"
-                      control={control}
-                      render={({ field }) => {
-                        const displayName = (() => {
-                          if (!field.value) return null
-                          return (
-                            estimatorProfiles.find(p => p.id === field.value)?.name ??
-                            profiles.find(p => p.id === field.value)?.name ??
-                            null
-                          )
-                        })()
-                        return (
+
+                    <div>
+                      <Controller
+                        name={`line_items.${index}.scope`}
+                        control={control}
+                        render={({ field: scopeField }) => (
                           <Select
-                            value={field.value ?? '__none__'}
-                            onValueChange={(v) => field.onChange(v === '__none__' ? null : v)}
+                            value={scopeField.value}
+                            onValueChange={scopeField.onChange}
                           >
-                            <SelectTrigger className="w-full">
-                              {displayName
-                                ? <span>{displayName}</span>
-                                : <span className="italic text-muted-foreground">Unassigned</span>
-                              }
+                            <SelectTrigger className="w-full h-7 text-xs">
+                              <SelectValue placeholder="Scope" />
                             </SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="__none__">
-                                <span className="italic text-muted-foreground">Unassigned</span>
-                              </SelectItem>
-                              {estimatorProfiles.map((p) => (
-                                <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+                              {SCOPES.map((s) => (
+                                <SelectItem key={s} value={s}>
+                                  <span
+                                    className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
+                                  >
+                                    {s}
+                                  </span>
+                                </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                        )
-                      }}
-                    />
-                  )}
-                </div>
-
-                {/* Dates */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="bd-bid_due_date">Bid Due Date</Label>
-                    <Controller
-                      name="bid_due_date"
-                      control={control}
-                      render={({ field }) => (
-                        <SmartDateInput
-                          id="bd-bid_due_date"
-                          value={field.value ?? ''}
-                          onChange={field.onChange}
-                          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        />
+                        )}
+                      />
+                      {errors.line_items?.[index]?.scope && (
+                        <p className="text-xs text-destructive mt-0.5">
+                          {errors.line_items[index]?.scope?.message}
+                        </p>
                       )}
+                    </div>
+
+                    <Input
+                      {...register(`line_items.${index}.price`)}
+                      type="number"
+                      step="1"
+                      min="0"
+                      placeholder="TBD"
+                      className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
-                    {errors.bid_due_date && (
-                      <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => {
+                        if (fields.length === 1) {
+                          setDeleteLineItemIndex(index)
+                        } else {
+                          remove(index)
+                        }
+                      }}
+                      aria-label="Remove client bid"
+                    >
+                      <Trash2Icon className="size-3.5 text-destructive" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  append({ id: undefined, client: '', scope: undefined as any, price: '' })
+                }
+              >
+                <PlusIcon className="size-3.5" />
+                Add Client
+              </Button>
+
+              {/* Running Total */}
+              <div
+                className="flex items-center justify-end pt-2"
+                style={{ borderTop: '1px solid var(--border)' }}
+              >
+                <span className="text-xs mr-2" style={{ color: 'var(--text3)' }}>
+                  Running Total:
+                </span>
+                <span
+                  className="font-bold text-sm tabular-nums"
+                  style={{
+                    fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                    color: 'var(--accent2)',
+                  }}
+                >
+                  {clientRunningTotal > 0 ? formatCurrency(clientRunningTotal) : 'TBD'}
+                </span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Bid Information (project metadata) */}
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Bid Information</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="bd-project_name">Project Name</Label>
+                    <Input
+                      id="bd-project_name"
+                      {...register('project_name')}
+                      placeholder="Project name"
+                    />
+                    {errors.project_name && (
+                      <p className="text-xs text-destructive">{errors.project_name.message}</p>
                     )}
                   </div>
+
                   <div className="space-y-1">
-                    <Label htmlFor="bd-project_start_date">Project Start (optional)</Label>
+                    <Label>Branch</Label>
                     <Controller
-                      name="project_start_date"
+                      name="branch"
                       control={control}
                       render={({ field }) => (
-                        <SmartDateInput
-                          id="bd-project_start_date"
-                          value={field.value ?? ''}
-                          onChange={field.onChange}
-                          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        />
+                        <Select value={field.value} onValueChange={field.onChange}>
+                          <SelectTrigger className="w-full">
+                            <SelectValue placeholder="Select branch" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {(isAdmin
+                              ? BRANCHES
+                              : BRANCHES.filter((b) => userBranches.includes(b))
+                            ).map((b) => (
+                              <SelectItem key={b} value={b}>
+                                {BRANCH_LABELS[b]}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       )}
                     />
+                    {errors.branch && (
+                      <p className="text-xs text-destructive">{errors.branch.message}</p>
+                    )}
                   </div>
                 </div>
-              </CardContent>
-            </Card>
 
-            {/* Line Items Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Line Items</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {errors.line_items?.root && (
-                  <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
-                )}
-
-                <div className="border rounded-md overflow-hidden">
-                  {/* Table Header */}
-                  <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                    <span>Client</span>
-                    <span>Scope</span>
-                    <span>Price</span>
-                    <span />
-                  </div>
-
-                  {/* Table Rows */}
-                  {fields.map((field, index) => (
-                    <div
-                      key={field.id}
-                      className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
-                    >
-                      <input type="hidden" {...register(`line_items.${index}.id`)} />
-                      <div>
-                        <Input
-                          {...register(`line_items.${index}.client`)}
-                          placeholder="Client"
-                          className="h-7 text-xs px-2"
-                        />
-                        {errors.line_items?.[index]?.client && (
-                          <p className="text-xs text-destructive mt-0.5">
-                            {errors.line_items[index]?.client?.message}
-                          </p>
-                        )}
+                <div className="space-y-4">
+                  <div className="space-y-1">
+                    <Label>Estimator</Label>
+                    {isEstimator ? (
+                      <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
+                        {bid.estimator_name ?? 'Unassigned'}
                       </div>
-                      <div>
-                        <Controller
-                          name={`line_items.${index}.scope`}
-                          control={control}
-                          render={({ field: scopeField }) => (
+                    ) : (
+                      <Controller
+                        name="estimator_id"
+                        control={control}
+                        render={({ field }) => {
+                          const displayName = (() => {
+                            if (!field.value) return null
+                            return (
+                              estimatorProfiles.find((p) => p.id === field.value)?.name ??
+                              profiles.find((p) => p.id === field.value)?.name ??
+                              null
+                            )
+                          })()
+                          return (
                             <Select
-                              value={scopeField.value}
-                              onValueChange={scopeField.onChange}
+                              value={field.value ?? '__none__'}
+                              onValueChange={(v) =>
+                                field.onChange(v === '__none__' ? null : v)
+                              }
                             >
-                              <SelectTrigger className="w-full h-7 text-xs">
-                                <SelectValue placeholder="Scope" />
+                              <SelectTrigger className="w-full">
+                                {displayName ? (
+                                  <span>{displayName}</span>
+                                ) : (
+                                  <span className="italic text-muted-foreground">
+                                    Unassigned
+                                  </span>
+                                )}
                               </SelectTrigger>
                               <SelectContent>
-                                {SCOPES.map((s) => (
-                                  <SelectItem key={s} value={s}>
-                                    <span
-                                      className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
-                                    >
-                                      {s}
-                                    </span>
+                                <SelectItem value="__none__">
+                                  <span className="italic text-muted-foreground">
+                                    Unassigned
+                                  </span>
+                                </SelectItem>
+                                {estimatorProfiles.map((p) => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
-                          )}
-                        />
-                        {errors.line_items?.[index]?.scope && (
-                          <p className="text-xs text-destructive mt-0.5">
-                            {errors.line_items[index]?.scope?.message}
-                          </p>
-                        )}
-                      </div>
-                      <Input
-                        {...register(`line_items.${index}.price`)}
-                        type="number"
-                        step="1"
-                        min="0"
-                        placeholder="TBD"
-                        className="h-7 text-xs px-2"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => {
-                          if (fields.length === 1) {
-                            setDeleteLineItemIndex(index)
-                          } else {
-                            remove(index)
-                          }
+                          )
                         }}
-                        aria-label="Remove line item"
-                      >
-                        <Trash2Icon className="size-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() =>
-                    append({ id: undefined, client: '', scope: undefined as any, price: '' })
-                  }
-                >
-                  <PlusIcon className="size-3.5" />
-                  Add Line Item
-                </Button>
-
-                {/* Running Total */}
-                <div className="flex items-center justify-end pt-2" style={{ borderTop: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text3)', fontSize: '0.8rem', marginRight: 8 }}>Total:</span>
-                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 700, color: 'var(--accent2)', fontSize: '0.95rem' }}>
-                    {hasAnyPrice ? formatCurrency(totalPreview) : 'TBD'}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Scopes Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Scopes</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="border rounded-md overflow-hidden">
-                  <div className="grid grid-cols-[1fr_120px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                    <span>Scope</span>
-                    <span>Price</span>
-                    <span />
-                  </div>
-                  {scopeItems.length === 0 && (
-                    <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
-                      No scopes added yet.
-                    </div>
-                  )}
-                  {scopeItems.map((item, idx) => (
-                    <div
-                      key={item.id ?? `new-scope-${idx}`}
-                      className="grid grid-cols-[1fr_120px_36px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
-                    >
-                      <Select
-                        value={item.scope}
-                        onValueChange={(v) =>
-                          setScopeItems((prev) =>
-                            prev.map((s, i) => (i === idx ? { ...s, scope: v as BidScope } : s))
-                          )
-                        }
-                      >
-                        <SelectTrigger className="h-7 text-xs w-full">
-                          <SelectValue placeholder="Select scope" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {SCOPES.map((s) => (
-                            <SelectItem key={s} value={s}>
-                              <span className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}>
-                                {s}
-                              </span>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Input
-                        type="number"
-                        step="1"
-                        min="0"
-                        placeholder="TBD"
-                        value={item.price}
-                        onChange={(e) =>
-                          setScopeItems((prev) =>
-                            prev.map((s, i) => (i === idx ? { ...s, price: e.target.value } : s))
-                          )
-                        }
-                        className="h-7 text-xs px-2"
                       />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setScopeItems((prev) => prev.filter((_, i) => i !== idx))}
-                        aria-label="Remove scope"
-                      >
-                        <Trash2Icon className="size-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))}
-                </div>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
-                >
-                  <PlusIcon className="size-3.5" />
-                  Add Scope
-                </Button>
-                {scopeItems.some((s) => s.price.trim() && !isNaN(parseFloat(s.price))) && (
-                  <div className="flex items-center justify-end pt-2" style={{ borderTop: '1px solid var(--border)' }}>
-                    <span style={{ color: 'var(--text3)', fontSize: '0.8rem', marginRight: 8 }}>Total:</span>
-                    <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 700, color: 'var(--accent2)', fontSize: '0.95rem' }}>
-                      {formatCurrency(
-                        scopeItems.reduce((sum, s) => {
-                          const p = parseFloat(s.price)
-                          return sum + (isNaN(p) ? 0 : p)
-                        }, 0)
-                      )}
-                    </span>
+                    )}
                   </div>
-                )}
-              </CardContent>
-            </Card>
 
-            {/* Bid Breakdown */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Bid Breakdown</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {(() => {
-                  const clientItems = (bid.line_items ?? []).filter((li) => li.client)
-                  if (clientItems.length === 0) {
-                    return (
-                      <p className="text-sm text-muted-foreground italic">
-                        No line items yet. Add clients in the Line Items section above.
-                      </p>
-                    )
-                  }
-                  const grouped = clientItems.reduce<Record<string, typeof clientItems>>(
-                    (acc, li) => {
-                      const key = li.client!
-                      if (!acc[key]) acc[key] = []
-                      acc[key].push(li)
-                      return acc
-                    },
-                    {}
-                  )
-                  const grandTotal = clientItems.reduce((sum, li) => sum + (li.price ?? 0), 0)
-                  return (
-                    <div className="border rounded-md overflow-hidden text-sm">
-                      <div className="grid grid-cols-[1fr_2fr_120px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                        <span>Client</span>
-                        <span>Scopes Bid</span>
-                        <span className="text-right">Total Bid Price</span>
-                      </div>
-                      {Object.entries(grouped).map(([client, items]) => {
-                        const clientTotal = items.reduce((sum, li) => sum + (li.price ?? 0), 0)
-                        return (
-                          <div
-                            key={client}
-                            className="grid grid-cols-[1fr_2fr_120px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
-                          >
-                            <span className="font-medium truncate">{client}</span>
-                            <div className="flex flex-wrap gap-1">
-                              {items.map((li) => (
-                                <span
-                                  key={li.id}
-                                  className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${SCOPE_BADGE_CLASSES[li.scope]}`}
-                                >
-                                  {li.scope}
-                                </span>
-                              ))}
-                            </div>
-                            <span className="text-right tabular-nums font-semibold">
-                              {clientTotal > 0 ? formatCurrency(clientTotal) : 'TBD'}
-                            </span>
-                          </div>
-                        )
-                      })}
-                      <div className="grid grid-cols-[1fr_2fr_120px] gap-2 px-3 py-2 bg-muted/30 border-t">
-                        <span className="font-semibold col-span-2">Grand Total</span>
-                        <span
-                          className="text-right tabular-nums font-bold"
-                          style={{ color: 'var(--accent2)' }}
-                        >
-                          {grandTotal > 0 ? formatCurrency(grandTotal) : 'TBD'}
-                        </span>
-                      </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="bd-bid_due_date">Bid Due Date</Label>
+                      <Controller
+                        name="bid_due_date"
+                        control={control}
+                        render={({ field }) => (
+                          <SmartDateInput
+                            id="bd-bid_due_date"
+                            value={field.value ?? ''}
+                            onChange={field.onChange}
+                            className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        )}
+                      />
+                      {errors.bid_due_date && (
+                        <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+                      )}
                     </div>
-                  )
-                })()}
-              </CardContent>
-            </Card>
-
-            {/* Save Button */}
-            <div className="flex justify-end pt-2 pb-4 border-t">
-              <Button type="submit" form="bid-detail-form" disabled={saving} size="lg">
-                {saving ? 'Saving…' : 'Save Changes'}
-              </Button>
-            </div>
-          </div>
-
-          {/* ── Center Column ── */}
-          <div className="flex flex-col gap-4">
-            {/* Notes Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Notes</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                {/* Add Note Input */}
-                <div className="flex gap-2">
-                  <Input
-                    value={noteText}
-                    onChange={(e) => setNoteText(e.target.value)}
-                    placeholder="Add a note…"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault()
-                        handleAddNote()
-                      }
-                    }}
-                  />
-                  <Button
-                    type="button"
-                    size="sm"
-                    disabled={!noteText.trim() || addingNote}
-                    onClick={handleAddNote}
-                  >
-                    {addingNote ? '…' : 'Add'}
-                  </Button>
+                    <div className="space-y-1">
+                      <Label htmlFor="bd-project_start_date">Project Start (optional)</Label>
+                      <Controller
+                        name="project_start_date"
+                        control={control}
+                        render={({ field }) => (
+                          <SmartDateInput
+                            id="bd-project_start_date"
+                            value={field.value ?? ''}
+                            onChange={field.onChange}
+                            className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          />
+                        )}
+                      />
+                    </div>
+                  </div>
                 </div>
-
-                {/* Notes List (newest first) */}
-                {notes.length === 0 ? (
-                  <p style={{ color: 'var(--text3)', fontSize: '0.875rem', fontStyle: 'italic' }}>No notes yet.</p>
-                ) : (
-                  <ul style={{ maxHeight: 256, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 0 }}>
-                    {notes.map((note) => (
-                      <li key={note.id} style={{ paddingBottom: 10, marginBottom: 10, borderBottom: '1px solid var(--border)' }} className="last:border-b-0 last:mb-0 last:pb-0">
-                        <p style={{ fontSize: '0.8rem', lineHeight: 1.4, color: 'var(--text)' }}>{note.text}</p>
-                        <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 3 }}>
-                          {note.author_name ?? 'Unknown'} · {formatDateTime(note.created_at)}
-                        </p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Activity Log Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Activity</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {activity.length === 0 ? (
-                  <p style={{ color: 'var(--text3)', fontSize: '0.875rem', fontStyle: 'italic' }}>No activity yet.</p>
-                ) : (
-                  <ul style={{ maxHeight: 280, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                    {activity.map((entry) => (
-                      <li key={entry.id} style={{ display: 'flex', gap: 10, paddingBottom: 12, borderBottom: '1px solid var(--border)', marginBottom: 0 }} className="last:border-b-0">
-                        <div style={{
-                          width: 8,
-                          height: 8,
-                          borderRadius: '50%',
-                          background: 'var(--accent)',
-                          flexShrink: 0,
-                          marginTop: 5,
-                        }} />
-                        <div>
-                          <p style={{ fontSize: '0.8rem', lineHeight: 1.4, color: 'var(--text)' }}>{entry.action}</p>
-                          <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-                            {entry.author_name ?? 'System'} · {formatDateTime(entry.created_at)}
-                          </p>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* ── Right Column ── */}
-          <div className="flex flex-col gap-4">
-            {/* Quick Stats Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Quick Stats</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 text-sm">
-                <div className="flex justify-between items-center">
-                  <span style={{ color: 'var(--text3)' }}>Total Bid Value</span>
-                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 600, color: 'var(--accent2)' }}>
-                    {(bid.total_price ?? 0) > 0 ? formatCurrency(bid.total_price ?? 0) : 'TBD'}
-                  </span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span style={{ color: 'var(--text3)' }}>Line Items</span>
-                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 600, color: 'var(--text)' }}>{bid.line_items?.length ?? 0}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span style={{ color: 'var(--text3)' }}>Clients</span>
-                  <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontWeight: 600, color: 'var(--text)' }}>{uniqueClients}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span style={{ color: 'var(--text3)' }}>Days Until Due</span>
-                  <span style={{
-                    fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-                    fontWeight: 700,
-                    color: days <= 3 ? 'var(--red)' : days <= 7 ? 'var(--yellow)' : 'var(--green)',
-                  }}>
-                    {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Bid ID Card */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Bid Details</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div>
-                  <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginBottom: 2 }}>Bid ID</p>
-                  <p style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', fontSize: '0.7rem', color: 'var(--text2)', wordBreak: 'break-all' }}>{bid.id}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Created</p>
-                  <p>{formatDate(bid.created_at)}</p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Branch</p>
-                  <Badge
-                    className={BRANCH_BADGE_CLASSES[bid.branch] ?? ''}
-                    variant="outline"
-                  >
-                    {bid.branch}
-                  </Badge>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </form>
+
+      {/* ── Task 5: Notes (collapsible, collapsed by default) ────────────────── */}
+
+      <Card>
+        <button
+          type="button"
+          className="w-full text-left"
+          onClick={() => setNotesOpen((o) => !o)}
+        >
+          <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none py-4">
+            <CardTitle>Notes</CardTitle>
+            {notesOpen ? (
+              <ChevronUpIcon className="size-4 text-muted-foreground" />
+            ) : (
+              <ChevronDownIcon className="size-4 text-muted-foreground" />
+            )}
+          </CardHeader>
+        </button>
+
+        {notesOpen && (
+          <CardContent className="space-y-3 pt-0">
+            <div className="flex gap-2">
+              <Input
+                value={noteText}
+                onChange={(e) => setNoteText(e.target.value)}
+                placeholder="Add a note…"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddNote()
+                  }
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={!noteText.trim() || addingNote}
+                onClick={handleAddNote}
+              >
+                {addingNote ? '…' : 'Add'}
+              </Button>
+            </div>
+
+            {notes.length === 0 ? (
+              <p className="text-sm italic" style={{ color: 'var(--text3)' }}>
+                No notes yet.
+              </p>
+            ) : (
+              <ul className="max-h-64 overflow-y-auto">
+                {notes.map((note) => (
+                  <li
+                    key={note.id}
+                    className="pb-2.5 mb-2.5 border-b last:border-b-0 last:mb-0 last:pb-0"
+                  >
+                    <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
+                      {note.text}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>
+                      {note.author_name ?? 'Unknown'} · {formatDateTime(note.created_at)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        )}
+      </Card>
+
+      {/* Activity — only rendered when entries exist */}
+      {activity.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="max-h-72 overflow-y-auto">
+              {activity.map((entry) => (
+                <li
+                  key={entry.id}
+                  className="flex gap-2.5 pb-3 mb-0 border-b last:border-b-0 last:pb-0"
+                >
+                  <div
+                    className="size-2 rounded-full shrink-0 mt-1.5"
+                    style={{ background: 'var(--accent)' }}
+                  />
+                  <div>
+                    <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
+                      {entry.action}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>
+                      {entry.author_name ?? 'System'} · {formatDateTime(entry.created_at)}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ── Task 5: Bottom Summary Bar ───────────────────────────────────────── */}
+
+      <div
+        className="fixed bottom-0 left-60 right-0 z-10 border-t px-6 py-3 flex items-center justify-between backdrop-blur-sm"
+        style={{
+          background: 'color-mix(in srgb, var(--background, #fff) 90%, transparent)',
+          borderColor: 'var(--border)',
+        }}
+      >
+        <div className="flex items-baseline gap-2">
+          <span className="text-xs font-medium" style={{ color: 'var(--text3)' }}>
+            Total Bid Value
+          </span>
+          <span
+            className="text-2xl font-bold tabular-nums"
+            style={{
+              fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+              color: 'var(--accent2)',
+            }}
+          >
+            {scopeTotal > 0 ? formatCurrency(scopeTotal) : 'TBD'}
+          </span>
+        </div>
+        <Button
+          type="submit"
+          form="bid-detail-form"
+          disabled={saving}
+          size="lg"
+        >
+          {saving ? 'Saving…' : 'Save Changes'}
+        </Button>
+      </div>
 
       {/* Confirm remove last line item */}
       <AlertDialog
