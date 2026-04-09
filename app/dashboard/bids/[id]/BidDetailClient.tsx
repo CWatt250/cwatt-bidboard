@@ -913,15 +913,21 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
             <CardHeader>
               <CardTitle className="font-bold text-[var(--text)]">Bid Information</CardTitle>
             </CardHeader>
-            <CardContent className="p-6">
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
+            <CardContent className="p-6 space-y-6">
+              {/* Project Info group */}
+              <div>
+                <p className="text-xs uppercase tracking-wider font-medium mb-3" style={{ color: 'var(--text3)' }}>
+                  Project Info
+                </p>
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <Label htmlFor="bd-project_name">Project Name</Label>
+                    <Label htmlFor="bd-project_name" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      Project Name
+                    </Label>
                     <Input
                       id="bd-project_name"
                       {...register('project_name')}
-                      placeholder="Project name"
+                      className="border-[var(--border)]"
                     />
                     {errors.project_name && (
                       <p className="text-xs text-destructive">{errors.project_name.message}</p>
@@ -929,13 +935,13 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   </div>
 
                   <div className="space-y-1">
-                    <Label>Branch</Label>
+                    <Label className="text-sm" style={{ color: 'var(--text3)' }}>Branch</Label>
                     <Controller
                       name="branch"
                       control={control}
                       render={({ field }) => (
                         <Select value={field.value} onValueChange={field.onChange}>
-                          <SelectTrigger className="w-full">
+                          <SelectTrigger className="w-full border-[var(--border)]">
                             <SelectValue placeholder="Select branch" />
                           </SelectTrigger>
                           <SelectContent>
@@ -955,13 +961,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                       <p className="text-xs text-destructive">{errors.branch.message}</p>
                     )}
                   </div>
-                </div>
 
-                <div className="space-y-4">
                   <div className="space-y-1">
-                    <Label>Estimator</Label>
+                    <Label className="text-sm" style={{ color: 'var(--text3)' }}>Estimator</Label>
                     {isEstimator ? (
-                      <div className="h-9 px-3 flex items-center rounded-md border border-input bg-muted/40 text-sm text-muted-foreground">
+                      <div className="h-9 px-3 flex items-center rounded-md border border-[var(--border)] bg-muted/40 text-sm" style={{ color: 'var(--text)' }}>
                         {bid.estimator_name ?? 'Unassigned'}
                       </div>
                     ) : (
@@ -984,7 +988,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                                 field.onChange(v === '__none__' ? null : v)
                               }
                             >
-                              <SelectTrigger className="w-full">
+                              <SelectTrigger className="w-full border-[var(--border)]">
                                 {displayName ? (
                                   <span>{displayName}</span>
                                 ) : (
@@ -1011,41 +1015,51 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                       />
                     )}
                   </div>
+                </div>
+              </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label htmlFor="bd-bid_due_date">Bid Due Date</Label>
-                      <Controller
-                        name="bid_due_date"
-                        control={control}
-                        render={({ field }) => (
-                          <SmartDateInput
-                            id="bd-bid_due_date"
-                            value={field.value ?? ''}
-                            onChange={field.onChange}
-                            className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                        )}
-                      />
-                      {errors.bid_due_date && (
-                        <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+              {/* Dates group */}
+              <div>
+                <p className="text-xs uppercase tracking-wider font-medium mb-3" style={{ color: 'var(--text3)' }}>
+                  Dates
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="bd-bid_due_date" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      Bid Due Date
+                    </Label>
+                    <Controller
+                      name="bid_due_date"
+                      control={control}
+                      render={({ field }) => (
+                        <SmartDateInput
+                          id="bd-bid_due_date"
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          className="flex h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
                       )}
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="bd-project_start_date">Project Start (optional)</Label>
-                      <Controller
-                        name="project_start_date"
-                        control={control}
-                        render={({ field }) => (
-                          <SmartDateInput
-                            id="bd-project_start_date"
-                            value={field.value ?? ''}
-                            onChange={field.onChange}
-                            className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                          />
-                        )}
-                      />
-                    </div>
+                    />
+                    {errors.bid_due_date && (
+                      <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="bd-project_start_date" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      Project Start <span className="font-normal opacity-60">(optional)</span>
+                    </Label>
+                    <Controller
+                      name="project_start_date"
+                      control={control}
+                      render={({ field }) => (
+                        <SmartDateInput
+                          id="bd-project_start_date"
+                          value={field.value ?? ''}
+                          onChange={field.onChange}
+                          className="flex h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                      )}
+                    />
                   </div>
                 </div>
               </div>
