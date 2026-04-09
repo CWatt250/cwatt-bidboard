@@ -12,21 +12,27 @@ const SCOPE_COLORS: Record<string, { bg: string; text: string }> = {
   'HVAC Ductwork':   { bg: 'rgba(249,115,22,0.12)', text: '#f97316' },
   'Fire Stopping':   { bg: 'rgba(239,68,68,0.12)',  text: '#ef4444' },
   'Equipment':       { bg: 'rgba(139,92,246,0.12)', text: '#8b5cf6' },
-  'Other':           { bg: 'rgba(148,163,184,0.12)','text': '#64748b' },
+  'Other':           { bg: 'rgba(148,163,184,0.12)', text: '#64748b' },
 }
 
-function dueDateStyle(dateStr: string): React.CSSProperties {
+/** Returns due-date badge info: null = omit, else pill props */
+function getDueBadge(dateStr: string | null): { label: string; bg: string; color: string } | null {
+  if (!dateStr) return null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const due = new Date(dateStr + 'T00:00:00')
-  const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diffDays <= 3) return { color: 'var(--red)', fontWeight: 700 }
-  if (diffDays <= 7) return { color: 'var(--yellow)', fontWeight: 600 }
-  return { color: 'var(--text3)' }
+  const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (diffDays === 0) return { label: 'Due Today', bg: '#FCEBEB', color: '#A32D2D' }
+  if (diffDays >= 1 && diffDays <= 5) return { label: 'Due Soon', bg: '#FAEEDA', color: '#854F0B' }
+  return null
 }
 
 function formatCurrency(value: number): string {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(value)
+}
+
+function formatDate(dateStr: string): string {
+  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
 interface BidCardProps {
@@ -52,17 +58,20 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
   }
 
   const lineItems = bid.line_items ?? []
-  const uniqueClients = [...new Set(lineItems.map((li) => li.client))]
+  const uniqueClients = [...new Set(lineItems.map((li) => li.client).filter(Boolean))]
   const clientsDisplay =
     uniqueClients.length === 0
       ? null
       : uniqueClients.slice(0, 2).join(', ') +
-        (uniqueClients.length > 2 ? ` +${uniqueClients.length - 2} more` : '')
+        (uniqueClients.length > 2 ? ` +${uniqueClients.length - 2}` : '')
 
   const uniqueScopes = [...new Set(lineItems.map((li) => li.scope))]
   const extraScopes = uniqueScopes.length > 2 ? uniqueScopes.length - 2 : 0
   const hasPrice = lineItems.some((li) => li.price !== null)
   const totalPriceDisplay = hasPrice ? formatCurrency(bid.total_price ?? 0) : 'TBD'
+
+  const dueBadge = getDueBadge(bid.bid_due_date)
+  const dueDateFormatted = bid.bid_due_date ? formatDate(bid.bid_due_date) : null
 
   return (
     <Draggable draggableId={bid.id} index={index}>
@@ -107,20 +116,20 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
           }}
         >
           {/* Project name */}
-          <div style={{ fontWeight: 700, fontSize: '0.8rem', lineHeight: 1.3, color: 'var(--text)', marginBottom: 4 }}>
+          <div style={{ fontWeight: 700, fontSize: '0.82rem', lineHeight: 1.3, color: 'var(--text)', marginBottom: 3 }}>
             {bid.project_name}
           </div>
 
-          {/* Clients */}
+          {/* GC / client name */}
           {clientsDisplay && (
-            <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginBottom: 6 }}>
+            <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginBottom: 7 }}>
               {clientsDisplay}
             </div>
           )}
 
-          {/* Scope badges */}
-          {uniqueScopes.length > 0 && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 6 }}>
+          {/* Scope + branch tags row */}
+          {(uniqueScopes.length > 0 || bid.branch) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
               {uniqueScopes.slice(0, 2).map((scope) => {
                 const c = SCOPE_COLORS[scope] ?? { bg: 'var(--surface2)', text: 'var(--text2)' }
                 return (
@@ -129,7 +138,7 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
                     style={{
                       background: c.bg,
                       color: c.text,
-                      fontSize: '0.65rem',
+                      fontSize: '0.63rem',
                       fontWeight: 600,
                       padding: '2px 6px',
                       borderRadius: '4px',
@@ -143,7 +152,7 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
                 <span style={{
                   background: 'var(--surface2)',
                   color: 'var(--text3)',
-                  fontSize: '0.65rem',
+                  fontSize: '0.63rem',
                   fontWeight: 600,
                   padding: '2px 6px',
                   borderRadius: '4px',
@@ -151,45 +160,55 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
                   +{extraScopes}
                 </span>
               )}
-              <span style={{
-                background: 'var(--surface2)',
-                color: 'var(--text2)',
-                fontSize: '0.65rem',
-                fontWeight: 600,
-                padding: '2px 6px',
-                borderRadius: '4px',
-              }}>
-                {bid.branch}
-              </span>
+              {bid.branch && (
+                <span style={{
+                  background: 'var(--surface2)',
+                  color: 'var(--text2)',
+                  fontSize: '0.63rem',
+                  fontWeight: 600,
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                }}>
+                  {bid.branch}
+                </span>
+              )}
             </div>
           )}
 
-          {/* Estimator */}
-          <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginBottom: 4 }}>
-            {bid.estimator_name ?? <em>Unassigned</em>}
-          </div>
-
-          {/* Due date */}
-          <div style={{ fontSize: '0.72rem', marginBottom: 4, ...dueDateStyle(bid.bid_due_date) }}>
-            Due: {new Date(bid.bid_due_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-          </div>
-
-          {/* Price — only for In Progress, Sent, Awarded */}
-          {(bid.status === 'In Progress' || bid.status === 'Sent' || bid.status === 'Awarded') && (
-            <div style={{
+          {/* Bottom row: bid value left, due date right */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <span style={{
               fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-              fontSize: '0.8rem',
-              fontWeight: 600,
+              fontSize: '0.78rem',
+              fontWeight: 700,
               color: hasPrice ? 'var(--accent2)' : 'var(--text3)',
-              marginBottom: 0,
             }}>
               {totalPriceDisplay}
-            </div>
-          )}
+            </span>
 
-          {/* Claim button */}
+            {/* Due date badge or muted text */}
+            {dueBadge ? (
+              <span style={{
+                background: dueBadge.bg,
+                color: dueBadge.color,
+                fontSize: '0.63rem',
+                fontWeight: 700,
+                padding: '2px 7px',
+                borderRadius: '100px',
+                flexShrink: 0,
+              }}>
+                {dueBadge.label}
+              </span>
+            ) : dueDateFormatted ? (
+              <span style={{ fontSize: '0.68rem', color: 'var(--text3)', flexShrink: 0 }}>
+                {dueDateFormatted}
+              </span>
+            ) : null}
+          </div>
+
+          {/* Claim button — Unassigned only */}
           {bid.status === 'Unassigned' && (
-            <div onClick={(e) => e.stopPropagation()}>
+            <div onClick={(e) => e.stopPropagation()} style={{ marginTop: 8 }}>
               <button
                 disabled={claiming || !currentUserId}
                 onClick={handleClaim}

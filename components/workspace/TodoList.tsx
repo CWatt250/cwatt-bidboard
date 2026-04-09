@@ -140,14 +140,29 @@ export function TodoList() {
           <span className="text-xs text-muted-foreground">
             {incomplete.length} {incomplete.length === 1 ? 'task' : 'tasks'} remaining
           </span>
-          {completed.length > 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {completed.length > 0 && (
+              <button
+                onClick={clearCompleted}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Clear
+              </button>
+            )}
             <button
-              onClick={clearCompleted}
-              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              style={{
+                fontSize: '0.7rem',
+                color: 'var(--accent)',
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                fontWeight: 500,
+              }}
             >
-              Clear Completed
+              View all tasks →
             </button>
-          )}
+          </div>
         </div>
       )}
     </div>

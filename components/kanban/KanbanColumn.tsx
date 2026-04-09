@@ -4,6 +4,12 @@ import { Droppable } from '@hello-pangea/dnd'
 import { BidCard } from '@/components/kanban/BidCard'
 import type { Bid, BidStatus } from '@/hooks/useBids'
 
+function formatCompact(val: number): string {
+  if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
+  if (val >= 1_000) return `$${Math.round(val / 1_000)}K`
+  return `$${Math.round(val)}`
+}
+
 const STATUS_LEFT_BORDER: Record<BidStatus, string> = {
   Unassigned:    '#8892b0',
   Bidding:       '#38bdf8',
@@ -21,6 +27,7 @@ interface KanbanColumnProps {
 
 export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps) {
   const accentColor = STATUS_LEFT_BORDER[status]
+  const totalValue = bids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
   return (
     <div
@@ -50,19 +57,12 @@ export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps)
       >
         <span style={{ fontWeight: 700, fontSize: '0.8rem', color: 'var(--text)', letterSpacing: '-0.2px' }}>
           {status}
-        </span>
-        <span
-          style={{
-            fontSize: '0.7rem',
-            fontWeight: 700,
-            padding: '2px 7px',
-            borderRadius: '100px',
-            background: 'var(--surface2)',
-            color: 'var(--text2)',
-            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-          }}
-        >
-          {bids.length}
+          <span style={{ fontWeight: 500, color: 'var(--text3)', marginLeft: 6 }}>
+            {bids.length}
+            {totalValue > 0 && (
+              <> · <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}>{formatCompact(totalValue)}</span></>
+            )}
+          </span>
         </span>
       </div>
 
@@ -101,6 +101,36 @@ export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps)
               <BidCard key={bid.id} bid={bid} index={index} currentUserId={currentUserId} />
             ))}
             {provided.placeholder}
+            {/* Add BIC button */}
+            <button
+              style={{
+                width: '100%',
+                padding: '6px 0',
+                borderRadius: 6,
+                fontSize: '0.72rem',
+                fontWeight: 600,
+                color: 'var(--text3)',
+                background: 'transparent',
+                border: '1px dashed var(--border)',
+                cursor: 'pointer',
+                transition: 'all 150ms ease',
+                marginTop: 2,
+              }}
+              onMouseEnter={(e) => {
+                const el = e.currentTarget as HTMLButtonElement
+                el.style.color = 'var(--accent)'
+                el.style.borderColor = 'var(--accent)'
+                el.style.background = 'var(--accent-light)'
+              }}
+              onMouseLeave={(e) => {
+                const el = e.currentTarget as HTMLButtonElement
+                el.style.color = 'var(--text3)'
+                el.style.borderColor = 'var(--border)'
+                el.style.background = 'transparent'
+              }}
+            >
+              + Add BIC
+            </button>
           </div>
         )}
       </Droppable>

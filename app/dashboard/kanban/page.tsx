@@ -1,12 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd'
 import { toast } from 'sonner'
 import { KanbanColumn } from '@/components/kanban/KanbanColumn'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { TodoList } from '@/components/workspace/TodoList'
 import { RecentActivity } from '@/components/workspace/RecentActivity'
+import { KpiRow } from '@/components/workspace/KpiRow'
 import { useBids, type Bid, type BidStatus } from '@/hooks/useBids'
 import { createClient } from '@/lib/supabase/client'
 
@@ -64,12 +66,38 @@ export default function KanbanPage() {
   )
 
   return (
-    <div className="flex flex-col h-full gap-4 min-h-0">
-      <div className="flex items-center justify-between shrink-0">
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>My Workspace</h1>
+    <div className="flex flex-col h-full gap-4 min-h-0" style={{ background: 'var(--bg)' }}>
+      {/* Breadcrumb */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--text3)', flexShrink: 0 }}>
+        <Link
+          href="/dashboard"
+          style={{ color: 'var(--text3)', textDecoration: 'none', transition: 'color 150ms' }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--accent)' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.color = 'var(--text3)' }}
+        >
+          Dashboard
+        </Link>
+        <span>›</span>
+        <span style={{ color: 'var(--text2)' }}>My Workspace</span>
+      </div>
+
+      {/* Page title row */}
+      <div className="flex items-start justify-between shrink-0">
+        <div>
+          <h1 style={{ fontSize: '1.35rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px', lineHeight: 1.2, marginBottom: 4 }}>
+            My Workspace
+          </h1>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text3)', margin: 0 }}>
+            Drag and drop bids to move them through your process
+          </p>
+        </div>
         <NewBidDialog />
       </div>
 
+      {/* KPI Row */}
+      <KpiRow bids={localBids} />
+
+      {/* Main content: kanban + right panel */}
       <div className="flex gap-4 flex-1 min-h-0">
         {/* Left: Kanban board — horizontally scrollable */}
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
@@ -84,6 +112,7 @@ export default function KanbanPage() {
                     flexShrink: 0,
                     height: 280,
                     borderRadius: 'var(--radius)',
+                    background: 'var(--surface)',
                   }}
                 />
               ))}
