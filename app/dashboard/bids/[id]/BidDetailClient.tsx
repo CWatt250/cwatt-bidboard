@@ -1142,9 +1142,9 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       {/* ── Task 5: Bottom Summary Bar ───────────────────────────────────────── */}
 
       <div
-        className="fixed bottom-0 left-60 right-0 z-10 border-t px-6 py-3 flex items-center justify-between"
+        className="fixed bottom-0 left-60 right-0 z-10 border-t px-6 py-3 flex items-center justify-between backdrop-blur-sm"
         style={{
-          background: 'var(--surface, var(--background))',
+          background: 'color-mix(in srgb, var(--background, #fff) 90%, transparent)',
           borderColor: 'var(--border)',
         }}
       >
