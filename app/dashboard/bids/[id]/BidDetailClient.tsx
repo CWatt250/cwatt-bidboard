@@ -581,10 +581,19 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           {/* ── Task 3: Scope Breakdown ── */}
           <Card>
             <CardHeader>
-              <CardTitle>Scope Breakdown</CardTitle>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Source of truth for scope pricing
-              </p>
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <CardTitle>Scope Breakdown</CardTitle>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Source of truth for scope pricing
+                    {scopeItems.length > 0 && (
+                      <span className="ml-1.5 text-muted-foreground/60">
+                        · {scopeItems.length} scope{scopeItems.length !== 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="border rounded-md overflow-hidden">
