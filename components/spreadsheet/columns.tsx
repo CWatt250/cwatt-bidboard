@@ -34,11 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  STATUS_BADGE_CLASSES,
-  DUE_DATE_URGENT_CLASS,
-  DUE_DATE_WARNING_CLASS,
-} from '@/config/colors'
+import { STATUS_BADGE_CLASSES } from '@/config/colors'
 import { ScopePricingPopover } from './ScopePricingPopover'
 import { ClientsPopover } from './ClientsPopover'
 
@@ -68,14 +64,14 @@ function SortableHeader({ label, column }: { label: string; column: any }) {
   )
 }
 
-function dueDateClass(dateStr: string): string {
+function dueDateStyle(dateStr: string): React.CSSProperties {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const due = new Date(dateStr + 'T00:00:00')
   const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diffDays <= 3) return DUE_DATE_URGENT_CLASS
-  if (diffDays <= 7) return DUE_DATE_WARNING_CLASS
-  return ''
+  if (diffDays < 0) return { color: '#A32D2D', fontWeight: 600 }  // overdue
+  if (diffDays <= 5) return { color: '#854F0B', fontWeight: 600 } // within 5 days
+  return {}
 }
 
 function formatCurrency(value: number): string {
@@ -308,7 +304,7 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
       accessorKey: 'bid_due_date',
       header: ({ column }) => <SortableHeader label="Bid Due Date" column={column} />,
       cell: ({ row }) => (
-        <span className={dueDateClass(row.original.bid_due_date)}>
+        <span style={dueDateStyle(row.original.bid_due_date)}>
           {formatDate(row.original.bid_due_date)}
         </span>
       ),

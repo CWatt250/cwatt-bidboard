@@ -240,7 +240,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
         }}
       >
         <Table>
-          <TableHeader>
+          <TableHeader style={{ position: 'sticky', top: 0, zIndex: 1 }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
