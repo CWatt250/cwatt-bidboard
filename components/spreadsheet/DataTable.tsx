@@ -23,8 +23,9 @@ import {
   Columns3Icon,
   SearchIcon,
 } from 'lucide-react'
-import type { Bid } from '@/hooks/useBids'
+import type { Bid, BidScope, BidStatus } from '@/hooks/useBids'
 import { createColumns } from './columns'
+import { FilterBar, type ActiveFilters, type DueDateFilter } from './FilterBar'
 import {
   Table,
   TableBody,
@@ -64,6 +65,41 @@ interface DataTableProps {
   loading: boolean
 }
 
+function applyLocalFilters(bids: Bid[], filters: ActiveFilters): Bid[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  return bids.filter((bid) => {
+    // Status
+    if (filters.statuses.size > 0 && !filters.statuses.has(bid.status)) return false
+
+    // Branch
+    if (filters.branches.size > 0 && !filters.branches.has(bid.branch)) return false
+
+    // Scope
+    if (filters.scopes.size > 0) {
+      const bidScopes = new Set((bid.line_items ?? []).map((li) => li.scope))
+      const hasMatch = [...filters.scopes].some((s) => bidScopes.has(s))
+      if (!hasMatch) return false
+    }
+
+    // Due Date
+    if (filters.dueDate !== 'all' && bid.bid_due_date) {
+      const due = new Date(bid.bid_due_date + 'T00:00:00')
+      const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+      if (filters.dueDate === 'overdue' && diffDays >= 0) return false
+      if (filters.dueDate === 'this-week' && (diffDays < 0 || diffDays > 7)) return false
+      if (filters.dueDate === 'this-month') {
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+        if (due < today || due > endOfMonth) return false
+      }
+    }
+
+    return true
+  })
+}
+
 export function DataTable({ bids, loading }: DataTableProps) {
   const { openBid } = useBidDetail()
   const [sorting, setSorting] = useState<SortingState>([])
@@ -72,6 +108,12 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const [ghostName, setGhostName] = useState('')
   const [newBidOpen, setNewBidOpen] = useState(false)
   const ghostInputRef = useRef<HTMLInputElement>(null)
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
+    statuses: new Set<BidStatus>(),
+    branches: new Set<string>(),
+    scopes: new Set<BidScope>(),
+    dueDate: 'all' as DueDateFilter,
+  })
 
   const columns = useMemo<ColumnDef<Bid>[]>(
     () =>
@@ -98,8 +140,13 @@ export function DataTable({ bids, loading }: DataTableProps) {
     []
   )
 
+  const filteredBids = useMemo(
+    () => applyLocalFilters(bids, activeFilters),
+    [bids, activeFilters]
+  )
+
   const table = useReactTable<Bid>({
-    data: bids,
+    data: filteredBids,
     columns,
     state: { sorting, globalFilter, columnVisibility },
     onSortingChange: setSorting,
@@ -134,7 +181,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Toolbar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-sm">
@@ -178,6 +225,9 @@ export function DataTable({ bids, loading }: DataTableProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      {/* Filter bar */}
+      <FilterBar filters={activeFilters} onChange={setActiveFilters} />
 
       {/* Table */}
       <div
