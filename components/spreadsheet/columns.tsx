@@ -35,11 +35,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import {
-  SCOPE_BADGE_CLASSES,
   STATUS_BADGE_CLASSES,
   DUE_DATE_URGENT_CLASS,
   DUE_DATE_WARNING_CLASS,
 } from '@/config/colors'
+import { ScopePricingPopover } from './ScopePricingPopover'
+import { ClientsPopover } from './ClientsPopover'
 
 // Augment TanStack Table meta so cells can call updateBid
 declare module '@tanstack/react-table' {
@@ -280,24 +281,11 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
         </button>
       ),
     },
-    // 2. Scope
+    // 2. Scope (click to open pricing popover)
     {
       id: 'scope',
       header: ({ column }) => <SortableHeader label="Scope" column={column} />,
-      cell: ({ row }) => {
-        const scopes = [...new Set((row.original.line_items ?? []).map((li) => li.scope))]
-        return (
-          <div className="flex flex-wrap gap-1">
-            {scopes.length === 0
-              ? <span className="italic text-muted-foreground text-xs">—</span>
-              : scopes.map((scope) => (
-                  <Badge key={scope} className={SCOPE_BADGE_CLASSES[scope]} variant="outline">
-                    {scope}
-                  </Badge>
-                ))}
-          </div>
-        )
-      },
+      cell: ({ row }) => <ScopePricingPopover bid={row.original} />,
     },
     // 3. Bid Price (computed, never editable)
     {
@@ -336,24 +324,11 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
           <span className="italic text-muted-foreground">Unassigned</span>
         ),
     },
-    // 6. Client(s)
+    // 6. Client(s) (click to open multi-client popover)
     {
       id: 'client',
       header: ({ column }) => <SortableHeader label="Client(s)" column={column} />,
-      cell: ({ row }) => {
-        const bidClients = row.original.clients ?? []
-        const display =
-          bidClients.length === 0
-            ? null
-            : bidClients.length === 1
-              ? bidClients[0].client_name
-              : `${bidClients[0].client_name} +${bidClients.length - 1}`
-        return (
-          <span className="text-sm">
-            {display ?? <span className="italic text-muted-foreground">—</span>}
-          </span>
-        )
-      },
+      cell: ({ row }) => <ClientsPopover bid={row.original} />,
     },
     // 7. Branch
     {
