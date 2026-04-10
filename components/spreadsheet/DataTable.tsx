@@ -72,7 +72,6 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const [ghostName, setGhostName] = useState('')
   const [newBidOpen, setNewBidOpen] = useState(false)
   const ghostInputRef = useRef<HTMLInputElement>(null)
-  const ghostClientRef = useRef<HTMLInputElement>(null)
 
   const columns = useMemo<ColumnDef<Bid>[]>(
     () =>
@@ -86,7 +85,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const updateBid = useCallback(
     async (
       id: string,
-      field: 'notes' | 'project_start_date',
+      field: 'notes',
       value: string | null
     ) => {
       const supabase = createClient()
@@ -124,14 +123,14 @@ export function DataTable({ bids, loading }: DataTableProps) {
 
   const columnLabels: Record<string, string> = {
     project_name: 'Project Name',
-    client: 'Client',
     scope: 'Scope',
-    branch: 'Branch',
-    estimator_name: 'Estimator',
     total_price: 'Bid Price',
-    status: 'Status',
     bid_due_date: 'Bid Due Date',
-    project_start_date: 'Project Start',
+    estimator_name: 'Estimator',
+    client: 'Client(s)',
+    branch: 'Branch',
+    notes: 'Notes',
+    status: 'Status',
   }
 
   return (
@@ -287,27 +286,6 @@ export function DataTable({ bids, loading }: DataTableProps) {
                             color: ghostName ? 'var(--text)' : 'var(--text3)',
                             fontSize: '0.8rem',
                             fontStyle: ghostName ? 'normal' : 'italic',
-                          }}
-                        />
-                      </TableCell>
-                    )
-                  }
-                  if (idx === 2) {
-                    return (
-                      <TableCell key={col.id}>
-                        <input
-                          ref={ghostClientRef}
-                          type="text"
-                          onClick={(e) => e.stopPropagation()}
-                          placeholder="Client"
-                          style={{
-                            width: '100%',
-                            background: 'transparent',
-                            border: 'none',
-                            outline: 'none',
-                            color: 'var(--text3)',
-                            fontSize: '0.8rem',
-                            fontStyle: 'italic',
                           }}
                         />
                       </TableCell>
