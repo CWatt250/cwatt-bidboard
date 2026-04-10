@@ -33,7 +33,7 @@ function formatCurrency(value: number): string {
   }).format(value)
 }
 
-interface DraftItem {
+export interface DraftItem {
   id?: string
   scope: BidScope | ''
   price: string
@@ -41,35 +41,54 @@ interface DraftItem {
 }
 
 interface ScopePricingPopoverProps {
-  bid: Bid
+  bid?: Bid
+  /** Draft mode: parent owns state, popover never touches supabase. */
+  draftMode?: boolean
+  draftItems?: DraftItem[]
+  onDraftSave?: (items: DraftItem[]) => void
+  placeholder?: React.ReactNode
+  triggerClassName?: string
 }
 
-export function ScopePricingPopover({ bid }: ScopePricingPopoverProps) {
+export function ScopePricingPopover({
+  bid,
+  draftMode = false,
+  draftItems,
+  onDraftSave,
+  placeholder,
+  triggerClassName,
+}: ScopePricingPopoverProps) {
   const [open, setOpen] = useState(false)
   const [items, setItems] = useState<DraftItem[]>([])
   const [saving, setSaving] = useState(false)
 
-  // When popover opens, initialize draft from bid.line_items
+  // When popover opens, initialize draft from props
   useEffect(() => {
     if (open) {
-      const drafts: DraftItem[] = (bid.line_items ?? []).map((li) => ({
-        id: li.id,
-        scope: li.scope,
-        price: li.price?.toString() ?? '',
-      }))
-      setItems(drafts)
+      if (draftMode) {
+        setItems((draftItems ?? []).map((it) => ({ ...it })))
+      } else {
+        const drafts: DraftItem[] = (bid?.line_items ?? []).map((li) => ({
+          id: li.id,
+          scope: li.scope,
+          price: li.price?.toString() ?? '',
+        }))
+        setItems(drafts)
+      }
     }
-  }, [open, bid.line_items])
+  }, [open, bid?.line_items, draftMode, draftItems])
 
-  const scopes = [...new Set((bid.line_items ?? []).map((li) => li.scope))]
+  // Display scopes: in draft mode read from draftItems, else from bid
+  const displayScopes = draftMode
+    ? [...new Set((draftItems ?? []).filter((i) => i.scope !== '').map((i) => i.scope as BidScope))]
+    : [...new Set((bid?.line_items ?? []).map((li) => li.scope))]
 
-  // Display trigger content
   const triggerContent =
-    scopes.length === 0 ? (
-      <span className="italic text-muted-foreground text-xs">—</span>
+    displayScopes.length === 0 ? (
+      placeholder ?? <span className="italic text-muted-foreground text-xs">—</span>
     ) : (
       <div className="flex flex-wrap gap-1">
-        {scopes.map((scope) => (
+        {displayScopes.map((scope) => (
           <Badge key={scope} className={SCOPE_BADGE_CLASSES[scope]} variant="outline">
             {scope}
           </Badge>
@@ -91,6 +110,14 @@ export function ScopePricingPopover({ bid }: ScopePricingPopoverProps) {
   }
 
   async function handleSave() {
+    // Draft mode: hand state back to parent, do not touch supabase
+    if (draftMode) {
+      onDraftSave?.(items.filter((it) => it.scope !== ''))
+      setOpen(false)
+      return
+    }
+
+    if (!bid) return
     setSaving(true)
     const supabase = createClient()
 
@@ -136,7 +163,7 @@ export function ScopePricingPopover({ bid }: ScopePricingPopoverProps) {
       <PopoverTrigger
         render={
           <button
-            className="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
+            className={triggerClassName ?? 'w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors'}
             title="Click to edit scope pricing"
           />
         }

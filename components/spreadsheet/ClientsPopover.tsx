@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import type { Bid, BidClient } from '@/lib/supabase/types'
+import type { Bid } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -15,10 +15,23 @@ import {
 } from '@/components/ui/popover'
 
 interface ClientsPopoverProps {
-  bid: Bid
+  bid?: Bid
+  /** Draft mode: parent owns state, popover never touches supabase. */
+  draftMode?: boolean
+  draftClients?: string[]
+  onDraftSave?: (names: string[]) => void
+  placeholder?: React.ReactNode
+  triggerClassName?: string
 }
 
-export function ClientsPopover({ bid }: ClientsPopoverProps) {
+export function ClientsPopover({
+  bid,
+  draftMode = false,
+  draftClients,
+  onDraftSave,
+  placeholder,
+  triggerClassName,
+}: ClientsPopoverProps) {
   const [open, setOpen] = useState(false)
   const [allClients, setAllClients] = useState<string[]>([])
   const [checked, setChecked] = useState<Set<string>>(new Set())
@@ -27,19 +40,21 @@ export function ClientsPopover({ bid }: ClientsPopoverProps) {
   const [saving, setSaving] = useState(false)
 
   // Compute display string for trigger
-  const bidClients = bid.clients ?? []
+  const bidClientNames: string[] = draftMode
+    ? (draftClients ?? [])
+    : (bid?.clients ?? []).map((c) => c.client_name)
   const display =
-    bidClients.length === 0
+    bidClientNames.length === 0
       ? null
-      : bidClients.length === 1
-        ? bidClients[0].client_name
-        : `${bidClients[0].client_name} +${bidClients.length - 1}`
+      : bidClientNames.length === 1
+        ? bidClientNames[0]
+        : `${bidClientNames[0]} +${bidClientNames.length - 1}`
 
   // When popover opens: fetch all unique client names + init checked set
   useEffect(() => {
     if (!open) return
 
-    const currentNames = new Set(bidClients.map((c) => c.client_name))
+    const currentNames = new Set(bidClientNames)
     setChecked(currentNames)
     setSearch('')
     setNewName('')
@@ -71,11 +86,18 @@ export function ClientsPopover({ bid }: ClientsPopoverProps) {
   }
 
   async function handleSave() {
+    if (draftMode) {
+      onDraftSave?.([...checked])
+      setOpen(false)
+      return
+    }
+
+    if (!bid) return
     setSaving(true)
     const supabase = createClient()
 
     try {
-      const currentNames = new Set(bidClients.map((c) => c.client_name))
+      const currentNames = new Set(bidClientNames)
 
       // Names to add
       const toAdd = [...checked].filter((name) => !currentNames.has(name))
@@ -130,12 +152,12 @@ export function ClientsPopover({ bid }: ClientsPopoverProps) {
       <PopoverTrigger
         render={
           <button
-            className="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors text-sm"
+            className={triggerClassName ?? 'w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors text-sm'}
             title="Click to manage clients"
           />
         }
       >
-        {display ?? <span className="italic text-muted-foreground">—</span>}
+        {display ?? placeholder ?? <span className="italic text-muted-foreground">—</span>}
       </PopoverTrigger>
 
       <PopoverContent className="w-72 p-0" side="bottom" align="start">
