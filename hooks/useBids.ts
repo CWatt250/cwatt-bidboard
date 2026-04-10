@@ -6,8 +6,8 @@ import { useFilters } from '@/contexts/filters'
 import { useUserRole } from '@/contexts/userRole'
 
 // Re-export types from canonical location for backwards compatibility
-export type { BidStatus, BidScope, BidBranch, BidLineItem, Bid } from '@/lib/supabase/types'
-import type { Bid, BidLineItem } from '@/lib/supabase/types'
+export type { BidStatus, BidScope, BidBranch, BidLineItem, BidClient, Bid } from '@/lib/supabase/types'
+import type { Bid, BidLineItem, BidClient } from '@/lib/supabase/types'
 
 interface UseBidsResult {
   bids: Bid[]
@@ -38,7 +38,8 @@ export function useBids(): UseBidsResult {
         created_at,
         updated_at,
         profiles!bids_estimator_id_fkey(name),
-        bid_line_items(*)
+        bid_line_items(*),
+        bid_clients(*)
       `)
       .order('created_at', { ascending: false })
 
@@ -62,11 +63,13 @@ export function useBids(): UseBidsResult {
 
     const mapped: Bid[] = (data ?? []).map((row: any) => {
       const line_items: BidLineItem[] = row.bid_line_items ?? []
+      const clients: BidClient[] = row.bid_clients ?? []
       const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
       return {
         ...row,
         estimator_name: row.profiles?.name ?? null,
         line_items,
+        clients,
         total_price,
       }
     })
@@ -114,18 +117,21 @@ export function useBids(): UseBidsResult {
           created_at,
           updated_at,
           profiles!bids_estimator_id_fkey(name),
-          bid_line_items(*)
+          bid_line_items(*),
+          bid_clients(*)
         `)
         .eq('id', bidId)
         .single()
 
       if (!data) return null
       const line_items: BidLineItem[] = (data as any).bid_line_items ?? []
+      const clients: BidClient[] = (data as any).bid_clients ?? []
       const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
       return {
         ...(data as any),
         estimator_name: (data as any).profiles?.name ?? null,
         line_items,
+        clients,
         total_price,
       }
     }
@@ -154,6 +160,21 @@ export function useBids(): UseBidsResult {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bid_line_items' },
+        async (payload) => {
+          const bidId =
+            payload.eventType === 'DELETE'
+              ? (payload.old as any).bid_id
+              : (payload.new as any).bid_id
+          if (!bidId) return
+
+          const bid = await fetchSingleBid(bidId)
+          if (!bid) return
+          setBids((prev) => prev.map((b) => (b.id === bid.id ? bid : b)))
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bid_clients' },
         async (payload) => {
           const bidId =
             payload.eventType === 'DELETE'

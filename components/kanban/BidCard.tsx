@@ -58,12 +58,14 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
   }
 
   const lineItems = bid.line_items ?? []
-  const uniqueClients = [...new Set(lineItems.map((li) => li.client).filter(Boolean))]
+  const bidClients = bid.clients ?? []
+  const clientNames = bidClients.map((c) => c.client_name)
   const clientsDisplay =
-    uniqueClients.length === 0
+    clientNames.length === 0
       ? null
-      : uniqueClients.slice(0, 2).join(', ') +
-        (uniqueClients.length > 2 ? ` +${uniqueClients.length - 2}` : '')
+      : clientNames.length === 1
+        ? clientNames[0]
+        : `${clientNames[0]} +${clientNames.length - 1}`
 
   const uniqueScopes = [...new Set(lineItems.map((li) => li.scope))]
   const extraScopes = uniqueScopes.length > 2 ? uniqueScopes.length - 2 : 0

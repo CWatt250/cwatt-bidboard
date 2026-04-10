@@ -34,12 +34,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import {
-  SCOPE_BADGE_CLASSES,
-  STATUS_BADGE_CLASSES,
-  DUE_DATE_URGENT_CLASS,
-  DUE_DATE_WARNING_CLASS,
-} from '@/config/colors'
+import { STATUS_BADGE_CLASSES } from '@/config/colors'
+import { ScopePricingPopover } from './ScopePricingPopover'
+import { ClientsPopover } from './ClientsPopover'
 
 // Augment TanStack Table meta so cells can call updateBid
 declare module '@tanstack/react-table' {
@@ -47,7 +44,7 @@ declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
     updateBid: (
       id: string,
-      field: 'notes' | 'project_start_date',
+      field: 'notes',
       value: string | null
     ) => Promise<void>
   }
@@ -67,14 +64,14 @@ function SortableHeader({ label, column }: { label: string; column: any }) {
   )
 }
 
-function dueDateClass(dateStr: string): string {
+function dueDateStyle(dateStr: string): React.CSSProperties {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const due = new Date(dateStr + 'T00:00:00')
   const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diffDays <= 3) return DUE_DATE_URGENT_CLASS
-  if (diffDays <= 7) return DUE_DATE_WARNING_CLASS
-  return ''
+  if (diffDays < 0) return { color: '#A32D2D', fontWeight: 600 }  // overdue
+  if (diffDays <= 5) return { color: '#854F0B', fontWeight: 600 } // within 5 days
+  return {}
 }
 
 function formatCurrency(value: number): string {
@@ -267,6 +264,7 @@ interface ColumnCallbacks {
 
 export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef<Bid>[] {
   return [
+    // 1. Project Name
     {
       accessorKey: 'project_name',
       header: ({ column }) => <SortableHeader label="Project Name" column={column} />,
@@ -279,44 +277,39 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
         </button>
       ),
     },
+    // 2. Scope (click to open pricing popover)
     {
-      id: 'client',
-      header: ({ column }) => <SortableHeader label="Client" column={column} />,
+      id: 'scope',
+      header: ({ column }) => <SortableHeader label="Scope" column={column} />,
+      cell: ({ row }) => <ScopePricingPopover bid={row.original} />,
+    },
+    // 3. Bid Price (computed, never editable)
+    {
+      id: 'total_price',
+      header: ({ column }) => <SortableHeader label="Bid Price" column={column} />,
       cell: ({ row }) => {
-        const clients = [...new Set((row.original.line_items ?? []).map((li) => li.client))]
+        const hasPrice = (row.original.line_items ?? []).some((li) => li.price !== null)
         return (
-          <span className="text-sm">
-            {clients.length === 0 ? <span className="italic text-muted-foreground">—</span> : clients.join(', ')}
+          <span
+            style={{ fontWeight: 500, fontSize: 15 }}
+            className={hasPrice ? '' : 'italic text-muted-foreground'}
+          >
+            {hasPrice ? formatCurrency(row.original.total_price ?? 0) : 'TBD'}
           </span>
         )
       },
     },
+    // 4. Bid Due Date
     {
-      id: 'scope',
-      header: ({ column }) => <SortableHeader label="Scope" column={column} />,
-      cell: ({ row }) => {
-        const scopes = [...new Set((row.original.line_items ?? []).map((li) => li.scope))]
-        return (
-          <div className="flex flex-wrap gap-1">
-            {scopes.length === 0
-              ? <span className="italic text-muted-foreground text-xs">—</span>
-              : scopes.map((scope) => (
-                  <Badge key={scope} className={SCOPE_BADGE_CLASSES[scope]} variant="outline">
-                    {scope}
-                  </Badge>
-                ))}
-          </div>
-        )
-      },
-    },
-    {
-      accessorKey: 'branch',
-      header: ({ column }) => <SortableHeader label="Branch" column={column} />,
+      accessorKey: 'bid_due_date',
+      header: ({ column }) => <SortableHeader label="Bid Due Date" column={column} />,
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.branch}</span>
+        <span style={dueDateStyle(row.original.bid_due_date)}>
+          {formatDate(row.original.bid_due_date)}
+        </span>
       ),
-      filterFn: 'equals',
     },
+    // 5. Estimator
     {
       accessorKey: 'estimator_name',
       header: ({ column }) => <SortableHeader label="Estimator" column={column} />,
@@ -327,55 +320,22 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
           <span className="italic text-muted-foreground">Unassigned</span>
         ),
     },
+    // 6. Client(s) (click to open multi-client popover)
     {
-      id: 'total_price',
-      header: ({ column }) => <SortableHeader label="Bid Price" column={column} />,
-      cell: ({ row }) => {
-        const hasPrice = (row.original.line_items ?? []).some((li) => li.price !== null)
-        return (
-          <span className={hasPrice ? 'font-medium' : 'italic text-muted-foreground'}>
-            {hasPrice ? formatCurrency(row.original.total_price ?? 0) : 'TBD'}
-          </span>
-        )
-      },
+      id: 'client',
+      header: ({ column }) => <SortableHeader label="Client(s)" column={column} />,
+      cell: ({ row }) => <ClientsPopover bid={row.original} />,
     },
+    // 7. Branch
     {
-      accessorKey: 'status',
-      header: ({ column }) => <SortableHeader label="Status" column={column} />,
+      accessorKey: 'branch',
+      header: ({ column }) => <SortableHeader label="Branch" column={column} />,
       cell: ({ row }) => (
-        <Badge className={STATUS_BADGE_CLASSES[row.original.status]} variant="outline">
-          {row.original.status}
-        </Badge>
+        <span className="text-muted-foreground">{row.original.branch}</span>
       ),
+      filterFn: 'equals',
     },
-    {
-      accessorKey: 'bid_due_date',
-      header: ({ column }) => <SortableHeader label="Bid Due Date" column={column} />,
-      cell: ({ row }) => (
-        <span className={dueDateClass(row.original.bid_due_date)}>
-          {formatDate(row.original.bid_due_date)}
-        </span>
-      ),
-    },
-    // ── Inline editable: Project Start Date ──
-    {
-      accessorKey: 'project_start_date',
-      header: ({ column }) => <SortableHeader label="Project Start" column={column} />,
-      cell: ({ row, table }) => (
-        <InlineEditCell
-          defaultValue={row.original.project_start_date ?? ''}
-          type="date"
-          onSave={async (raw) => {
-            const value = raw.trim() === '' ? null : raw
-            await table.options.meta?.updateBid(row.original.id, 'project_start_date', value)
-          }}
-          renderDisplay={(raw) => (
-            <span className="text-muted-foreground">{formatDate(raw || null)}</span>
-          )}
-        />
-      ),
-    },
-    // ── Inline editable: Notes ──
+    // 8. Notes (inline editable)
     {
       accessorKey: 'notes',
       header: ({ column }) => <SortableHeader label="Notes" column={column} />,
@@ -396,6 +356,17 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
         />
       ),
     },
+    // 9. Status
+    {
+      accessorKey: 'status',
+      header: ({ column }) => <SortableHeader label="Status" column={column} />,
+      cell: ({ row }) => (
+        <Badge className={STATUS_BADGE_CLASSES[row.original.status]} variant="outline">
+          {row.original.status}
+        </Badge>
+      ),
+    },
+    // 10. Actions
     {
       id: 'actions',
       header: () => <span className="sr-only">Actions</span>,

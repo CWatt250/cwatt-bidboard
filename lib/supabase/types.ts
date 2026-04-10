@@ -50,6 +50,13 @@ export interface BidLineItem {
   updated_at: string
 }
 
+export interface BidClient {
+  id: string
+  bid_id: string
+  client_name: string
+  created_at: string
+}
+
 export interface Bid {
   id: string
   project_name: string
@@ -64,5 +71,6 @@ export interface Bid {
   updated_at: string
   // Joined fields
   line_items?: BidLineItem[]
+  clients?: BidClient[] // from bid_clients junction table
   total_price?: number // computed: sum of all line item prices
 }

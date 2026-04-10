@@ -23,8 +23,9 @@ import {
   Columns3Icon,
   SearchIcon,
 } from 'lucide-react'
-import type { Bid } from '@/hooks/useBids'
+import type { Bid, BidScope, BidStatus } from '@/hooks/useBids'
 import { createColumns } from './columns'
+import { FilterBar, type ActiveFilters, type DueDateFilter } from './FilterBar'
 import {
   Table,
   TableBody,
@@ -49,8 +50,8 @@ const PAGE_SIZE = 25
 
 const globalFilterFn: FilterFn<Bid> = (row, _columnId, filterValue: string) => {
   const search = filterValue.toLowerCase()
-  const clientMatch = (row.original.line_items ?? []).some((li) =>
-    li.client?.toLowerCase().includes(search)
+  const clientMatch = (row.original.clients ?? []).some((c) =>
+    c.client_name.toLowerCase().includes(search)
   )
   return (
     row.original.project_name.toLowerCase().includes(search) ||
@@ -64,6 +65,41 @@ interface DataTableProps {
   loading: boolean
 }
 
+function applyLocalFilters(bids: Bid[], filters: ActiveFilters): Bid[] {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  return bids.filter((bid) => {
+    // Status
+    if (filters.statuses.size > 0 && !filters.statuses.has(bid.status)) return false
+
+    // Branch
+    if (filters.branches.size > 0 && !filters.branches.has(bid.branch)) return false
+
+    // Scope
+    if (filters.scopes.size > 0) {
+      const bidScopes = new Set((bid.line_items ?? []).map((li) => li.scope))
+      const hasMatch = [...filters.scopes].some((s) => bidScopes.has(s))
+      if (!hasMatch) return false
+    }
+
+    // Due Date
+    if (filters.dueDate !== 'all' && bid.bid_due_date) {
+      const due = new Date(bid.bid_due_date + 'T00:00:00')
+      const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+
+      if (filters.dueDate === 'overdue' && diffDays >= 0) return false
+      if (filters.dueDate === 'this-week' && (diffDays < 0 || diffDays > 7)) return false
+      if (filters.dueDate === 'this-month') {
+        const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
+        if (due < today || due > endOfMonth) return false
+      }
+    }
+
+    return true
+  })
+}
+
 export function DataTable({ bids, loading }: DataTableProps) {
   const { openBid } = useBidDetail()
   const [sorting, setSorting] = useState<SortingState>([])
@@ -72,7 +108,12 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const [ghostName, setGhostName] = useState('')
   const [newBidOpen, setNewBidOpen] = useState(false)
   const ghostInputRef = useRef<HTMLInputElement>(null)
-  const ghostClientRef = useRef<HTMLInputElement>(null)
+  const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
+    statuses: new Set<BidStatus>(),
+    branches: new Set<string>(),
+    scopes: new Set<BidScope>(),
+    dueDate: 'all' as DueDateFilter,
+  })
 
   const columns = useMemo<ColumnDef<Bid>[]>(
     () =>
@@ -86,7 +127,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
   const updateBid = useCallback(
     async (
       id: string,
-      field: 'notes' | 'project_start_date',
+      field: 'notes',
       value: string | null
     ) => {
       const supabase = createClient()
@@ -99,8 +140,13 @@ export function DataTable({ bids, loading }: DataTableProps) {
     []
   )
 
+  const filteredBids = useMemo(
+    () => applyLocalFilters(bids, activeFilters),
+    [bids, activeFilters]
+  )
+
   const table = useReactTable<Bid>({
-    data: bids,
+    data: filteredBids,
     columns,
     state: { sorting, globalFilter, columnVisibility },
     onSortingChange: setSorting,
@@ -124,18 +170,18 @@ export function DataTable({ bids, loading }: DataTableProps) {
 
   const columnLabels: Record<string, string> = {
     project_name: 'Project Name',
-    client: 'Client',
     scope: 'Scope',
-    branch: 'Branch',
-    estimator_name: 'Estimator',
     total_price: 'Bid Price',
-    status: 'Status',
     bid_due_date: 'Bid Due Date',
-    project_start_date: 'Project Start',
+    estimator_name: 'Estimator',
+    client: 'Client(s)',
+    branch: 'Branch',
+    notes: 'Notes',
+    status: 'Status',
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {/* Toolbar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-sm">
@@ -180,6 +226,9 @@ export function DataTable({ bids, loading }: DataTableProps) {
         </DropdownMenu>
       </div>
 
+      {/* Filter bar */}
+      <FilterBar filters={activeFilters} onChange={setActiveFilters} />
+
       {/* Table */}
       <div
         style={{
@@ -191,7 +240,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
         }}
       >
         <Table>
-          <TableHeader>
+          <TableHeader style={{ position: 'sticky', top: 0, zIndex: 1 }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow
                 key={headerGroup.id}
@@ -287,27 +336,6 @@ export function DataTable({ bids, loading }: DataTableProps) {
                             color: ghostName ? 'var(--text)' : 'var(--text3)',
                             fontSize: '0.8rem',
                             fontStyle: ghostName ? 'normal' : 'italic',
-                          }}
-                        />
-                      </TableCell>
-                    )
-                  }
-                  if (idx === 2) {
-                    return (
-                      <TableCell key={col.id}>
-                        <input
-                          ref={ghostClientRef}
-                          type="text"
-                          onClick={(e) => e.stopPropagation()}
-                          placeholder="Client"
-                          style={{
-                            width: '100%',
-                            background: 'transparent',
-                            border: 'none',
-                            outline: 'none',
-                            color: 'var(--text3)',
-                            fontSize: '0.8rem',
-                            fontStyle: 'italic',
                           }}
                         />
                       </TableCell>
