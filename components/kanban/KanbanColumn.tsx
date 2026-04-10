@@ -101,7 +101,7 @@ export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps)
               <BidCard key={bid.id} bid={bid} index={index} currentUserId={currentUserId} />
             ))}
             {provided.placeholder}
-            {/* Add BIC button */}
+            {/* Add Bid button */}
             <button
               style={{
                 width: '100%',
@@ -129,7 +129,7 @@ export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps)
                 el.style.background = 'transparent'
               }}
             >
-              + Add BIC
+              + Add Bid
             </button>
           </div>
         )}

@@ -300,7 +300,18 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
       {externalOpen === undefined && (
         <DialogTrigger
           render={
-            <Button>
+            <Button
+              style={{
+                background: '#2563EB',
+                color: '#fff',
+                fontWeight: 500,
+                padding: '10px 20px',
+                borderRadius: 8,
+                border: 'none',
+              }}
+              onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#1D4ED8' }}
+              onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = '#2563EB' }}
+            >
               <PlusIcon />
               New Bid
             </Button>
