@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useUserRole } from '@/contexts/userRole'
-import type { Bid, BidLineItem } from '@/lib/supabase/types'
+import type { Bid, BidLineItem, BidClient } from '@/lib/supabase/types'
 
 export interface BidActivity {
   id: string
@@ -67,7 +67,8 @@ export function useBid(id: string): UseBidResult {
         created_at,
         updated_at,
         profiles!bids_estimator_id_fkey(name),
-        bid_line_items(*)
+        bid_line_items(*),
+        bid_clients(*)
       `)
       .eq('id', id)
       .single()
@@ -96,11 +97,13 @@ export function useBid(id: string): UseBidResult {
     }
 
     const line_items: BidLineItem[] = bidData.bid_line_items ?? []
+    const clients: BidClient[] = bidData.bid_clients ?? []
     const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
     setBid({
       ...bidData,
       estimator_name: bidData.profiles?.name ?? null,
       line_items,
+      clients,
       total_price,
     })
     setNotFound(false)
@@ -174,6 +177,11 @@ export function useBid(id: string): UseBidResult {
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bid_notes', filter: `bid_id=eq.${id}` },
+        () => fetchBid()
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bid_clients', filter: `bid_id=eq.${id}` },
         () => fetchBid()
       )
       .subscribe()

@@ -625,7 +625,13 @@ function RecentBidsTable({
         </thead>
         <tbody>
           {filtered.map((bid) => {
-            const clients = [...new Set((bid.line_items ?? []).map((li) => li.client).filter(Boolean))]
+            const bidClients = bid.clients ?? []
+            const clientDisplay =
+              bidClients.length === 0
+                ? '—'
+                : bidClients.length === 1
+                  ? bidClients[0].client_name
+                  : `${bidClients[0].client_name} +${bidClients.length - 1}`
             const dueBadge = getDueDateBadge(bid.bid_due_date)
             return (
               <tr
@@ -658,7 +664,7 @@ function RecentBidsTable({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  {clients.join(', ') || '—'}
+                  {clientDisplay}
                 </td>
                 <td
                   style={{

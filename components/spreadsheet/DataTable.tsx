@@ -49,8 +49,8 @@ const PAGE_SIZE = 25
 
 const globalFilterFn: FilterFn<Bid> = (row, _columnId, filterValue: string) => {
   const search = filterValue.toLowerCase()
-  const clientMatch = (row.original.line_items ?? []).some((li) =>
-    li.client?.toLowerCase().includes(search)
+  const clientMatch = (row.original.clients ?? []).some((c) =>
+    c.client_name.toLowerCase().includes(search)
   )
   return (
     row.original.project_name.toLowerCase().includes(search) ||

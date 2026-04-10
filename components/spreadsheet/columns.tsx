@@ -281,12 +281,18 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     },
     {
       id: 'client',
-      header: ({ column }) => <SortableHeader label="Client" column={column} />,
+      header: ({ column }) => <SortableHeader label="Client(s)" column={column} />,
       cell: ({ row }) => {
-        const clients = [...new Set((row.original.line_items ?? []).map((li) => li.client))]
+        const bidClients = row.original.clients ?? []
+        const display =
+          bidClients.length === 0
+            ? null
+            : bidClients.length === 1
+              ? bidClients[0].client_name
+              : `${bidClients[0].client_name} +${bidClients.length - 1}`
         return (
           <span className="text-sm">
-            {clients.length === 0 ? <span className="italic text-muted-foreground">—</span> : clients.join(', ')}
+            {display ?? <span className="italic text-muted-foreground">—</span>}
           </span>
         )
       },
