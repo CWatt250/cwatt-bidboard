@@ -153,10 +153,14 @@ function ScopePicker({ selected, onChange, error }: ScopePickerProps) {
 
 // ─── Schema ───────────────────────────────────────────────────────────────────
 
+const scopePriceSchema = z.object({
+  scope: z.string().min(1),
+  price: z.string().optional(),
+})
+
 const lineItemSchema = z.object({
   client: z.string().min(1, 'Client is required'),
-  scopes: z.array(z.string()).min(1, 'At least one scope required'),
-  price: z.string().optional(),
+  scope_prices: z.array(scopePriceSchema).min(1, 'At least one scope required'),
 })
 
 const newBidSchema = z.object({
@@ -194,6 +198,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     control,
     reset,
     watch,
+    setValue,
     formState: { errors },
   } = useForm<NewBidForm>({
     resolver: zodResolver(newBidSchema),
@@ -203,7 +208,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
       estimator_id: profile?.id ?? null,
       bid_due_date: '',
       notes: '',
-      line_items: [{ client: '', scopes: [], price: '' }],
+      line_items: [{ client: '', scope_prices: [] }],
     },
   })
 
@@ -211,28 +216,39 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
 
   // Reset form with new defaultProjectName whenever the dialog opens
   useEffect(() => {
-    if (open) {
-      setCreateAsUnassigned(false)
-      reset({
-        project_name: defaultProjectName ?? '',
-        branch: '' as any,
-        estimator_id: profile?.id ?? null,
-        bid_due_date: '',
-        notes: '',
-        line_items: [{ client: '', scopes: [], price: '' }],
-      })
-    }
-  }, [open, defaultProjectName, profile?.id, reset])
+    if (!open) return
+    setCreateAsUnassigned(false)
+    reset({
+      project_name: defaultProjectName ?? '',
+      branch: '' as any,
+      estimator_id: profile?.id ?? null,
+      bid_due_date: '',
+      notes: '',
+      line_items: [{ client: '', scope_prices: [] }],
+    })
+    // Belt-and-suspenders: force estimator_id to the current auth user even if
+    // useUserRole().profile hasn't loaded yet.
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.id) {
+        setValue('estimator_id', data.user.id, { shouldDirty: false })
+      }
+    })
+  }, [open, defaultProjectName, profile?.id, reset, setValue])
 
   const watchedItems = watch('line_items')
   const totalPreview = (watchedItems ?? []).reduce((sum, item) => {
-    const p = parseFloat(item.price ?? '')
-    return sum + (isNaN(p) ? 0 : p)
+    return sum + (item.scope_prices ?? []).reduce((s, sp) => {
+      const p = parseFloat(sp.price ?? '')
+      return s + (isNaN(p) ? 0 : p)
+    }, 0)
   }, 0)
-  const hasAnyPrice = (watchedItems ?? []).some((item) => {
-    const p = parseFloat(item.price ?? '')
-    return !isNaN(p)
-  })
+  const hasAnyPrice = (watchedItems ?? []).some((item) =>
+    (item.scope_prices ?? []).some((sp) => {
+      const p = parseFloat(sp.price ?? '')
+      return !isNaN(p)
+    })
+  )
 
   async function onSubmit(values: NewBidForm) {
     setSubmitting(true)
@@ -262,13 +278,13 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
 
     const bidId = bidData.id
 
-    // Expand: one record per client+scope combination
+    // Expand: one record per client+scope, with the price entered for that scope
     const lineItemsToInsert = values.line_items.flatMap((li) =>
-      li.scopes.map((scope) => ({
+      li.scope_prices.map((sp) => ({
         bid_id: bidId,
         client: li.client,
-        scope,
-        price: li.price?.trim() ? parseFloat(li.price) / li.scopes.length : null,
+        scope: sp.scope,
+        price: sp.price?.trim() ? parseFloat(sp.price) : null,
       }))
     )
 
@@ -290,7 +306,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
       estimator_id: profile?.id ?? null,
       bid_due_date: '',
       notes: '',
-      line_items: [{ client: '', scopes: [], price: '' }],
+      line_items: [{ client: '', scope_prices: [] }],
     })
     setOpen(false)
   }
@@ -437,75 +453,106 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
             )}
             <div className="space-y-2">
               {/* Header row */}
-              <div className="grid grid-cols-[1fr_1fr_120px_32px] gap-2 text-xs text-muted-foreground px-1">
+              <div className="grid grid-cols-[1fr_1fr_32px] gap-2 text-xs text-muted-foreground px-1">
                 <span>Client</span>
                 <span>Scope(s)</span>
-                <span>Price (optional)</span>
                 <span />
               </div>
 
-              {fields.map((field, index) => (
-                <div key={field.id} className="grid grid-cols-[1fr_1fr_120px_32px] gap-2 items-start">
-                  <div>
-                    <Input
-                      {...register(`line_items.${index}.client`)}
-                      placeholder="Client name"
-                      className="h-8 text-sm"
-                    />
-                    {errors.line_items?.[index]?.client && (
-                      <p className="text-xs text-destructive mt-0.5">
-                        {errors.line_items[index]?.client?.message}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <Controller
-                      name={`line_items.${index}.scopes`}
-                      control={control}
-                      render={({ field: scopeField }) => (
-                        <ScopePicker
-                          selected={scopeField.value ?? []}
-                          onChange={scopeField.onChange}
-                          error={!!errors.line_items?.[index]?.scopes}
+              {fields.map((field, index) => {
+                const scopePrices = watchedItems?.[index]?.scope_prices ?? []
+                return (
+                  <div key={field.id} className="space-y-2">
+                    <div className="grid grid-cols-[1fr_1fr_32px] gap-2 items-start">
+                      <div>
+                        <Input
+                          {...register(`line_items.${index}.client`)}
+                          placeholder="Client name"
+                          className="h-8 text-sm"
                         />
-                      )}
-                    />
-                    {errors.line_items?.[index]?.scopes && (
-                      <p className="text-xs text-destructive mt-0.5">
-                        At least one scope required
-                      </p>
+                        {errors.line_items?.[index]?.client && (
+                          <p className="text-xs text-destructive mt-0.5">
+                            {errors.line_items[index]?.client?.message}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <Controller
+                          name={`line_items.${index}.scope_prices`}
+                          control={control}
+                          render={({ field: spField }) => {
+                            const selectedScopes = (spField.value ?? []).map((sp) => sp.scope)
+                            return (
+                              <ScopePicker
+                                selected={selectedScopes}
+                                onChange={(nextScopes) => {
+                                  const existing = new Map(
+                                    (spField.value ?? []).map((sp) => [sp.scope, sp.price])
+                                  )
+                                  spField.onChange(
+                                    nextScopes.map((s) => ({ scope: s, price: existing.get(s) ?? '' }))
+                                  )
+                                }}
+                                error={!!errors.line_items?.[index]?.scope_prices}
+                              />
+                            )
+                          }}
+                        />
+                        {errors.line_items?.[index]?.scope_prices && (
+                          <p className="text-xs text-destructive mt-0.5">
+                            At least one scope required
+                          </p>
+                        )}
+                      </div>
+
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => remove(index)}
+                        disabled={fields.length === 1}
+                        aria-label="Remove line item"
+                      >
+                        <XIcon className="size-3.5" />
+                      </Button>
+                    </div>
+
+                    {scopePrices.length > 0 && (
+                      <div className="space-y-1 pl-1">
+                        {scopePrices.map((sp, spIdx) => (
+                          <div key={sp.scope} className="grid grid-cols-[1fr_120px] gap-2 items-center">
+                            <span className="text-sm text-muted-foreground">{sp.scope}</span>
+                            <Input
+                              type="number"
+                              step="1"
+                              min="0"
+                              placeholder="0"
+                              value={sp.price}
+                              onChange={(e) => {
+                                const next = scopePrices.map((row, i) =>
+                                  i === spIdx ? { ...row, price: e.target.value } : row
+                                )
+                                setValue(`line_items.${index}.scope_prices`, next, {
+                                  shouldValidate: true,
+                                })
+                              }}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-
-                  <Input
-                    {...register(`line_items.${index}.price`)}
-                    type="number"
-                    step="1"
-                    min="0"
-                    placeholder="0"
-                    className="h-8 text-sm"
-                  />
-
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-sm"
-                    onClick={() => remove(index)}
-                    disabled={fields.length === 1}
-                    aria-label="Remove line item"
-                  >
-                    <XIcon className="size-3.5" />
-                  </Button>
-                </div>
-              ))}
+                )
+              })}
             </div>
 
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => append({ client: '', scopes: [], price: '' })}
+              onClick={() => append({ client: '', scope_prices: [] })}
             >
               <PlusIcon className="size-3.5" />
               Add Client
