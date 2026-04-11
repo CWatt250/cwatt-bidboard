@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import type { Bid, BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
+import { parseLooseDate } from '@/lib/utils'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { ScopePricingPopover, type DraftItem } from './ScopePricingPopover'
 import { ClientsPopover } from './ClientsPopover'
@@ -67,8 +68,22 @@ interface GhostRowProps {
 export function GhostRow({ visibleColumnIds }: GhostRowProps) {
   const { profiles } = useBidDetail()
   const [ghost, setGhost] = useState<GhostState>(EMPTY_GHOST)
+  const [dueDateText, setDueDateText] = useState('')
   const [saving, setSaving] = useState(false)
   const projectNameRef = useRef<HTMLInputElement>(null)
+
+  function normalizeDueDate() {
+    if (!dueDateText.trim()) {
+      setGhost((g) => ({ ...g, bid_due_date: '' }))
+      return
+    }
+    const iso = parseLooseDate(dueDateText)
+    if (iso) {
+      const [y, m, d] = iso.split('-')
+      setDueDateText(`${m}/${d}/${y}`)
+      setGhost((g) => ({ ...g, bid_due_date: iso }))
+    }
+  }
 
   const totalPrice = ghost.scopes.reduce((sum, s) => {
     const p = parseFloat(s.price)
@@ -81,6 +96,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
   function reset() {
     setGhost(EMPTY_GHOST)
+    setDueDateText('')
   }
 
   function handleEnter(e: React.KeyboardEvent) {
@@ -104,7 +120,8 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       toast.error('Branch is required.')
       return
     }
-    if (!ghost.bid_due_date) {
+    const isoDue = ghost.bid_due_date || parseLooseDate(dueDateText)
+    if (!isoDue) {
       toast.error('Bid due date is required.')
       return
     }
@@ -119,7 +136,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
         branch: ghost.branch,
         estimator_id: ghost.status === 'Unassigned' ? null : ghost.estimator_id,
         status: ghost.status,
-        bid_due_date: ghost.bid_due_date,
+        bid_due_date: isoDue,
         notes: ghost.notes.trim() || null,
       })
       .select('id')
@@ -212,10 +229,27 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       case 'bid_due_date':
         return (
           <input
-            type="date"
-            value={ghost.bid_due_date}
-            onChange={(e) => setGhost((g) => ({ ...g, bid_due_date: e.target.value }))}
-            onKeyDown={handleEnter}
+            type="text"
+            value={dueDateText}
+            placeholder="MM/DD/YYYY"
+            onChange={(e) => setDueDateText(e.target.value)}
+            onBlur={normalizeDueDate}
+            onKeyDown={(e) => {
+              if (e.key === 'Tab') {
+                normalizeDueDate()
+                return
+              }
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                normalizeDueDate()
+                void commit()
+                return
+              }
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                reset()
+              }
+            }}
             className="ghost-cell-input"
             style={cellInputStyle}
           />

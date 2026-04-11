@@ -1,10 +1,9 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { PlusIcon, Trash2Icon } from 'lucide-react'
+import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import type { Bid, BidLineItem, BidScope } from '@/lib/supabase/types'
+import type { Bid, BidScope } from '@/lib/supabase/types'
 import { SCOPE_BADGE_CLASSES } from '@/config/colors'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -50,6 +49,15 @@ interface ScopePricingPopoverProps {
   triggerClassName?: string
 }
 
+type ScopeState = Record<BidScope, { checked: boolean; price: string; id?: string }>
+
+function emptyState(): ScopeState {
+  return ALL_SCOPES.reduce((acc, s) => {
+    acc[s] = { checked: false, price: '' }
+    return acc
+  }, {} as ScopeState)
+}
+
 export function ScopePricingPopover({
   bid,
   draftMode = false,
@@ -59,23 +67,30 @@ export function ScopePricingPopover({
   triggerClassName,
 }: ScopePricingPopoverProps) {
   const [open, setOpen] = useState(false)
-  const [items, setItems] = useState<DraftItem[]>([])
+  const [state, setState] = useState<ScopeState>(emptyState)
   const [saving, setSaving] = useState(false)
 
-  // When popover opens, initialize draft from props
+  // When popover opens, initialize state from props
   useEffect(() => {
-    if (open) {
-      if (draftMode) {
-        setItems((draftItems ?? []).map((it) => ({ ...it })))
-      } else {
-        const drafts: DraftItem[] = (bid?.line_items ?? []).map((li) => ({
+    if (!open) return
+    const next = emptyState()
+    const source: DraftItem[] = draftMode
+      ? (draftItems ?? []).map((i) => ({ ...i }))
+      : (bid?.line_items ?? []).map((li) => ({
           id: li.id,
           scope: li.scope,
           price: li.price?.toString() ?? '',
         }))
-        setItems(drafts)
+    for (const item of source) {
+      if (item.scope && next[item.scope as BidScope]) {
+        next[item.scope as BidScope] = {
+          checked: true,
+          price: item.price ?? '',
+          id: item.id,
+        }
       }
     }
+    setState(next)
   }, [open, bid?.line_items, draftMode, draftItems])
 
   // Display scopes: in draft mode read from draftItems, else from bid
@@ -96,23 +111,40 @@ export function ScopePricingPopover({
       </div>
     )
 
-  const total = items.reduce((sum, item) => {
-    const p = parseFloat(item.price)
+  const total = ALL_SCOPES.reduce((sum, s) => {
+    if (!state[s].checked) return sum
+    const p = parseFloat(state[s].price)
     return sum + (isNaN(p) ? 0 : p)
   }, 0)
 
-  function addScope() {
-    setItems((prev) => [...prev, { scope: '', price: '', isNew: true }])
+  function toggleScope(scope: BidScope, checked: boolean) {
+    setState((prev) => ({
+      ...prev,
+      [scope]: { ...prev[scope], checked },
+    }))
   }
 
-  function removeItem(index: number) {
-    setItems((prev) => prev.filter((_, i) => i !== index))
+  function updatePrice(scope: BidScope, price: string) {
+    setState((prev) => ({
+      ...prev,
+      [scope]: { ...prev[scope], price },
+    }))
+  }
+
+  function collectItems(): DraftItem[] {
+    return ALL_SCOPES.filter((s) => state[s].checked).map((s) => ({
+      id: state[s].id,
+      scope: s,
+      price: state[s].price,
+    }))
   }
 
   async function handleSave() {
+    const items = collectItems()
+
     // Draft mode: hand state back to parent, do not touch supabase
     if (draftMode) {
-      onDraftSave?.(items.filter((it) => it.scope !== ''))
+      onDraftSave?.(items)
       setOpen(false)
       return
     }
@@ -123,7 +155,7 @@ export function ScopePricingPopover({
 
     try {
       const existingIds = new Set((bid.line_items ?? []).map((li) => li.id))
-      const draftIds = new Set(items.map((i) => i.id).filter(Boolean))
+      const draftIds = new Set(items.map((i) => i.id).filter(Boolean) as string[])
 
       // Delete removed items
       const deletedIds = [...existingIds].filter((id) => !draftIds.has(id))
@@ -131,16 +163,14 @@ export function ScopePricingPopover({
         await supabase.from('bid_line_items').delete().in('id', deletedIds)
       }
 
-      // Upsert all items (new and existing)
-      const upsertRows = items
-        .filter((item) => item.scope !== '')
-        .map((item) => ({
-          ...(item.id ? { id: item.id } : {}),
-          bid_id: bid.id,
-          scope: item.scope as BidScope,
-          price: item.price.trim() ? parseFloat(item.price) : null,
-          client: null as string | null,
-        }))
+      // Upsert selected items
+      const upsertRows = items.map((item) => ({
+        ...(item.id ? { id: item.id } : {}),
+        bid_id: bid.id,
+        scope: item.scope as BidScope,
+        price: item.price.trim() ? parseFloat(item.price) : null,
+        client: null as string | null,
+      }))
 
       if (upsertRows.length > 0) {
         const { error } = await supabase
@@ -176,120 +206,80 @@ export function ScopePricingPopover({
           <p style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text)', letterSpacing: '0.04em' }}>
             Scope Pricing
           </p>
+          <p style={{ fontSize: '0.68rem', color: 'var(--text3)', marginTop: 2 }}>
+            Check scopes to include, then enter a price.
+          </p>
         </div>
 
-        {/* Scope rows */}
+        {/* Scope checklist */}
         <div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {items.length === 0 && (
-            <p style={{ fontSize: '0.75rem', color: 'var(--text3)', fontStyle: 'italic', textAlign: 'center', padding: '8px 0' }}>
-              No scopes yet. Add one below.
-            </p>
-          )}
-          {items.map((item, idx) => (
-            <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {/* Scope selector */}
-              {item.isNew || item.scope === '' ? (
-                <select
-                  value={item.scope}
-                  onChange={(e) => {
-                    const val = e.target.value as BidScope
-                    setItems((prev) => prev.map((it, i) => i === idx ? { ...it, scope: val } : it))
-                  }}
-                  style={{
-                    flex: 1,
-                    fontSize: '0.75rem',
-                    padding: '3px 6px',
-                    borderRadius: 6,
-                    border: '1px solid var(--border)',
-                    background: 'var(--surface)',
-                    color: 'var(--text)',
-                    outline: 'none',
-                    minWidth: 0,
-                  }}
-                >
-                  <option value="">Select scope…</option>
-                  {ALL_SCOPES.map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              ) : (
+          {ALL_SCOPES.map((scope) => {
+            const row = state[scope]
+            return (
+              <label
+                key={scope}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                  padding: '2px 0',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={row.checked}
+                  onChange={(e) => toggleScope(scope, e.target.checked)}
+                  style={{ width: 14, height: 14, cursor: 'pointer', flexShrink: 0 }}
+                />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <Badge
-                    className={SCOPE_BADGE_CLASSES[item.scope as BidScope]}
+                    className={SCOPE_BADGE_CLASSES[scope]}
                     variant="outline"
                     style={{ fontSize: '0.7rem' }}
                   >
-                    {item.scope}
+                    {scope}
                   </Badge>
                 </div>
-              )}
-
-              {/* Price input */}
-              <Input
-                type="number"
-                value={item.price}
-                placeholder="Price"
-                min="0"
-                step="1"
-                onChange={(e) => {
-                  const val = e.target.value
-                  setItems((prev) => prev.map((it, i) => i === idx ? { ...it, price: val } : it))
-                }}
-                style={{ width: 90, height: 28, fontSize: '0.75rem', padding: '2px 6px' }}
-                className="h-7 text-xs"
-              />
-
-              {/* Delete */}
-              <button
-                onClick={() => removeItem(idx)}
-                title="Remove"
-                style={{ color: 'var(--text3)', flexShrink: 0, padding: 2 }}
-                className="hover:text-destructive transition-colors"
-              >
-                <Trash2Icon className="size-3.5" />
-              </button>
-            </div>
-          ))}
+                <Input
+                  type="number"
+                  value={row.price}
+                  placeholder="Price"
+                  min="0"
+                  step="1"
+                  disabled={!row.checked}
+                  onChange={(e) => updatePrice(scope, e.target.value)}
+                  style={{
+                    width: 96,
+                    height: 28,
+                    fontSize: '0.75rem',
+                    padding: '2px 6px',
+                    opacity: row.checked ? 1 : 0.5,
+                  }}
+                  className="h-7 text-xs"
+                />
+              </label>
+            )
+          })}
         </div>
 
         {/* Running total */}
-        {items.length > 0 && (
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '6px 12px',
-            borderTop: '1px solid var(--border)',
-            background: 'var(--surface2)',
-          }}>
-            <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text2)' }}>Total</span>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, fontFamily: '"IBM Plex Mono", monospace', color: 'var(--text)' }}>
-              {total > 0 ? formatCurrency(total) : '—'}
-            </span>
-          </div>
-        )}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          padding: '6px 12px',
+          borderTop: '1px solid var(--border)',
+          background: 'var(--surface2)',
+        }}>
+          <span style={{ fontSize: '0.72rem', fontWeight: 600, color: 'var(--text2)' }}>Total</span>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, fontFamily: '"IBM Plex Mono", monospace', color: 'var(--text)' }}>
+            {total > 0 ? formatCurrency(total) : '—'}
+          </span>
+        </div>
 
         {/* Footer */}
-        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <button
-            onClick={addScope}
-            style={{
-              flex: 1,
-              fontSize: '0.75rem',
-              color: 'var(--accent)',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              background: 'none',
-              border: 'none',
-              cursor: 'pointer',
-              padding: '2px 0',
-            }}
-          >
-            <PlusIcon className="size-3" />
-            Add Scope
-          </button>
+        <div style={{ padding: '8px 12px', borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
           <PopoverClose
             render={
               <Button variant="outline" size="sm" style={{ height: 28, fontSize: '0.72rem' }} />
