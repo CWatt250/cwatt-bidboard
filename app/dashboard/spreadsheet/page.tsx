@@ -81,40 +81,32 @@ function exportToCsv(bids: Bid[]) {
 export default function SpreadsheetPage() {
   const { bids, loading, error } = useBids()
 
+  const topBar = (
+    <div className="flex items-center justify-between">
+      <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Bid Board</h1>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          onClick={() => exportToCsv(bids)}
+          disabled={loading || bids.length === 0}
+        >
+          <DownloadIcon />
+          Export CSV
+        </Button>
+        <NewBidDialog />
+      </div>
+    </div>
+  )
+
   return (
     <div className="flex flex-col h-full gap-4">
-      <div
-        className="flex items-center justify-between"
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 20,
-          background: 'white',
-          paddingTop: 8,
-          paddingBottom: 8,
-        }}
-      >
-        <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Bid Board</h1>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            onClick={() => exportToCsv(bids)}
-            disabled={loading || bids.length === 0}
-          >
-            <DownloadIcon />
-            Export CSV
-          </Button>
-          <NewBidDialog />
-        </div>
-      </div>
-
       {error && (
         <div className="error-card">
           Error loading bids: {error}
         </div>
       )}
 
-      <DataTable bids={bids} loading={loading} />
+      <DataTable bids={bids} loading={loading} topBar={topBar} />
     </div>
   )
 }
