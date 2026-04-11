@@ -18,6 +18,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SmartDateInput } from '@/components/ui/SmartDateInput'
+import { ScopePricingPopover } from '@/components/spreadsheet/ScopePricingPopover'
+import { ClientsPopover } from '@/components/spreadsheet/ClientsPopover'
 import {
   Select,
   SelectContent,
@@ -62,9 +64,15 @@ const bidDetailSchema = z.object({
   status: z.enum(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']),
   estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
-  project_start_date: z.string().optional(),
-  notes: z.string().optional(),
 })
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  }).format(value)
+}
 
 type BidDetailForm = z.infer<typeof bidDetailSchema>
 
@@ -142,15 +150,28 @@ export function BidDetailDrawer() {
   // Re-populate form whenever the selected bid changes
   useEffect(() => {
     if (!selectedBid) return
-    reset({
-      project_name: selectedBid.project_name,
-      branch: selectedBid.branch,
-      status: selectedBid.status,
-      estimator_id: selectedBid.estimator_id ?? undefined,
-      bid_due_date: selectedBid.bid_due_date,
-      project_start_date: selectedBid.project_start_date ?? '',
-      notes: selectedBid.notes ?? '',
-    })
+    let cancelled = false
+
+    async function populate() {
+      if (!selectedBid) return
+      let estimatorId = selectedBid.estimator_id ?? null
+      if (!estimatorId) {
+        const supabase = createClient()
+        const { data } = await supabase.auth.getUser()
+        if (data?.user?.id) estimatorId = data.user.id
+      }
+      if (cancelled) return
+      reset({
+        project_name: selectedBid.project_name,
+        branch: selectedBid.branch,
+        status: selectedBid.status,
+        estimator_id: estimatorId ?? undefined,
+        bid_due_date: selectedBid.bid_due_date,
+      })
+    }
+
+    populate()
+    return () => { cancelled = true }
   }, [selectedBid, reset])
 
   // Real-time: listen for bid_line_items changes and refresh the selected bid
@@ -219,8 +240,6 @@ export function BidDetailDrawer() {
         status: values.status,
         estimator_id: values.estimator_id ?? null,
         bid_due_date: values.bid_due_date,
-        project_start_date: values.project_start_date?.trim() || null,
-        notes: values.notes?.trim() || null,
       })
       .eq('id', selectedBid.id)
 
@@ -315,6 +334,43 @@ export function BidDetailDrawer() {
                   {errors.project_name && (
                     <p className="text-xs text-destructive">{errors.project_name.message}</p>
                   )}
+                </div>
+
+                {/* Bid Total (calculated, read-only) */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '14px 16px',
+                    borderRadius: 'var(--radius)',
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface2)',
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      color: 'var(--text3)',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.07em',
+                    }}
+                  >
+                    Bid Total
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '1.5rem',
+                      fontWeight: 700,
+                      color: 'var(--text)',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                    }}
+                  >
+                    {(selectedBid.line_items ?? []).some((li) => li.price !== null)
+                      ? formatCurrency(selectedBid.total_price ?? 0)
+                      : 'TBD'}
+                  </span>
                 </div>
 
                 {/* Branch + Status */}
@@ -412,52 +468,76 @@ export function BidDetailDrawer() {
                   )}
                 </div>
 
-                {/* Bid Due Date + Project Start Date */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1">
-                    <Label htmlFor="dd-bid_due_date">Bid Due Date</Label>
-                    <Controller
-                      name="bid_due_date"
-                      control={control}
-                      render={({ field }) => (
-                        <SmartDateInput
-                          id="dd-bid_due_date"
-                          value={field.value ?? ''}
-                          onChange={field.onChange}
-                          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        />
-                      )}
-                    />
-                    {errors.bid_due_date && (
-                      <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+                {/* Bid Due Date */}
+                <div className="space-y-1">
+                  <Label htmlFor="dd-bid_due_date">Bid Due Date</Label>
+                  <Controller
+                    name="bid_due_date"
+                    control={control}
+                    render={({ field }) => (
+                      <SmartDateInput
+                        id="dd-bid_due_date"
+                        value={field.value ?? ''}
+                        onChange={field.onChange}
+                        className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                      />
                     )}
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="dd-project_start_date">Project Start (optional)</Label>
-                    <Controller
-                      name="project_start_date"
-                      control={control}
-                      render={({ field }) => (
-                        <SmartDateInput
-                          id="dd-project_start_date"
-                          value={field.value ?? ''}
-                          onChange={field.onChange}
-                          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        />
-                      )}
+                  />
+                  {errors.bid_due_date && (
+                    <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
+                  )}
+                </div>
+
+                {/* Scopes + Pricing */}
+                <div className="space-y-1">
+                  <Label>Scopes &amp; Pricing</Label>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      minHeight: 36,
+                      padding: '6px 10px',
+                      borderRadius: 'var(--radius)',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                    }}
+                  >
+                    <ScopePricingPopover
+                      bid={selectedBid}
+                      placeholder={
+                        <span className="italic text-muted-foreground text-xs">
+                          Click to add scopes &amp; prices
+                        </span>
+                      }
+                      triggerClassName="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
                     />
                   </div>
                 </div>
 
-                {/* Notes */}
+                {/* Clients */}
                 <div className="space-y-1">
-                  <Label htmlFor="dd-notes">Notes (optional)</Label>
-                  <textarea
-                    id="dd-notes"
-                    {...register('notes')}
-                    placeholder="Additional notes…"
-                    className="flex w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none resize-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 min-h-[100px]"
-                  />
+                  <Label>Clients</Label>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      minHeight: 36,
+                      padding: '6px 10px',
+                      borderRadius: 'var(--radius)',
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                    }}
+                  >
+                    <ClientsPopover
+                      bid={selectedBid}
+                      placeholder={
+                        <span className="italic text-muted-foreground text-sm">
+                          Click to add clients
+                        </span>
+                      }
+                      triggerClassName="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors text-sm"
+                    />
+                  </div>
                 </div>
               </div>
 
