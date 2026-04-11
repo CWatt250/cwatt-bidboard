@@ -1,8 +1,8 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState, useCallback } from 'react'
 import { Calendar, dateFnsLocalizer, Views } from 'react-big-calendar'
-import { format, parse, startOfWeek, getDay } from 'date-fns'
+import { format, parse, startOfWeek, getDay, isSameDay } from 'date-fns'
 import { enUS } from 'date-fns/locale'
 import 'react-big-calendar/lib/css/react-big-calendar.css'
 
@@ -10,6 +10,7 @@ import { useBids } from '@/hooks/useBids'
 import transformBidsToEvents from '@/lib/calendar/transformBidsToEvents'
 import CalendarEventComponent from '@/components/calendar/CalendarEvent'
 import CalendarToolbar from '@/components/calendar/CalendarToolbar'
+import DayBidsDialog from '@/components/calendar/DayBidsDialog'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { useFilters, type Branch, type Status } from '@/contexts/filters'
 import { useUserRole } from '@/contexts/userRole'
@@ -17,6 +18,7 @@ import { useBidDetail } from '@/contexts/bidDetail'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
 import type { Branch as DBBranch } from '@/lib/supabase/types'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
+import type { Bid } from '@/hooks/useBids'
 
 const localizer = dateFnsLocalizer({
   format,
@@ -45,9 +47,59 @@ const selectStyle: React.CSSProperties = {
   backgroundPosition: 'right 8px center',
 }
 
+function DateHeader({ date, label }: { date: Date; label: string }) {
+  const today = new Date()
+  const isToday = isSameDay(date, today)
+  return (
+    <span
+      style={{
+        fontWeight: isToday ? 700 : 500,
+        color: isToday ? '#2563EB' : 'inherit',
+        fontSize: isToday ? '0.85rem' : '0.8rem',
+      }}
+    >
+      {label}
+    </span>
+  )
+}
+
 export default function CalendarPage() {
   const { bids, loading } = useBids()
   const events = useMemo(() => transformBidsToEvents(bids), [bids])
+
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null)
+  const [selectedDayBids, setSelectedDayBids] = useState<Bid[]>([])
+
+  const openDayDialog = useCallback(
+    (date: Date, dayBids: Bid[]) => {
+      setSelectedDate(date)
+      setSelectedDayBids(dayBids)
+      setDialogOpen(true)
+    },
+    []
+  )
+
+  const bidsByDay = useCallback(
+    (date: Date): Bid[] =>
+      events
+        .filter((e) => isSameDay(e.start, date))
+        .map((e) => e.resource),
+    [events]
+  )
+
+  const dayPropGetter = useCallback((date: Date) => {
+    if (isSameDay(date, new Date())) {
+      return {
+        className: 'rbc-day-today-highlight',
+        style: {
+          backgroundColor: '#EFF6FF',
+          boxShadow: 'inset 0 0 0 2px #2563EB',
+        },
+      }
+    }
+    return {}
+  }, [])
 
   const { branch, estimator, status, setBranch, setEstimator, setStatus } = useFilters()
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches } = useUserRole()
@@ -160,17 +212,61 @@ export default function CalendarPage() {
             defaultView={Views.MONTH}
             views={[Views.MONTH, Views.WEEK]}
             style={{ height: '100%', minHeight: 600 }}
+            popup
+            dayPropGetter={dayPropGetter}
             components={{
               event: CalendarEventComponent,
               toolbar: CalendarToolbar,
+              month: {
+                dateHeader: DateHeader,
+              },
             }}
             eventPropGetter={() => ({
               // Let CalendarEvent handle its own background; suppress default blue
               style: { background: 'transparent', border: 'none', padding: 0 },
             })}
+            onShowMore={(shownEvents, date) => {
+              openDayDialog(
+                date,
+                (shownEvents as CalendarEvent[]).map((e) => e.resource)
+              )
+            }}
+            onDrillDown={(date) => {
+              const dayBids = bidsByDay(date)
+              if (dayBids.length > 0) {
+                openDayDialog(date, dayBids)
+              }
+            }}
           />
         )}
       </div>
+
+      <DayBidsDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        date={selectedDate}
+        bids={selectedDayBids}
+      />
+
+      <style>{`
+        .rbc-wrapper .rbc-show-more {
+          display: inline-block;
+          margin: 2px 4px 0;
+          padding: 2px 8px;
+          border-radius: 999px;
+          background: #DBEAFE;
+          color: #1D4ED8;
+          font-size: 0.65rem;
+          font-weight: 600;
+          border: 1px solid #BFDBFE;
+          cursor: pointer;
+          transition: background 150ms ease;
+        }
+        .rbc-wrapper .rbc-show-more:hover {
+          background: #BFDBFE;
+          color: #1E40AF;
+        }
+      `}</style>
 
       {/* Legend */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, fontSize: '0.75rem', color: 'var(--text3)', padding: '0 4px 8px' }}>
