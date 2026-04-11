@@ -83,7 +83,17 @@ export default function SpreadsheetPage() {
 
   return (
     <div className="flex flex-col h-full gap-4">
-      <div className="flex items-center justify-between">
+      <div
+        className="flex items-center justify-between"
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 10,
+          background: 'white',
+          paddingTop: 8,
+          paddingBottom: 8,
+        }}
+      >
         <h1 style={{ fontSize: '1.25rem', fontWeight: 800, color: 'var(--text)', letterSpacing: '-0.3px' }}>Bid Board</h1>
         <div className="flex items-center gap-2">
           <Button
