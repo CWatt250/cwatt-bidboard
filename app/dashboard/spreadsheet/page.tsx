@@ -88,7 +88,7 @@ export default function SpreadsheetPage() {
         style={{
           position: 'sticky',
           top: 0,
-          zIndex: 10,
+          zIndex: 20,
           background: 'white',
           paddingTop: 8,
           paddingBottom: 8,
