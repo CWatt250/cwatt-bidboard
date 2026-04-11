@@ -63,6 +63,7 @@ const globalFilterFn: FilterFn<Bid> = (row, _columnId, filterValue: string) => {
 interface DataTableProps {
   bids: Bid[]
   loading: boolean
+  topBar?: React.ReactNode
 }
 
 function applyLocalFilters(bids: Bid[], filters: ActiveFilters): Bid[] {
@@ -100,7 +101,7 @@ function applyLocalFilters(bids: Bid[], filters: ActiveFilters): Bid[] {
   })
 }
 
-export function DataTable({ bids, loading }: DataTableProps) {
+export function DataTable({ bids, loading, topBar }: DataTableProps) {
   const { openBid } = useBidDetail()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -179,6 +180,20 @@ export function DataTable({ bids, loading }: DataTableProps) {
 
   return (
     <div className="flex flex-col gap-3">
+      <div
+        style={{
+          position: 'sticky',
+          top: 0,
+          zIndex: 20,
+          background: 'white',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+          paddingTop: 8,
+          paddingBottom: 8,
+        }}
+      >
+      {topBar}
       {/* Toolbar */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-sm">
@@ -225,6 +240,7 @@ export function DataTable({ bids, loading }: DataTableProps) {
 
       {/* Filter bar */}
       <FilterBar filters={activeFilters} onChange={setActiveFilters} />
+      </div>
 
       {/* Table */}
       <div
