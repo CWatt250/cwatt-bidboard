@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { Draggable } from '@hello-pangea/dnd'
+import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import type { Bid } from '@/hooks/useBids'
@@ -50,11 +51,14 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
     if (!currentUserId) return
     setClaiming(true)
     const supabase = createClient()
-    await supabase
+    const { error: updateError } = await supabase
       .from('bids')
       .update({ estimator_id: currentUserId, status: 'Bidding' })
       .eq('id', bid.id)
     setClaiming(false)
+    if (updateError) {
+      toast.error('Failed to claim bid. Please try again.')
+    }
   }
 
   const lineItems = bid.line_items ?? []
