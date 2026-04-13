@@ -23,6 +23,11 @@ const ACOUSTIC_PRODUCTS = [
   { label: 'B-20LAG 2" (135 sqft/roll)', sqft: 135 },
 ]
 
+const PIPE_TANK_PRODUCTS = [
+  { label: '1.5" x 48" x 30\' (120 SF/RL)', sqft: 120 },
+  { label: '2.0" x 48" x 26\' (104 SF/RL)', sqft: 104 },
+]
+
 function parsePositiveFloat(val: string): number | null {
   const n = parseFloat(val)
   if (isNaN(n) || n <= 0) return null
@@ -197,6 +202,53 @@ function AcousticCalc() {
   )
 }
 
+function PipeTankCalc() {
+  const [price, setPrice] = useState('')
+  const [productIdx, setProductIdx] = useState(0)
+
+  const priceVal = parsePositiveFloat(price)
+  const sqft = PIPE_TANK_PRODUCTS[productIdx].sqft
+  const costPerSqft = priceVal !== null ? priceVal / sqft : null
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Pipe &amp; Tank Wrap</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label>Price per Roll</Label>
+            <Input
+              type="number"
+              min="0"
+              step="any"
+              placeholder="0.00"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label>Product</Label>
+            <select
+              style={selectStyle}
+              value={productIdx}
+              onChange={(e) => setProductIdx(Number(e.target.value))}
+            >
+              {PIPE_TANK_PRODUCTS.map((p, i) => (
+                <option key={p.label} value={i}>
+                  {p.label}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <CostResult costPerSqft={costPerSqft} />
+      </CardContent>
+    </Card>
+  )
+}
+
 export default function MaterialPricePage() {
   return (
     <div className="space-y-6">
@@ -207,6 +259,7 @@ export default function MaterialPricePage() {
         <DuctwrapCalc />
         <DuctboardCalc />
         <AcousticCalc />
+        <PipeTankCalc />
       </div>
     </div>
   )
