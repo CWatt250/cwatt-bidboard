@@ -7,7 +7,6 @@ const tabs = [
   { href: '/dashboard/toolbox/mike-discount', label: 'MIKE Discount Calculator' },
   { href: '/dashboard/toolbox/material-price', label: 'Material Price Calculator' },
   { href: '/dashboard/toolbox/crew-size', label: 'Crew Size Calculator' },
-  { href: '/dashboard/toolbox/pipe-tank', label: 'Pipe & Tank Wrap', disabled: true },
 ]
 
 export default function ToolboxLayout({ children }: { children: React.ReactNode }) {
@@ -21,29 +20,19 @@ export default function ToolboxLayout({ children }: { children: React.ReactNode 
       </div>
 
       <div className="border-b flex gap-1">
-        {tabs.map(({ href, label, disabled }) =>
-          disabled ? (
-            <span
-              key={href}
-              className="px-4 py-2 text-sm font-medium text-muted-foreground/40 cursor-not-allowed select-none"
-            >
-              {label}
-              <span className="ml-1.5 text-xs">(Coming Soon)</span>
-            </span>
-          ) : (
-            <Link
-              key={href}
-              href={href}
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
-                pathname === href
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40'
-              }`}
-            >
-              {label}
-            </Link>
-          )
-        )}
+        {tabs.map(({ href, label }) => (
+          <Link
+            key={href}
+            href={href}
+            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors -mb-px ${
+              pathname === href
+                ? 'border-primary text-foreground'
+                : 'border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40'
+            }`}
+          >
+            {label}
+          </Link>
+        ))}
       </div>
 
       {children}
