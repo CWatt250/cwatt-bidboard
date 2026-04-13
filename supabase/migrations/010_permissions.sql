@@ -33,23 +33,29 @@ CREATE TABLE role_permissions (
 );
 
 -- 4. User role assignments (branch-scoped)
+-- branch_id is a text branch code (PSC, SEA, POR, PHX, SLC) or NULL for global
 CREATE TABLE user_role_assignments (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
   role_id uuid REFERENCES roles(id) ON DELETE CASCADE,
-  branch_id uuid REFERENCES branches(id) ON DELETE CASCADE,
-  created_at timestamptz DEFAULT now()
+  branch_id text,
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT user_role_assignments_branch_id_check
+    CHECK (branch_id IS NULL OR branch_id IN ('PSC', 'SEA', 'POR', 'PHX', 'SLC'))
 );
 
 -- 5. User permission overrides
+-- branch_id is a text branch code (PSC, SEA, POR, PHX, SLC) or NULL for global
 CREATE TABLE user_permission_overrides (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id uuid REFERENCES auth.users(id) ON DELETE CASCADE,
-  branch_id uuid REFERENCES branches(id),
+  branch_id text,
   permission_key text NOT NULL,
   allowed boolean NOT NULL,
   reason text,
-  created_at timestamptz DEFAULT now()
+  created_at timestamptz DEFAULT now(),
+  CONSTRAINT user_permission_overrides_branch_id_check
+    CHECK (branch_id IS NULL OR branch_id IN ('PSC', 'SEA', 'POR', 'PHX', 'SLC'))
 );
 
 -- ============================================================

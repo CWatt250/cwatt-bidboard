@@ -37,7 +37,7 @@ export interface UserRoleAssignment {
   id: string
   user_id: string
   role_id: string
-  branch_id: string
+  branch_id: string | null
   created_at: string
   roles?: { key: string; name: string }
 }

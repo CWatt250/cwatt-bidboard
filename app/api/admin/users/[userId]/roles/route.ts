@@ -28,7 +28,7 @@ export async function PUT(
 
   const { userId } = await params
   const body: {
-    assignments: Array<{ role_id: string; branch_id: string }>
+    assignments: Array<{ role_id: string; branch_id: string | null }>
   } = await request.json()
 
   // Delete existing assignments, then re-insert
@@ -43,7 +43,7 @@ export async function PUT(
     const rows = body.assignments.map((a) => ({
       user_id: userId,
       role_id: a.role_id,
-      branch_id: a.branch_id,
+      branch_id: a.branch_id || null,
     }))
 
     const { error: insError } = await auth.supabase
