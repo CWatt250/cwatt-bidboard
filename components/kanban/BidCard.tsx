@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import type { Bid } from '@/hooks/useBids'
+import { getBidClientName } from '@/lib/supabase/types'
 
 const SCOPE_COLORS: Record<string, { bg: string; text: string }> = {
   'Plumbing Piping': { bg: 'rgba(56,189,248,0.12)', text: '#0ea5e9' },
@@ -63,7 +64,7 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
 
   const lineItems = bid.line_items ?? []
   const bidClients = bid.clients ?? []
-  const clientNames = bidClients.map((c) => c.client_name)
+  const clientNames = bidClients.map(getBidClientName).filter(Boolean)
   const clientsDisplay =
     clientNames.length === 0
       ? null

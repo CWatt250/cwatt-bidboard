@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import { PlusIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { ensureClientId } from '@/lib/clients'
 import type { Bid } from '@/lib/supabase/types'
+import { getBidClientName } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -42,7 +44,7 @@ export function ClientsPopover({
   // Compute display string for trigger
   const bidClientNames: string[] = draftMode
     ? (draftClients ?? [])
-    : (bid?.clients ?? []).map((c) => c.client_name)
+    : (bid?.clients ?? []).map(getBidClientName).filter(Boolean)
   const display =
     bidClientNames.length === 0
       ? null
@@ -62,11 +64,11 @@ export function ClientsPopover({
     async function fetchAllClients() {
       const supabase = createClient()
       const { data } = await supabase
-        .from('bid_clients')
-        .select('client_name')
-        .order('client_name', { ascending: true })
+        .from('clients')
+        .select('name')
+        .order('name', { ascending: true })
 
-      const names = [...new Set((data ?? []).map((r: any) => r.client_name as string))]
+      const names = (data ?? []).map((r: any) => r.name as string).filter(Boolean)
       // Also include current bid's clients in case they're not in the global list yet
       const merged = [...new Set([...names, ...currentNames])]
       merged.sort((a, b) => a.localeCompare(b))
@@ -105,9 +107,14 @@ export function ClientsPopover({
       const toRemove = [...currentNames].filter((name) => !checked.has(name))
 
       if (toAdd.length > 0) {
-        const { error } = await supabase.from('bid_clients').insert(
-          toAdd.map((client_name) => ({ bid_id: bid.id, client_name }))
+        const rows = await Promise.all(
+          toAdd.map(async (client_name) => ({
+            bid_id: bid.id,
+            client_id: await ensureClientId(supabase, client_name),
+            client_name,
+          }))
         )
+        const { error } = await supabase.from('bid_clients').insert(rows)
         if (error) throw error
       }
 

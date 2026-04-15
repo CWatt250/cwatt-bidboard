@@ -18,7 +18,7 @@ import {
   STATUS_BADGE_CLASSES,
   BRANCH_BADGE_CLASSES,
 } from '@/config/colors'
-import { BRANCH_LABELS } from '@/lib/supabase/types'
+import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
 import type { Bid, BidScope, Branch, BidStatus } from '@/lib/supabase/types'
 
 // ─── types ──────────────────────────────────────────────────────────────────
@@ -625,13 +625,15 @@ function RecentBidsTable({
         </thead>
         <tbody>
           {filtered.map((bid) => {
-            const bidClients = bid.clients ?? []
+            const clientNames = (bid.clients ?? [])
+              .map(getBidClientName)
+              .filter(Boolean)
             const clientDisplay =
-              bidClients.length === 0
+              clientNames.length === 0
                 ? '—'
-                : bidClients.length === 1
-                  ? bidClients[0].client_name
-                  : `${bidClients[0].client_name} +${bidClients.length - 1}`
+                : clientNames.length === 1
+                  ? clientNames[0]
+                  : `${clientNames[0]} +${clientNames.length - 1}`
             const dueBadge = getDueDateBadge(bid.bid_due_date)
             return (
               <tr

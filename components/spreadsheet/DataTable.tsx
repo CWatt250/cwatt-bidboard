@@ -24,6 +24,7 @@ import {
   SearchIcon,
 } from 'lucide-react'
 import type { Bid, BidScope, BidStatus } from '@/hooks/useBids'
+import { getBidClientName } from '@/lib/supabase/types'
 import { createColumns } from './columns'
 import { FilterBar, type ActiveFilters, type DueDateFilter } from './FilterBar'
 import {
@@ -51,7 +52,7 @@ const PAGE_SIZE = 25
 const globalFilterFn: FilterFn<Bid> = (row, _columnId, filterValue: string) => {
   const search = filterValue.toLowerCase()
   const clientMatch = (row.original.clients ?? []).some((c) =>
-    c.client_name.toLowerCase().includes(search)
+    getBidClientName(c).toLowerCase().includes(search)
   )
   return (
     row.original.project_name.toLowerCase().includes(search) ||

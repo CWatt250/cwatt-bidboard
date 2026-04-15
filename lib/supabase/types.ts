@@ -50,11 +50,36 @@ export interface BidLineItem {
   updated_at: string
 }
 
+export interface Client {
+  id: string
+  name: string
+  created_at: string
+  updated_at: string
+}
+
+export interface ClientContact {
+  id: string
+  client_id: string
+  name: string
+  email: string | null
+  phone: string | null
+  title: string | null
+  created_at: string
+}
+
 export interface BidClient {
   id: string
   bid_id: string
-  client_name: string
+  client_id: string | null
+  client_name: string | null
+  /** Joined from clients table — preferred display name when present */
+  clients?: { name: string } | null
   created_at: string
+}
+
+/** Prefer the joined clients.name, falling back to the denormalized client_name. */
+export function getBidClientName(c: BidClient): string {
+  return c.clients?.name ?? c.client_name ?? ''
 }
 
 export interface Bid {
