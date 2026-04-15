@@ -5,7 +5,9 @@ import { CheckIcon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { ensureClientId } from '@/lib/clients'
+import { logActivity } from '@/lib/activity'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { useUserRole } from '@/contexts/userRole'
 import type { Bid, BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
 import { parseLooseDate } from '@/lib/utils'
 import { TableCell, TableRow } from '@/components/ui/table'
@@ -68,7 +70,11 @@ interface GhostRowProps {
 
 export function GhostRow({ visibleColumnIds }: GhostRowProps) {
   const { profiles } = useBidDetail()
-  const [ghost, setGhost] = useState<GhostState>(EMPTY_GHOST)
+  const { profile } = useUserRole()
+  const [ghost, setGhost] = useState<GhostState>(() => ({
+    ...EMPTY_GHOST,
+    estimator_id: profile?.id ?? null,
+  }))
   const [dueDateText, setDueDateText] = useState('')
   const [saving, setSaving] = useState(false)
   const projectNameRef = useRef<HTMLInputElement>(null)
@@ -96,7 +102,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
   })
 
   function reset() {
-    setGhost(EMPTY_GHOST)
+    setGhost({ ...EMPTY_GHOST, estimator_id: profile?.id ?? null })
     setDueDateText('')
   }
 
@@ -150,21 +156,23 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
     }
     const bidId = bidData.id
 
+    if (profile) await logActivity(bidId, profile.id, 'Created bid')
+
     const lineItems = ghost.scopes
       .filter((s) => s.scope !== '')
-      .map((s) => ({
-        bid_id: bidId,
-        scope: s.scope as BidScope,
-        price: s.price.trim() ? parseFloat(s.price) : null,
-        client: null as string | null,
-      }))
+      .map((s) => {
+        const n = parseFloat(s.price)
+        return {
+          bid_id: bidId,
+          scope: s.scope as BidScope,
+          price: isNaN(n) ? 0 : n,
+          client: null as string | null,
+        }
+      })
     if (lineItems.length > 0) {
       const { error: liErr } = await supabase.from('bid_line_items').insert(lineItems)
       if (liErr) {
-        await supabase.from('bids').delete().eq('id', bidId)
-        setSaving(false)
-        toast.error('Failed to save scope pricing.')
-        return
+        toast.error(`Scope pricing not saved: ${liErr.message}`)
       }
     }
 
@@ -178,10 +186,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       )
       const { error: cErr } = await supabase.from('bid_clients').insert(rows)
       if (cErr) {
-        await supabase.from('bids').delete().eq('id', bidId)
-        setSaving(false)
-        toast.error('Failed to save clients.')
-        return
+        toast.error(`Clients not saved: ${cErr.message}`)
       }
     }
 

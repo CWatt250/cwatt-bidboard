@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/activity'
 import { useUserRole } from '@/contexts/userRole'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { Button } from '@/components/ui/button'
@@ -277,6 +278,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     }
 
     const bidId = bidData.id
+
+    if (profile) await logActivity(bidId, profile.id, 'Created bid')
 
     // Expand: one record per client+scope, with the price entered for that scope
     const lineItemsToInsert = values.line_items.flatMap((li) =>
