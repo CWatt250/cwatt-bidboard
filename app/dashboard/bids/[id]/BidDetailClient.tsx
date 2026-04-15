@@ -24,6 +24,7 @@ import {
   SCOPE_BADGE_CLASSES,
 } from '@/config/colors'
 import { ScopePricingPopover } from '@/components/spreadsheet/ScopePricingPopover'
+import { DocumentsSection } from '@/components/bids/DocumentsSection'
 import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
@@ -1007,6 +1008,16 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
             )}
           </CardContent>
         )}
+      </Card>
+
+      {/* Documents */}
+      <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
+        <CardHeader>
+          <CardTitle className="font-bold text-[var(--text)]">Documents</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <DocumentsSection bidId={bid.id} />
+        </CardContent>
       </Card>
 
       {/* Activity — only rendered when entries exist */}

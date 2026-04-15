@@ -82,6 +82,17 @@ export function getBidClientName(c: BidClient): string {
   return c.clients?.name ?? c.client_name ?? ''
 }
 
+export interface BidDocument {
+  id: string
+  bid_id: string
+  file_name: string
+  file_path: string
+  file_size: number | null
+  file_type: string | null
+  uploaded_by: string | null
+  created_at: string
+}
+
 export interface Bid {
   id: string
   project_name: string
