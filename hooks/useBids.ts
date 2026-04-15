@@ -19,7 +19,7 @@ export function useBids(): UseBidsResult {
   const [bids, setBids] = useState<Bid[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const { branch, estimator, scope, status } = useFilters()
+  const { branch, scope, status } = useFilters()
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches, profile } = useUserRole()
 
   const fetchBids = useCallback(async () => {
@@ -74,9 +74,7 @@ export function useBids(): UseBidsResult {
       }
     })
 
-    let filtered = estimator !== 'All'
-      ? mapped.filter((b) => b.estimator_id === estimator)
-      : mapped
+    let filtered = mapped
 
     // Estimator: further filter to own bids only (estimator_id matches or unassigned)
     if (isEstimator && profile) {
@@ -92,7 +90,7 @@ export function useBids(): UseBidsResult {
 
     setBids(filtered)
     setError(null)
-  }, [branch, estimator, scope, status, isAdmin, isBranchManager, isEstimator, userBranches, profile])
+  }, [branch, scope, status, isAdmin, isBranchManager, isEstimator, userBranches, profile])
 
   useEffect(() => {
     setLoading(true)
