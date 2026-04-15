@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useUserRole } from '@/contexts/userRole'
-import type { Bid, BidLineItem, Branch, BidScope } from '@/lib/supabase/types'
+import type { Bid, BidLineItem, BidClient, Branch, BidScope } from '@/lib/supabase/types'
 
 export interface DashboardStats {
   activeCount: number
@@ -64,11 +64,13 @@ const ALL_SCOPES: BidScope[] = [
 
 function mapBidRow(row: any): Bid {
   const line_items: BidLineItem[] = row.bid_line_items ?? []
+  const clients: BidClient[] = row.bid_clients ?? []
   const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
   return {
     ...row,
     estimator_name: row.profiles?.name ?? null,
     line_items,
+    clients,
     total_price,
   }
 }
@@ -202,7 +204,8 @@ export function useDashboard(): UseDashboardResult {
       created_at,
       updated_at,
       profiles!bids_estimator_id_fkey(name),
-      bid_line_items(*)
+      bid_line_items(*),
+      bid_clients(*, clients(name))
     `
 
     let query = supabase

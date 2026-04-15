@@ -68,7 +68,7 @@ export function useBid(id: string): UseBidResult {
         updated_at,
         profiles!bids_estimator_id_fkey(name),
         bid_line_items(*),
-        bid_clients(*)
+        bid_clients(*, clients(name))
       `)
       .eq('id', id)
       .single()

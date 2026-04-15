@@ -39,7 +39,7 @@ export function useBids(): UseBidsResult {
         updated_at,
         profiles!bids_estimator_id_fkey(name),
         bid_line_items(*),
-        bid_clients(*)
+        bid_clients(*, clients(name))
       `)
       .order('created_at', { ascending: false })
 
@@ -118,7 +118,7 @@ export function useBids(): UseBidsResult {
           updated_at,
           profiles!bids_estimator_id_fkey(name),
           bid_line_items(*),
-          bid_clients(*)
+          bid_clients(*, clients(name))
         `)
         .eq('id', bidId)
         .single()

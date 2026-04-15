@@ -4,6 +4,7 @@ import { useRef, useState } from 'react'
 import { CheckIcon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { ensureClientId } from '@/lib/clients'
 import { useBidDetail } from '@/contexts/bidDetail'
 import type { Bid, BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
 import { parseLooseDate } from '@/lib/utils'
@@ -168,7 +169,13 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
     }
 
     if (ghost.clients.length > 0) {
-      const rows = ghost.clients.map((client_name) => ({ bid_id: bidId, client_name }))
+      const rows = await Promise.all(
+        ghost.clients.map(async (client_name) => ({
+          bid_id: bidId,
+          client_id: await ensureClientId(supabase, client_name),
+          client_name,
+        }))
+      )
       const { error: cErr } = await supabase.from('bid_clients').insert(rows)
       if (cErr) {
         await supabase.from('bids').delete().eq('id', bidId)
