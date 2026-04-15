@@ -1,8 +1,12 @@
 'use client'
 
+import { useEffect, useMemo, useState } from 'react'
 import { DownloadIcon } from 'lucide-react'
 import { useBids } from '@/hooks/useBids'
+import { useUserRole } from '@/contexts/userRole'
+import { createClient } from '@/lib/supabase/client'
 import { DataTable } from '@/components/spreadsheet/DataTable'
+import type { EstimatorFilter } from '@/components/spreadsheet/FilterBar'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { Button } from '@/components/ui/button'
 import type { Bid } from '@/hooks/useBids'
@@ -80,6 +84,30 @@ function exportToCsv(bids: Bid[]) {
 
 export default function SpreadsheetPage() {
   const { bids, loading, error } = useBids()
+  const { profile, isAdmin, isBranchManager } = useUserRole()
+  const canSeeAllEstimators = isAdmin || isBranchManager
+
+  const [estimatorFilter, setEstimatorFilter] = useState<EstimatorFilter>('mine')
+  const [estimators, setEstimators] = useState<{ id: string; name: string }[]>([])
+
+  useEffect(() => {
+    if (!canSeeAllEstimators) return
+    const supabase = createClient()
+    supabase
+      .from('profiles')
+      .select('id, name')
+      .order('name')
+      .then(({ data }) => {
+        if (data) setEstimators(data as { id: string; name: string }[])
+      })
+  }, [canSeeAllEstimators])
+
+  const visibleBids = useMemo(() => {
+    if (estimatorFilter === 'all') return bids
+    if (estimatorFilter === 'unassigned') return bids.filter((b) => b.estimator_id === null)
+    if (estimatorFilter === 'mine') return bids.filter((b) => b.estimator_id === profile?.id)
+    return bids.filter((b) => b.estimator_id === estimatorFilter)
+  }, [bids, estimatorFilter, profile?.id])
 
   const topBar = (
     <div className="flex items-center justify-between">
@@ -87,8 +115,8 @@ export default function SpreadsheetPage() {
       <div className="flex items-center gap-2">
         <Button
           variant="outline"
-          onClick={() => exportToCsv(bids)}
-          disabled={loading || bids.length === 0}
+          onClick={() => exportToCsv(visibleBids)}
+          disabled={loading || visibleBids.length === 0}
         >
           <DownloadIcon />
           Export CSV
@@ -106,7 +134,15 @@ export default function SpreadsheetPage() {
         </div>
       )}
 
-      <DataTable bids={bids} loading={loading} topBar={topBar} />
+      <DataTable
+        bids={visibleBids}
+        loading={loading}
+        topBar={topBar}
+        estimatorFilter={estimatorFilter}
+        onEstimatorFilterChange={setEstimatorFilter}
+        estimators={estimators}
+        canSeeAllEstimators={canSeeAllEstimators}
+      />
     </div>
   )
 }

@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { toast } from 'sonner'
 import { ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/activity'
 import { useUserRole } from '@/contexts/userRole'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { Button } from '@/components/ui/button'
@@ -159,7 +160,7 @@ const scopePriceSchema = z.object({
 })
 
 const lineItemSchema = z.object({
-  client: z.string().min(1, 'Client is required'),
+  client: z.string().optional(),
   scope_prices: z.array(scopePriceSchema).min(1, 'At least one scope required'),
 })
 
@@ -278,11 +279,13 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
 
     const bidId = bidData.id
 
+    if (profile) await logActivity(bidId, profile.id, 'Created bid')
+
     // Expand: one record per client+scope, with the price entered for that scope
     const lineItemsToInsert = values.line_items.flatMap((li) =>
       li.scope_prices.map((sp) => ({
         bid_id: bidId,
-        client: li.client,
+        client: li.client ?? '',
         scope: sp.scope,
         price: sp.price?.trim() ? parseFloat(sp.price) : null,
       }))
@@ -299,6 +302,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
 
     setSubmitting(false)
     toast.success('Bid created successfully.')
+    window.dispatchEvent(new CustomEvent('bidwatt:bid-created'))
     setCreateAsUnassigned(false)
     reset({
       project_name: '',
@@ -467,14 +471,9 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
                       <div>
                         <Input
                           {...register(`line_items.${index}.client`)}
-                          placeholder="Client name"
+                          placeholder="Client name (optional)"
                           className="h-8 text-sm"
                         />
-                        {errors.line_items?.[index]?.client && (
-                          <p className="text-xs text-destructive mt-0.5">
-                            {errors.line_items[index]?.client?.message}
-                          </p>
-                        )}
                       </div>
 
                       <div>

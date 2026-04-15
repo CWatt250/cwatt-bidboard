@@ -5,6 +5,8 @@ import { Draggable } from '@hello-pangea/dnd'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { useUserRole } from '@/contexts/userRole'
+import { logActivity } from '@/lib/activity'
 import type { Bid } from '@/hooks/useBids'
 import { getBidClientName } from '@/lib/supabase/types'
 
@@ -45,6 +47,7 @@ interface BidCardProps {
 
 export function BidCard({ bid, index, currentUserId }: BidCardProps) {
   const { openBid } = useBidDetail()
+  const { profile } = useUserRole()
   const [claiming, setClaiming] = useState(false)
 
   async function handleClaim(e: React.MouseEvent) {
@@ -59,6 +62,10 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
     setClaiming(false)
     if (updateError) {
       toast.error('Failed to claim bid. Please try again.')
+      return
+    }
+    if (profile) {
+      await logActivity(bid.id, profile.id, 'Status changed from Unassigned to Bidding')
     }
   }
 

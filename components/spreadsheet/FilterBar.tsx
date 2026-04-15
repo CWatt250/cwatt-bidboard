@@ -13,6 +13,7 @@ import {
 import { Button } from '@/components/ui/button'
 
 export type DueDateFilter = 'all' | 'overdue' | 'this-week' | 'this-month'
+export type EstimatorFilter = 'mine' | 'unassigned' | 'all' | string
 
 const ALL_STATUSES: BidStatus[] = [
   'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost',
@@ -38,6 +39,10 @@ export interface ActiveFilters {
 interface FilterBarProps {
   filters: ActiveFilters
   onChange: (next: ActiveFilters) => void
+  estimatorFilter: EstimatorFilter
+  onEstimatorFilterChange: (next: EstimatorFilter) => void
+  estimators: { id: string; name: string }[]
+  canSeeAllEstimators: boolean
 }
 
 function toggleSetItem<T>(set: Set<T>, item: T): Set<T> {
@@ -112,8 +117,22 @@ function FilterChip({
   )
 }
 
-export function FilterBar({ filters, onChange }: FilterBarProps) {
-  const total = activeCount(filters)
+export function FilterBar({
+  filters,
+  onChange,
+  estimatorFilter,
+  onEstimatorFilterChange,
+  estimators,
+  canSeeAllEstimators,
+}: FilterBarProps) {
+  const total = activeCount(filters) + (estimatorFilter !== 'mine' ? 1 : 0)
+
+  const estimatorLabel = (() => {
+    if (estimatorFilter === 'mine') return 'My Bids'
+    if (estimatorFilter === 'unassigned') return 'Unassigned'
+    if (estimatorFilter === 'all') return 'All Bids'
+    return estimators.find((e) => e.id === estimatorFilter)?.name ?? 'Estimator'
+  })()
 
   function clearAll() {
     onChange({
@@ -122,6 +141,7 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
       scopes: new Set(),
       dueDate: 'all',
     })
+    onEstimatorFilterChange('mine')
   }
 
   return (
@@ -175,6 +195,47 @@ export function FilterBar({ filters, onChange }: FilterBarProps) {
             {s}
           </DropdownMenuCheckboxItem>
         ))}
+      </FilterChip>
+
+      {/* Estimator */}
+      <FilterChip
+        label={estimatorLabel}
+        count={estimatorFilter !== 'mine' ? 1 : 0}
+      >
+        <DropdownMenuLabel>Estimator</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuCheckboxItem
+          checked={estimatorFilter === 'mine'}
+          onCheckedChange={() => onEstimatorFilterChange('mine')}
+        >
+          My Bids
+        </DropdownMenuCheckboxItem>
+        <DropdownMenuCheckboxItem
+          checked={estimatorFilter === 'unassigned'}
+          onCheckedChange={() => onEstimatorFilterChange('unassigned')}
+        >
+          Unassigned
+        </DropdownMenuCheckboxItem>
+        {canSeeAllEstimators && (
+          <>
+            <DropdownMenuCheckboxItem
+              checked={estimatorFilter === 'all'}
+              onCheckedChange={() => onEstimatorFilterChange('all')}
+            >
+              All Bids
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSeparator />
+            {estimators.map((e) => (
+              <DropdownMenuCheckboxItem
+                key={e.id}
+                checked={estimatorFilter === e.id}
+                onCheckedChange={() => onEstimatorFilterChange(e.id)}
+              >
+                {e.name}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </>
+        )}
       </FilterChip>
 
       {/* Due Date */}

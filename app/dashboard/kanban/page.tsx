@@ -12,18 +12,24 @@ import { KpiRow } from '@/components/workspace/KpiRow'
 import { useBids, type Bid, type BidStatus } from '@/hooks/useBids'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { useUserRole } from '@/contexts/userRole'
+import { logActivity } from '@/lib/activity'
 
 const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent']
 
 export default function KanbanPage() {
   const { bids, loading, error } = useBids()
   const { openBid } = useBidDetail()
+  const { profile } = useUserRole()
   const [localBids, setLocalBids] = useState<Bid[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   useEffect(() => {
-    setLocalBids(bids)
-  }, [bids])
+    const myBids = profile
+      ? bids.filter((b) => b.estimator_id === profile.id || b.estimator_id === null)
+      : []
+    setLocalBids(myBids)
+  }, [bids, profile])
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data }) => {
@@ -42,7 +48,8 @@ export default function KanbanPage() {
 
     const newStatus = destination.droppableId as BidStatus
     const prevBids = localBids
-    const draggedBid = localBids.find((b) => b.id === draggableId)
+    const draggedBid = prevBids.find((b) => b.id === draggableId)
+    const prevStatus = draggedBid?.status
 
     setLocalBids((prev) =>
       prev.map((b) => (b.id === draggableId ? { ...b, status: newStatus } : b))
@@ -58,6 +65,14 @@ export default function KanbanPage() {
       setLocalBids(prevBids)
       toast.error('Failed to update bid status. Please try again.')
       return
+    }
+
+    if (profile && prevStatus && prevStatus !== newStatus) {
+      await logActivity(
+        draggableId,
+        profile.id,
+        `Status changed from ${prevStatus} to ${newStatus}`
+      )
     }
 
     if (newStatus === 'Sent' && draggedBid) {
