@@ -100,6 +100,12 @@ export function useBids(): UseBidsResult {
   }, [fetchBids])
 
   useEffect(() => {
+    const handler = () => { void fetchBids() }
+    window.addEventListener('bidwatt:bid-created', handler)
+    return () => window.removeEventListener('bidwatt:bid-created', handler)
+  }, [fetchBids])
+
+  useEffect(() => {
     const supabase = createClient()
 
     async function fetchSingleBid(bidId: string): Promise<Bid | null> {
