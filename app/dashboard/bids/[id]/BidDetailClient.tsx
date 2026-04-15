@@ -13,7 +13,6 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
-  LayersIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -24,6 +23,7 @@ import {
   STATUS_BADGE_CLASSES,
   SCOPE_BADGE_CLASSES,
 } from '@/config/colors'
+import { ScopePricingPopover } from '@/components/spreadsheet/ScopePricingPopover'
 import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
@@ -150,7 +150,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   const [deleteLineItemIndex, setDeleteLineItemIndex] = useState<number | null>(null)
   const [noteText, setNoteText] = useState('')
   const [addingNote, setAddingNote] = useState(false)
-  const [scopeItems, setScopeItems] = useState<{ id?: string; scope: BidScope | ''; price: string }[]>([])
   const [notesOpen, setNotesOpen] = useState(false)
   const [clientsEditOpen, setClientsEditOpen] = useState(false)
 
@@ -187,15 +186,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     if (!bid) return
 
     const regularItems = (bid.line_items ?? []).filter((li) => li.client)
-    const scopeOnlyItems = (bid.line_items ?? []).filter((li) => !li.client)
-
-    setScopeItems(
-      scopeOnlyItems.map((li) => ({
-        id: li.id,
-        scope: li.scope,
-        price: li.price?.toString() ?? '',
-      }))
-    )
 
     reset({
       project_name: bid.project_name,
@@ -297,29 +287,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       await logActivity(bidId, profile.id, action)
     }
 
-    const validScopeItems = scopeItems.filter((si) => si.scope)
-    if (validScopeItems.length > 0) {
-      const scopeUpsert = validScopeItems.map((si) => ({
-        ...(si.id ? { id: si.id } : {}),
-        bid_id: bidId,
-        client: null as null,
-        scope: si.scope as BidScope,
-        price: si.price.trim() ? parseFloat(si.price) : null,
-      }))
-      await supabase.from('bid_line_items').upsert(scopeUpsert as any, { onConflict: 'id' })
-    }
-
-    const keptScopeIds = new Set(scopeItems.map((si) => si.id).filter(Boolean))
-    const deletedScopeItems = (bid.line_items ?? []).filter(
-      (li) => !li.client && !keptScopeIds.has(li.id)
-    )
-    if (deletedScopeItems.length > 0) {
-      await supabase
-        .from('bid_line_items')
-        .delete()
-        .in('id', deletedScopeItems.map((li) => li.id))
-    }
-
     setSaving(false)
     toast.success('Bid saved successfully.')
     refetch()
@@ -395,10 +362,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   const days = daysUntilDue(bid.bid_due_date)
 
-  const scopeTotal = scopeItems.reduce((sum, s) => {
-    const p = parseFloat(s.price)
-    return sum + (isNaN(p) ? 0 : p)
-  }, 0)
+  const scopeOnlyItems = (bid.line_items ?? []).filter((li) => !li.client)
+  const scopeTotal = scopeOnlyItems.reduce((s, li) => s + (li.price ?? 0), 0)
 
   const clientLineItems = (bid.line_items ?? []).filter((li) => li.client)
   const uniqueClientCount = new Set(clientLineItems.map((li) => li.client)).size
@@ -563,123 +528,21 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       <form id="bid-detail-form" onSubmit={handleSubmit(onSubmit)}>
         <div className="grid grid-cols-2 gap-6">
 
-          {/* ── Task 3: Scope Breakdown ── */}
+          {/* ── Task 3: Scope Pricing ── */}
           <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
-                  <CardTitle className="font-bold text-[var(--text)]">Scope Breakdown</CardTitle>
+                  <CardTitle className="font-bold text-[var(--text)]">Scope Pricing</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Source of truth for scope pricing
-                    {scopeItems.length > 0 && (
+                    {scopeOnlyItems.length > 0 && (
                       <span className="ml-1.5 text-muted-foreground/60">
-                        · {scopeItems.length} scope{scopeItems.length !== 1 ? 's' : ''}
+                        · {scopeOnlyItems.length} scope{scopeOnlyItems.length !== 1 ? 's' : ''}
                       </span>
                     )}
                   </p>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 p-6">
-              <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_140px_36px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                  <span>Scope</span>
-                  <span>Price</span>
-                  <span />
-                </div>
-
-                {scopeItems.length === 0 && (
-                  <div className="flex flex-col items-center justify-center py-8 gap-2">
-                    <LayersIcon className="size-8 text-muted-foreground/30" />
-                    <p className="text-sm font-medium" style={{ color: 'var(--text3)' }}>No scopes yet</p>
-                    <Button
-                      type="button"
-                      size="sm"
-                      className="mt-1"
-                      style={{ background: 'var(--accent2)', color: '#fff' }}
-                      onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
-                    >
-                      <PlusIcon className="size-3.5" />
-                      Add First Scope
-                    </Button>
-                  </div>
-                )}
-
-                {scopeItems.map((item, idx) => (
-                  <div
-                    key={item.id ?? `new-scope-${idx}`}
-                    className="grid grid-cols-[1fr_140px_36px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
-                  >
-                    <Select
-                      value={item.scope}
-                      onValueChange={(v) =>
-                        setScopeItems((prev) =>
-                          prev.map((s, i) => (i === idx ? { ...s, scope: v as BidScope } : s))
-                        )
-                      }
-                    >
-                      <SelectTrigger className="h-7 text-xs w-full">
-                        <SelectValue placeholder="Select scope" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {SCOPES.map((s) => (
-                          <SelectItem key={s} value={s}>
-                            <span
-                              className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
-                            >
-                              {s}
-                            </span>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Input
-                      type="number"
-                      step="1"
-                      min="0"
-                      placeholder="TBD"
-                      value={item.price}
-                      onChange={(e) =>
-                        setScopeItems((prev) =>
-                          prev.map((s, i) => (i === idx ? { ...s, price: e.target.value } : s))
-                        )
-                      }
-                      className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() =>
-                        setScopeItems((prev) => prev.filter((_, i) => i !== idx))
-                      }
-                      aria-label="Remove scope"
-                    >
-                      <Trash2Icon className="size-3.5 text-destructive" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
-
-              {scopeItems.length > 0 && (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setScopeItems((prev) => [...prev, { scope: '', price: '' }])}
-                >
-                  <PlusIcon className="size-3.5" />
-                  Add Scope
-                </Button>
-              )}
-
-              {/* Running Total */}
-              <div
-                className="flex items-center justify-end pt-2"
-                style={{ borderTop: '1px solid var(--border)' }}
-              >
                 <span
                   className="font-bold text-base tabular-nums"
                   style={{
@@ -690,6 +553,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   {scopeTotal > 0 ? formatCurrency(scopeTotal) : '—'}
                 </span>
               </div>
+            </CardHeader>
+            <CardContent className="space-y-3 p-6">
+              <ScopePricingPopover
+                bid={bid}
+                triggerClassName="w-full text-left rounded-md border border-[var(--border)] px-3 py-2 hover:bg-muted/60 transition-colors min-h-[40px]"
+                placeholder={
+                  <span className="text-xs italic text-muted-foreground">
+                    Click to add scope pricing
+                  </span>
+                }
+              />
             </CardContent>
           </Card>
 
