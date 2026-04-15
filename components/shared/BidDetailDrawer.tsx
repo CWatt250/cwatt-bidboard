@@ -20,6 +20,7 @@ import { Label } from '@/components/ui/label'
 import { SmartDateInput } from '@/components/ui/SmartDateInput'
 import { ScopePricingPopover } from '@/components/spreadsheet/ScopePricingPopover'
 import { ClientsPopover } from '@/components/spreadsheet/ClientsPopover'
+import { DocumentsSection } from '@/components/bids/DocumentsSection'
 import {
   Select,
   SelectContent,
@@ -538,6 +539,12 @@ export function BidDetailDrawer() {
                       triggerClassName="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors text-sm"
                     />
                   </div>
+                </div>
+
+                {/* Documents */}
+                <div className="space-y-1">
+                  <Label>Documents</Label>
+                  <DocumentsSection bidId={selectedBid.id} />
                 </div>
               </div>
 
