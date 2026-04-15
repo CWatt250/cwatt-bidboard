@@ -11,11 +11,13 @@ import { RecentActivity } from '@/components/workspace/RecentActivity'
 import { KpiRow } from '@/components/workspace/KpiRow'
 import { useBids, type Bid, type BidStatus } from '@/hooks/useBids'
 import { createClient } from '@/lib/supabase/client'
+import { useBidDetail } from '@/contexts/bidDetail'
 
 const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent']
 
 export default function KanbanPage() {
   const { bids, loading, error } = useBids()
+  const { openBid } = useBidDetail()
   const [localBids, setLocalBids] = useState<Bid[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
@@ -40,6 +42,7 @@ export default function KanbanPage() {
 
     const newStatus = destination.droppableId as BidStatus
     const prevBids = localBids
+    const draggedBid = localBids.find((b) => b.id === draggableId)
 
     setLocalBids((prev) =>
       prev.map((b) => (b.id === draggableId ? { ...b, status: newStatus } : b))
@@ -54,6 +57,11 @@ export default function KanbanPage() {
     if (updateError) {
       setLocalBids(prevBids)
       toast.error('Failed to update bid status. Please try again.')
+      return
+    }
+
+    if (newStatus === 'Sent' && draggedBid) {
+      openBid({ ...draggedBid, status: 'Sent' })
     }
   }
 
