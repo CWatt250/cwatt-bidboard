@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, LayoutGrid, Table2, Calendar, Settings, Wrench, BarChart2 } from 'lucide-react'
+import { LayoutDashboard, LayoutGrid, Table2, Calendar, Contact, Settings, Wrench, BarChart2 } from 'lucide-react'
 import { useUserRole } from '@/contexts/userRole'
 import { createClient } from '@/lib/supabase/client'
 
@@ -11,6 +11,7 @@ const navLinks = [
   { href: '/dashboard/kanban', label: 'My Workspace', Icon: LayoutGrid },
   { href: '/dashboard/spreadsheet', label: 'Bid Board', Icon: Table2 },
   { href: '/dashboard/calendar', label: 'Calendar', Icon: Calendar },
+  { href: '/dashboard/clients', label: 'Clients', Icon: Contact },
 ]
 
 interface Profile {
