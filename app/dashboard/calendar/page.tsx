@@ -101,7 +101,8 @@ export default function CalendarPage() {
     return {}
   }, [])
 
-  const { branch, estimator, status, setBranch, setEstimator, setStatus } = useFilters()
+  const { branch, status, setBranch, setStatus } = useFilters()
+  const [estimator, setEstimator] = useState<string>('All')
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches } = useUserRole()
   const { profiles } = useBidDetail()
 
