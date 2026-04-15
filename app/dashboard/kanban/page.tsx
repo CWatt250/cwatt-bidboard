@@ -11,6 +11,7 @@ import { RecentActivity } from '@/components/workspace/RecentActivity'
 import { KpiRow } from '@/components/workspace/KpiRow'
 import { useBids, type Bid, type BidStatus } from '@/hooks/useBids'
 import { createClient } from '@/lib/supabase/client'
+import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
 import { logActivity } from '@/lib/activity'
 
@@ -18,6 +19,7 @@ const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent']
 
 export default function KanbanPage() {
   const { bids, loading, error } = useBids()
+  const { openBid } = useBidDetail()
   const { profile } = useUserRole()
   const [localBids, setLocalBids] = useState<Bid[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
@@ -71,6 +73,10 @@ export default function KanbanPage() {
         profile.id,
         `Status changed from ${prevStatus} to ${newStatus}`
       )
+    }
+
+    if (newStatus === 'Sent' && draggedBid) {
+      openBid({ ...draggedBid, status: 'Sent' })
     }
   }
 
