@@ -26,7 +26,7 @@ import {
 import type { Bid, BidScope, BidStatus } from '@/hooks/useBids'
 import { getBidClientName } from '@/lib/supabase/types'
 import { createColumns } from './columns'
-import { FilterBar, type ActiveFilters, type DueDateFilter } from './FilterBar'
+import { FilterBar, type ActiveFilters, type DueDateFilter, type EstimatorFilter } from './FilterBar'
 import {
   Table,
   TableBody,
@@ -65,6 +65,10 @@ interface DataTableProps {
   bids: Bid[]
   loading: boolean
   topBar?: React.ReactNode
+  estimatorFilter: EstimatorFilter
+  onEstimatorFilterChange: (next: EstimatorFilter) => void
+  estimators: { id: string; name: string }[]
+  canSeeAllEstimators: boolean
 }
 
 function applyLocalFilters(bids: Bid[], filters: ActiveFilters): Bid[] {
@@ -102,7 +106,15 @@ function applyLocalFilters(bids: Bid[], filters: ActiveFilters): Bid[] {
   })
 }
 
-export function DataTable({ bids, loading, topBar }: DataTableProps) {
+export function DataTable({
+  bids,
+  loading,
+  topBar,
+  estimatorFilter,
+  onEstimatorFilterChange,
+  estimators,
+  canSeeAllEstimators,
+}: DataTableProps) {
   const { openBid } = useBidDetail()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
@@ -240,7 +252,14 @@ export function DataTable({ bids, loading, topBar }: DataTableProps) {
       </div>
 
       {/* Filter bar */}
-      <FilterBar filters={activeFilters} onChange={setActiveFilters} />
+      <FilterBar
+        filters={activeFilters}
+        onChange={setActiveFilters}
+        estimatorFilter={estimatorFilter}
+        onEstimatorFilterChange={onEstimatorFilterChange}
+        estimators={estimators}
+        canSeeAllEstimators={canSeeAllEstimators}
+      />
       </div>
 
       {/* Table */}
