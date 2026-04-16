@@ -11,14 +11,11 @@ import { useUserRole } from '@/contexts/userRole'
 import type { BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
 import { parseLooseDate } from '@/lib/utils'
 import { TableCell, TableRow } from '@/components/ui/table'
-import { Badge } from '@/components/ui/badge'
-import { SCOPE_BADGE_CLASSES } from '@/config/colors'
-import type { DraftItem } from './ScopePricingPopover'
+import { ScopePricingPopover, type DraftItem } from './ScopePricingPopover'
 import { AutocompleteCell } from './AutocompleteCell'
 
 const BRANCHES: BidBranch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
-const ALL_SCOPES: BidScope[] = ['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
 
 interface GhostState {
   project_name: string
@@ -231,35 +228,12 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
       case 'scope':
         return (
-          <AutocompleteCell
-            options={ALL_SCOPES}
-            selected={ghost.scopes.map((s) => s.scope).filter((s): s is BidScope => s !== '')}
-            onSelect={(value) =>
-              setGhost((g) => ({
-                ...g,
-                scopes: [...g.scopes, { scope: value as BidScope, price: '', isNew: true }],
-              }))
-            }
-            onRemove={(value) =>
-              setGhost((g) => ({
-                ...g,
-                scopes: g.scopes.filter((s) => s.scope !== value),
-              }))
-            }
-            placeholder="Select scope..."
-            allowAdd={false}
-            onKeyDown={handleEnter}
-            renderSelected={(sel) =>
-              sel.map((s) => (
-                <Badge
-                  key={s}
-                  variant="outline"
-                  className={`text-[0.65rem] px-1.5 py-0 leading-tight ${SCOPE_BADGE_CLASSES[s as BidScope] ?? ''}`}
-                >
-                  {s}
-                </Badge>
-              ))
-            }
+          <ScopePricingPopover
+            draftMode
+            draftItems={ghost.scopes}
+            onDraftSave={(items) => setGhost((g) => ({ ...g, scopes: items }))}
+            placeholder={<span className="italic text-muted-foreground text-xs">Select scopes…</span>}
+            triggerClassName="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors min-h-[28px] flex items-center"
           />
         )
 

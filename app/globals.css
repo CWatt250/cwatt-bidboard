@@ -204,6 +204,9 @@
 .rbc-wrapper .rbc-date-cell.rbc-off-range {
   color: var(--text3);
 }
+.rbc-wrapper .rbc-month-row {
+  min-height: 160px;
+}
 .rbc-wrapper .rbc-month-row + .rbc-month-row {
   border-top: 1px solid var(--border);
 }
