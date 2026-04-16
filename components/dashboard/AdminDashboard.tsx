@@ -790,11 +790,9 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
   const sentCount = filteredBids.filter((b) => b.status === 'Sent').length
 
   const awardedCount = filteredBids.filter((b) => b.status === 'Awarded').length
-  const lostCount = filteredBids.filter((b) => b.status === 'Lost').length
-  const winRateDenominator = awardedCount + lostCount
   const winRate =
-    winRateDenominator > 0
-      ? Math.round((awardedCount / winRateDenominator) * 100)
+    sentCount > 0
+      ? Math.round((awardedCount / sentCount) * 100)
       : null
 
   const timeRangeLabel =
@@ -825,7 +823,7 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
         <KpiCard
           label="Win Rate"
           value={winRate !== null ? `${winRate}%` : '—'}
-          subtext={`${awardedCount}W / ${lostCount}L · ${timeRangeLabel}`}
+          subtext={`Wins / Bids Sent`}
         />
       </div>
 
