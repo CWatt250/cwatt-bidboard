@@ -23,7 +23,7 @@ import {
   STATUS_BADGE_CLASSES,
   SCOPE_BADGE_CLASSES,
 } from '@/config/colors'
-import { ScopePricingPopover } from '@/components/spreadsheet/ScopePricingPopover'
+import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
 import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
@@ -554,7 +554,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               )}
 
               {/* Edit scopes via popover */}
-              <ScopePricingPopover
+              <ScopeEditor
                 bid={bid}
                 triggerClassName="w-full text-left rounded-md border border-[var(--border)] px-3 py-2 hover:bg-muted/60 transition-colors min-h-[40px]"
                 placeholder={

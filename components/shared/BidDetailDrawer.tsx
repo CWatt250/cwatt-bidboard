@@ -18,7 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { SmartDateInput } from '@/components/ui/SmartDateInput'
-import { ScopePricingPopover } from '@/components/spreadsheet/ScopePricingPopover'
+import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
 import { ClientsPopover } from '@/components/spreadsheet/ClientsPopover'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
 import {
@@ -503,7 +503,7 @@ export function BidDetailDrawer() {
                       background: 'var(--surface)',
                     }}
                   >
-                    <ScopePricingPopover
+                    <ScopeEditor
                       bid={selectedBid}
                       placeholder={
                         <span className="italic text-muted-foreground text-xs">

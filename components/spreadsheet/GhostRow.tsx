@@ -11,7 +11,7 @@ import { useUserRole } from '@/contexts/userRole'
 import type { BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
 import { parseLooseDate } from '@/lib/utils'
 import { TableCell, TableRow } from '@/components/ui/table'
-import { ScopePricingPopover, type DraftItem } from './ScopePricingPopover'
+import { ScopeEditor, type DraftItem } from './ScopeEditor'
 import { AutocompleteCell } from './AutocompleteCell'
 
 const BRANCHES: BidBranch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
@@ -228,7 +228,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
       case 'scope':
         return (
-          <ScopePricingPopover
+          <ScopeEditor
             draftMode
             draftItems={ghost.scopes}
             onDraftSave={(items) => setGhost((g) => ({ ...g, scopes: items }))}
