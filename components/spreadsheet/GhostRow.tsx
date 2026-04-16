@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { CheckIcon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -8,14 +8,17 @@ import { ensureClientId } from '@/lib/clients'
 import { logActivity } from '@/lib/activity'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
-import type { Bid, BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
+import type { BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
 import { parseLooseDate } from '@/lib/utils'
 import { TableCell, TableRow } from '@/components/ui/table'
-import { ScopePricingPopover, type DraftItem } from './ScopePricingPopover'
-import { ClientsPopover } from './ClientsPopover'
+import { Badge } from '@/components/ui/badge'
+import { SCOPE_BADGE_CLASSES } from '@/config/colors'
+import type { DraftItem } from './ScopePricingPopover'
+import { AutocompleteCell } from './AutocompleteCell'
 
 const BRANCHES: BidBranch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
+const ALL_SCOPES: BidScope[] = ['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other']
 
 interface GhostState {
   project_name: string
@@ -77,7 +80,19 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
   }))
   const [dueDateText, setDueDateText] = useState('')
   const [saving, setSaving] = useState(false)
+  const [allClientNames, setAllClientNames] = useState<string[]>([])
   const projectNameRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('clients')
+      .select('name')
+      .order('name')
+      .then(({ data }) => {
+        if (data) setAllClientNames(data.map((r) => r.name))
+      })
+  }, [])
 
   function normalizeDueDate() {
     if (!dueDateText.trim()) {
@@ -198,9 +213,6 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
     setTimeout(() => projectNameRef.current?.focus(), 0)
   }
 
-  // Synthetic stub bid for the popovers in draft mode (not actually read in draft mode)
-  const stubBid = undefined as unknown as Bid
-
   function renderCell(colId: string) {
     switch (colId) {
       case 'project_name':
@@ -219,13 +231,35 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
       case 'scope':
         return (
-          <ScopePricingPopover
-            bid={stubBid}
-            draftMode
-            draftItems={ghost.scopes}
-            onDraftSave={(items) => setGhost((g) => ({ ...g, scopes: items }))}
-            placeholder={<span className="italic text-muted-foreground text-xs">Select scope…</span>}
-            triggerClassName="ghost-cell-trigger w-full text-left"
+          <AutocompleteCell
+            options={ALL_SCOPES}
+            selected={ghost.scopes.map((s) => s.scope).filter((s): s is BidScope => s !== '')}
+            onSelect={(value) =>
+              setGhost((g) => ({
+                ...g,
+                scopes: [...g.scopes, { scope: value as BidScope, price: '', isNew: true }],
+              }))
+            }
+            onRemove={(value) =>
+              setGhost((g) => ({
+                ...g,
+                scopes: g.scopes.filter((s) => s.scope !== value),
+              }))
+            }
+            placeholder="Select scope..."
+            allowAdd={false}
+            onKeyDown={handleEnter}
+            renderSelected={(sel) =>
+              sel.map((s) => (
+                <Badge
+                  key={s}
+                  variant="outline"
+                  className={`text-[0.65rem] px-1.5 py-0 leading-tight ${SCOPE_BADGE_CLASSES[s as BidScope] ?? ''}`}
+                >
+                  {s}
+                </Badge>
+              ))
+            }
           />
         )
 
@@ -290,13 +324,23 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
       case 'client':
         return (
-          <ClientsPopover
-            bid={stubBid}
-            draftMode
-            draftClients={ghost.clients}
-            onDraftSave={(names) => setGhost((g) => ({ ...g, clients: names }))}
-            placeholder={<span className="italic text-muted-foreground text-xs">Select clients…</span>}
-            triggerClassName="ghost-cell-trigger w-full text-left text-sm"
+          <AutocompleteCell
+            options={allClientNames}
+            selected={ghost.clients}
+            onSelect={(value) =>
+              setGhost((g) => ({ ...g, clients: [...g.clients, value] }))
+            }
+            onRemove={(value) =>
+              setGhost((g) => ({ ...g, clients: g.clients.filter((c) => c !== value) }))
+            }
+            placeholder="Select clients..."
+            allowAdd
+            onKeyDown={handleEnter}
+            renderSelected={(sel) => (
+              <span style={{ fontSize: '0.8rem', color: 'var(--text)' }}>
+                {sel.length === 1 ? sel[0] : `${sel[0]} +${sel.length - 1}`}
+              </span>
+            )}
           />
         )
 
@@ -411,10 +455,6 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       <style>{`
         .ghost-cell-input:focus {
           border-bottom: 2px solid #378add !important;
-        }
-        .ghost-cell-trigger:focus {
-          outline: none;
-          border-bottom: 2px solid #378add;
         }
       `}</style>
       <TableRow
