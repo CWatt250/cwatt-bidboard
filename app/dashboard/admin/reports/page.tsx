@@ -296,14 +296,14 @@ export default function ReportsPage() {
     const rows = metrics.byBranch
     const awarded = rows.reduce((s, r) => s + r.awarded, 0)
     const lost = rows.reduce((s, r) => s + r.lost, 0)
-    const total = awarded + lost
+    const sent = rows.reduce((s, r) => s + r.sent, 0)
     return {
       totalBids: rows.reduce((s, r) => s + r.totalBids, 0),
       pipeline: rows.reduce((s, r) => s + r.pipeline, 0),
-      sent: rows.reduce((s, r) => s + r.sent, 0),
+      sent,
       awarded,
       lost,
-      winRate: total === 0 ? 0 : Math.round((awarded / total) * 1000) / 10,
+      winRate: sent === 0 ? 0 : Math.round((awarded / sent) * 1000) / 10,
     }
   }, [metrics])
 
@@ -312,14 +312,14 @@ export default function ReportsPage() {
     const rows = metrics.byEstimator
     const awarded = rows.reduce((s, r) => s + r.awarded, 0)
     const lost = rows.reduce((s, r) => s + r.lost, 0)
-    const total = awarded + lost
+    const sent = rows.reduce((s, r) => s + r.sent, 0)
     return {
       totalBids: rows.reduce((s, r) => s + r.totalBids, 0),
       pipeline: rows.reduce((s, r) => s + r.pipeline, 0),
-      sent: rows.reduce((s, r) => s + r.sent, 0),
+      sent,
       awarded,
       lost,
-      winRate: total === 0 ? 0 : Math.round((awarded / total) * 1000) / 10,
+      winRate: sent === 0 ? 0 : Math.round((awarded / sent) * 1000) / 10,
     }
   }, [metrics])
 

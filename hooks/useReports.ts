@@ -116,10 +116,9 @@ const BID_QUERY = `
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function calcWinRate(awarded: number, lost: number): number {
-  const total = awarded + lost
-  if (total === 0) return 0
-  return Math.round((awarded / total) * 1000) / 10
+function calcWinRate(awarded: number, sent: number): number {
+  if (sent === 0) return 0
+  return Math.round((awarded / sent) * 1000) / 10
 }
 
 function mapBidRow(row: any): Bid {
@@ -175,16 +174,17 @@ function computeMetrics(bids: Bid[], profileBranches: Record<string, string>): R
     const bb = bids.filter((b) => b.branch === branch)
     const awarded = bb.filter((b) => b.status === 'Awarded').length
     const lost = bb.filter((b) => b.status === 'Lost').length
+    const sent = bb.filter((b) => b.status === 'Sent').length
     return {
       branch,
       totalBids: bb.length,
       pipeline: bb
         .filter((b) => b.status === 'Bidding' || b.status === 'In Progress')
         .reduce((sum, b) => sum + (b.total_price ?? 0), 0),
-      sent: bb.filter((b) => b.status === 'Sent').length,
+      sent,
       awarded,
       lost,
-      winRate: calcWinRate(awarded, lost),
+      winRate: calcWinRate(awarded, sent),
     }
   })
 
@@ -215,7 +215,7 @@ function computeMetrics(bids: Bid[], profileBranches: Record<string, string>): R
     if (bid.status === 'Lost') e.lost++
   }
   const byEstimator = Array.from(estMap.values())
-    .map((e) => ({ ...e, winRate: calcWinRate(e.awarded, e.lost) }))
+    .map((e) => ({ ...e, winRate: calcWinRate(e.awarded, e.sent) }))
     .sort((a, b) => b.pipeline - a.pipeline)
 
   // ── By Scope ──
@@ -258,7 +258,7 @@ function computeMetrics(bids: Bid[], profileBranches: Record<string, string>): R
     sentCount,
     awardedCount,
     lostCount,
-    winRate: calcWinRate(awardedCount, lostCount),
+    winRate: calcWinRate(awardedCount, sentCount),
     byBranch,
     byEstimator,
     byScope,
