@@ -201,7 +201,7 @@ export default function CalendarPage() {
       </div>
 
       {/* Calendar */}
-      <div className="rbc-wrapper flex-1 min-h-[600px] p-4" style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
+      <div className="rbc-wrapper flex-1 min-h-[1200px] p-4" style={{ background: 'var(--surface)', borderRadius: 'var(--radius)', border: '1px solid var(--border)', boxShadow: 'var(--shadow-sm)' }}>
         {loading ? (
           <div className="flex items-center justify-center h-full text-muted-foreground">
             Loading…
@@ -212,7 +212,7 @@ export default function CalendarPage() {
             events={events}
             defaultView={Views.MONTH}
             views={[Views.MONTH, Views.WEEK]}
-            style={{ height: '100%', minHeight: 600 }}
+            style={{ height: '100%', minHeight: 1200 }}
             popup
             dayPropGetter={dayPropGetter}
             components={{
