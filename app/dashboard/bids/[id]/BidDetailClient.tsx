@@ -527,6 +527,33 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               </div>
             </CardHeader>
             <CardContent className="space-y-3 p-6">
+              {/* Scope-by-scope price breakdown */}
+              {scopeOnlyItems.length > 0 && (
+                <div className="border rounded-md overflow-hidden">
+                  <div className="grid grid-cols-[1fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                    <span>Scope</span>
+                    <span className="text-right">Price</span>
+                  </div>
+                  {scopeOnlyItems.map((li) => (
+                    <div
+                      key={li.id}
+                      className="grid grid-cols-[1fr_100px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
+                    >
+                      <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs w-fit ${SCOPE_BADGE_CLASSES[li.scope]}`}>
+                        {li.scope}
+                      </span>
+                      <span
+                        className="text-right text-sm font-semibold tabular-nums"
+                        style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
+                      >
+                        {li.price != null && li.price > 0 ? formatCurrency(li.price) : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Edit scopes via popover */}
               <ScopePricingPopover
                 bid={bid}
                 triggerClassName="w-full text-left rounded-md border border-[var(--border)] px-3 py-2 hover:bg-muted/60 transition-colors min-h-[40px]"

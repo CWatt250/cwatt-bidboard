@@ -36,7 +36,7 @@ const EMPTY_GHOST: GhostState = {
   clients: [],
   branch: '',
   notes: '',
-  status: 'Unassigned',
+  status: 'Bidding',
 }
 
 function formatCurrency(value: number): string {
@@ -165,7 +165,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
         return {
           bid_id: bidId,
           scope: s.scope as BidScope,
-          price: isNaN(n) ? 0 : n,
+          price: s.price.trim() ? (isNaN(n) ? null : n) : null,
           client: null as string | null,
         }
       })
@@ -192,6 +192,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
     setSaving(false)
     toast.success('Bid created.')
+    window.dispatchEvent(new Event('bidwatt:bid-created'))
     reset()
     // Refocus the first cell so the row stays the entry point
     setTimeout(() => projectNameRef.current?.focus(), 0)
