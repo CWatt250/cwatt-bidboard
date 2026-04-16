@@ -7,7 +7,8 @@ export async function uploadBidDocument(
   supabase: SupabaseClient,
   bidId: string,
   file: File,
-  uploadedBy: string
+  uploadedBy: string,
+  category: string = 'Other'
 ): Promise<BidDocument> {
   const filePath = `${bidId}/${Date.now()}-${file.name}`
 
@@ -26,6 +27,7 @@ export async function uploadBidDocument(
       file_size: file.size,
       file_type: file.type || null,
       uploaded_by: uploadedBy,
+      category,
     })
     .select('*')
     .single()
@@ -48,6 +50,18 @@ export async function getBidDocumentUrl(
 
   if (error || !data) throw error ?? new Error('Failed to create signed URL')
   return data.signedUrl
+}
+
+export async function updateBidDocumentCategory(
+  supabase: SupabaseClient,
+  docId: string,
+  category: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('bid_documents')
+    .update({ category })
+    .eq('id', docId)
+  if (error) throw error
 }
 
 export async function deleteBidDocument(

@@ -91,6 +91,7 @@ export interface BidDocument {
   file_type: string | null
   uploaded_by: string | null
   created_at: string
+  category: string
 }
 
 export interface Bid {
