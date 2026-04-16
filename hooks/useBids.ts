@@ -155,7 +155,13 @@ export function useBids(): UseBidsResult {
           if (!bid) return
 
           if (payload.eventType === 'INSERT') {
-            setBids((prev) => [bid, ...prev])
+            setBids((prev) => {
+              // If this bid already exists (from fetchBids), update it instead of duplicating
+              if (prev.some((b) => b.id === bid.id)) {
+                return prev.map((b) => (b.id === bid.id ? bid : b))
+              }
+              return [bid, ...prev]
+            })
           } else {
             setBids((prev) => prev.map((b) => (b.id === bid.id ? bid : b)))
           }
