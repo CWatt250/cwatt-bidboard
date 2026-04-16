@@ -35,7 +35,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { STATUS_BADGE_CLASSES } from '@/config/colors'
-import { ScopePricingPopover } from './ScopePricingPopover'
+import { ScopeEditor } from './ScopeEditor'
 import { ClientsPopover } from './ClientsPopover'
 
 // Augment TanStack Table meta so cells can call updateBid
@@ -281,7 +281,7 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     {
       id: 'scope',
       header: ({ column }) => <SortableHeader label="Scope" column={column} />,
-      cell: ({ row }) => <ScopePricingPopover bid={row.original} />,
+      cell: ({ row }) => <ScopeEditor bid={row.original} />,
     },
     // 3. Bid Price (computed, never editable)
     {
