@@ -99,7 +99,6 @@ const bidFormSchema = z.object({
   branch: z.enum(['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const),
   estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
-  project_start_date: z.string().optional(),
   line_items: z.array(lineItemSchema).min(1, 'At least one line item is required'),
 })
 
@@ -142,16 +141,13 @@ function daysUntilDue(dateStr: string): number {
 
 export default function BidDetailClient({ bidId }: { bidId: string }) {
   const router = useRouter()
-  const { bid, activity, notes, loading, notFound, refetch } = useBid(bidId)
+  const { bid, activity, loading, notFound, refetch } = useBid(bidId)
   const { profiles } = useBidDetail()
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches, profile } = useUserRole()
 
   const [saving, setSaving] = useState(false)
   const [changingStatus, setChangingStatus] = useState<BidStatus | null>(null)
   const [deleteLineItemIndex, setDeleteLineItemIndex] = useState<number | null>(null)
-  const [noteText, setNoteText] = useState('')
-  const [addingNote, setAddingNote] = useState(false)
-  const [notesOpen, setNotesOpen] = useState(false)
   const [clientsEditOpen, setClientsEditOpen] = useState(false)
 
   const estimatorProfiles = (() => {
@@ -191,9 +187,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     reset({
       project_name: bid.project_name,
       branch: bid.branch,
-      estimator_id: bid.estimator_id ?? undefined,
+      estimator_id: bid.estimator_id ?? profile?.id ?? undefined,
       bid_due_date: bid.bid_due_date,
-      project_start_date: bid.project_start_date ?? '',
       line_items:
         regularItems.length > 0
           ? regularItems.map((li) => ({
@@ -224,7 +219,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         branch: values.branch,
         estimator_id: values.estimator_id ?? null,
         bid_due_date: values.bid_due_date,
-        project_start_date: values.project_start_date?.trim() || null,
       })
       .eq('id', bidId)
 
@@ -313,29 +307,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     await logActivity(bidId, profile.id, `Status changed from ${prevStatus} to ${newStatus}`)
     setChangingStatus(null)
     toast.success(`Status updated to ${newStatus}.`)
-    refetch()
-  }
-
-  async function handleAddNote() {
-    if (!noteText.trim() || !profile) return
-    setAddingNote(true)
-    const supabase = createClient()
-
-    const { error } = await supabase.from('bid_notes').insert({
-      bid_id: bidId,
-      user_id: profile.id,
-      text: noteText.trim(),
-    })
-
-    if (error) {
-      setAddingNote(false)
-      toast.error('Failed to add note.')
-      return
-    }
-
-    await logActivity(bidId, profile.id, 'Added a note')
-    setNoteText('')
-    setAddingNote(false)
     refetch()
   }
 
@@ -898,7 +869,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 <p className="text-xs uppercase tracking-wider font-medium mb-3" style={{ color: 'var(--text3)' }}>
                   Dates
                 </p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-1">
                     <Label htmlFor="bd-bid_due_date" className="text-sm" style={{ color: 'var(--text3)' }}>
                       Bid Due Date
@@ -919,96 +890,12 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                       <p className="text-xs text-destructive">{errors.bid_due_date.message}</p>
                     )}
                   </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="bd-project_start_date" className="text-sm" style={{ color: 'var(--text3)' }}>
-                      Project Start <span className="font-normal opacity-60">(optional)</span>
-                    </Label>
-                    <Controller
-                      name="project_start_date"
-                      control={control}
-                      render={({ field }) => (
-                        <SmartDateInput
-                          id="bd-project_start_date"
-                          value={field.value ?? ''}
-                          onChange={field.onChange}
-                          className="flex h-9 w-full rounded-lg border border-[var(--border)] bg-background px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        />
-                      )}
-                    />
-                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         </div>
       </form>
-
-      {/* ── Task 5: Notes (collapsible, collapsed by default) ────────────────── */}
-
-      <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
-        <button
-          type="button"
-          className="w-full text-left"
-          onClick={() => setNotesOpen((o) => !o)}
-        >
-          <CardHeader className="flex flex-row items-center justify-between cursor-pointer select-none py-4">
-            <CardTitle className="font-bold text-[var(--text)]">Notes</CardTitle>
-            {notesOpen ? (
-              <ChevronUpIcon className="size-4 text-muted-foreground" />
-            ) : (
-              <ChevronDownIcon className="size-4 text-muted-foreground" />
-            )}
-          </CardHeader>
-        </button>
-
-        {notesOpen && (
-          <CardContent className="space-y-3 pt-0">
-            <div className="flex gap-2">
-              <Input
-                value={noteText}
-                onChange={(e) => setNoteText(e.target.value)}
-                placeholder="Add a note…"
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleAddNote()
-                  }
-                }}
-              />
-              <Button
-                type="button"
-                size="sm"
-                disabled={!noteText.trim() || addingNote}
-                onClick={handleAddNote}
-              >
-                {addingNote ? '…' : 'Add'}
-              </Button>
-            </div>
-
-            {notes.length === 0 ? (
-              <p className="text-sm italic" style={{ color: 'var(--text3)' }}>
-                No notes yet.
-              </p>
-            ) : (
-              <ul className="max-h-64 overflow-y-auto">
-                {notes.map((note) => (
-                  <li
-                    key={note.id}
-                    className="pb-2.5 mb-2.5 border-b last:border-b-0 last:mb-0 last:pb-0"
-                  >
-                    <p className="text-sm leading-snug" style={{ color: 'var(--text)' }}>
-                      {note.text}
-                    </p>
-                    <p className="text-xs mt-0.5" style={{ color: 'var(--text3)' }}>
-                      {note.author_name ?? 'Unknown'} · {formatDateTime(note.created_at)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        )}
-      </Card>
 
       {/* Documents */}
       <Card className="shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
