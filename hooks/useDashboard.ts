@@ -45,6 +45,7 @@ export interface UseDashboardResult {
   stats: DashboardStats | null
   recentBids: Bid[]
   allBids: Bid[]
+  orgBids: Bid[]
   branchBreakdown: BranchBreakdownItem[]
   estimatorBreakdown: EstimatorBreakdown[]
   scopeBreakdown: ScopeBreakdownItem[]
@@ -179,6 +180,7 @@ export function useDashboard(): UseDashboardResult {
     stats: null,
     recentBids: [],
     allBids: [],
+    orgBids: [],
     branchBreakdown: [],
     estimatorBreakdown: [],
     scopeBreakdown: [],
@@ -208,19 +210,47 @@ export function useDashboard(): UseDashboardResult {
       bid_clients(*, clients(name))
     `
 
+    // Personal query: always filter by logged-in user for KPIs
     let query = supabase
       .from('bids')
       .select(BID_QUERY)
       .order('created_at', { ascending: false })
 
-    if (isEstimator && profile) {
+    if (profile) {
       query = query.eq('estimator_id', profile.id)
-    } else if (isBranchManager && userBranches.length > 0) {
-      query = query.in('branch', userBranches)
     }
-    // Admin: no additional filter
 
-    const { data, error: fetchError } = await query
+    // Build org-wide and profile queries for Admin/BranchManager (run in parallel with personal query)
+    const needsOrgData = isAdmin || isBranchManager
+    let orgQueryPromise: PromiseLike<{ data: any[] | null; error: any }> | null = null
+    let profileQueryPromise: PromiseLike<{ data: any[] | null }> | null = null
+
+    if (needsOrgData) {
+      let orgQuery = supabase
+        .from('bids')
+        .select(BID_QUERY)
+        .order('created_at', { ascending: false })
+
+      if (isBranchManager && userBranches.length > 0) {
+        orgQuery = orgQuery.in('branch', userBranches)
+      }
+
+      orgQueryPromise = orgQuery
+      profileQueryPromise = supabase
+        .from('profiles')
+        .select('id, user_branches(branch)')
+        .eq('role', 'estimator')
+        .eq('is_active', true)
+    }
+
+    // Run all queries concurrently
+    const [personalResult, orgResult, profileResult] = await Promise.all([
+      query,
+      orgQueryPromise ?? Promise.resolve({ data: null, error: null }),
+      profileQueryPromise ?? Promise.resolve({ data: null }),
+    ])
+
+    const { data, error: fetchError } = personalResult
 
     if (fetchError) {
       setResult((prev) => ({ ...prev, loading: false, error: fetchError.message }))
@@ -228,26 +258,16 @@ export function useDashboard(): UseDashboardResult {
     }
 
     const bids: Bid[] = (data ?? []).map(mapBidRow)
+    const orgBids: Bid[] = (orgResult.data ?? []).map(mapBidRow)
 
-    // Fetch active estimator count and profile branches for Admin/BranchManager
     let profileBranches: Record<string, string> = {}
     let totalActiveEstimators = 0
 
-    if (isAdmin || isBranchManager) {
-      const profileQuery = supabase
-        .from('profiles')
-        .select('id, user_branches(branch)')
-        .eq('role', 'estimator')
-        .eq('is_active', true)
-
-      const { data: profileData } = await profileQuery
-
-      if (profileData) {
-        totalActiveEstimators = profileData.length
-        for (const p of profileData as any[]) {
-          const branches = (p.user_branches ?? []).map((ub: any) => ub.branch).filter(Boolean)
-          profileBranches[p.id] = branches.join(', ')
-        }
+    if (profileResult.data) {
+      totalActiveEstimators = profileResult.data.length
+      for (const p of profileResult.data as any[]) {
+        const branches = (p.user_branches ?? []).map((ub: any) => ub.branch).filter(Boolean)
+        profileBranches[p.id] = branches.join(', ')
       }
     }
 
@@ -255,22 +275,23 @@ export function useDashboard(): UseDashboardResult {
     stats.totalActiveEstimators = totalActiveEstimators
 
     const recentBids = bids.slice(0, 8)
-    const branchBreakdown = isAdmin ? computeBranchBreakdown(bids) : []
+    const branchBreakdown = isAdmin ? computeBranchBreakdown(orgBids) : []
     const estimatorBreakdown =
-      isAdmin || isBranchManager ? computeEstimatorBreakdown(bids, profileBranches) : []
-    const scopeBreakdown = isAdmin ? computeScopeBreakdown(bids) : []
+      isAdmin || isBranchManager ? computeEstimatorBreakdown(orgBids, profileBranches) : []
+    const scopeBreakdown = isAdmin ? computeScopeBreakdown(orgBids) : []
 
     setResult({
       stats,
       recentBids,
       allBids: bids,
+      orgBids,
       branchBreakdown,
       estimatorBreakdown,
       scopeBreakdown,
       loading: false,
       error: null,
     })
-  }, [isAdmin, isBranchManager, isEstimator, userBranches, profile])
+  }, [isAdmin, isBranchManager, userBranches, profile])
 
   useEffect(() => {
     if (roleLoading) return
