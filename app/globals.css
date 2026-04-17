@@ -49,6 +49,9 @@
 }
 
 :root {
+  /* Sidebar layout — overridden by Sidebar component on collapse */
+  --main-sidebar-width: 192px;
+
   /* Sidebar — dark navy */
   --sb-bg: #1a1f36;
   --sb-bg2: #242b47;

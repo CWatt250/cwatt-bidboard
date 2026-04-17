@@ -2,9 +2,26 @@
 
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { LayoutDashboard, LayoutGrid, Table2, Calendar, Contact, Settings, Wrench, BarChart2 } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import {
+  LayoutDashboard,
+  LayoutGrid,
+  Table2,
+  Calendar,
+  Contact,
+  Settings,
+  Wrench,
+  BarChart2,
+  ChevronLeft,
+  ChevronRight,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useUserRole } from '@/contexts/userRole'
 import { createClient } from '@/lib/supabase/client'
+
+const STORAGE_KEY = 'bidwatt:sidebar-collapsed'
+const EXPANDED_WIDTH = 192
+const COLLAPSED_WIDTH = 56
 
 const navLinks = [
   { href: '/dashboard', label: 'Dashboard', Icon: LayoutDashboard },
@@ -20,162 +37,153 @@ interface Profile {
   branches?: string[]
 }
 
+function setSidebarWidthVar(collapsed: boolean) {
+  document.documentElement.style.setProperty(
+    '--main-sidebar-width',
+    collapsed ? `${COLLAPSED_WIDTH}px` : `${EXPANDED_WIDTH}px`,
+  )
+}
+
+interface NavItemProps {
+  href: string
+  label: string
+  Icon: LucideIcon
+  isActive: boolean
+  collapsed: boolean
+}
+
+function NavItem({ href, label, Icon, isActive, collapsed }: NavItemProps) {
+  return (
+    <Link
+      href={href}
+      title={collapsed ? label : undefined}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: collapsed ? 'center' : 'flex-start',
+        gap: collapsed ? 0 : '10px',
+        padding: collapsed ? '8px 0' : '8px 12px',
+        borderRadius: '8px',
+        fontSize: '0.875rem',
+        fontWeight: 500,
+        transition: 'all 200ms ease',
+        background: isActive ? 'var(--sb-active)' : 'transparent',
+        color: isActive ? '#38bdf8' : 'var(--sb-text2)',
+        textDecoration: 'none',
+      }}
+      onMouseEnter={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
+      }}
+      onMouseLeave={(e) => {
+        if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
+      }}
+    >
+      <Icon size={15} />
+      {!collapsed && label}
+    </Link>
+  )
+}
+
 export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
   const pathname = usePathname()
   const { isAdmin, isBranchManager, branches, profile } = useUserRole()
+  const [collapsed, setCollapsed] = useState(false)
+
+  // Read persisted state after mount to keep SSR markup stable
+  useEffect(() => {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    const initial = stored === 'true'
+    setCollapsed(initial)
+    setSidebarWidthVar(initial)
+  }, [])
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev
+      localStorage.setItem(STORAGE_KEY, String(next))
+      setSidebarWidthVar(next)
+      return next
+    })
+  }
 
   return (
     <aside
       style={{
         background: 'var(--sb-bg)',
         borderRight: '1px solid var(--sb-border)',
+        width: collapsed ? COLLAPSED_WIDTH : EXPANDED_WIDTH,
+        transition: 'width 200ms ease',
       }}
-      className="fixed inset-y-0 left-0 w-60 flex flex-col z-10"
+      className="fixed inset-y-0 left-0 flex flex-col z-10"
     >
       {/* Logo */}
       <div
         style={{ borderBottom: '1px solid var(--sb-border)' }}
-        className="px-5 py-5 flex items-center gap-3"
+        className={`${collapsed ? 'px-3 justify-center' : 'px-5'} py-5 flex items-center gap-3`}
       >
-        <img src="/bidwatt-logo.png" alt="BidWatt" style={{ height: 40, width: 'auto' }} />
-        <span style={{ color: 'var(--sb-text)', fontWeight: 700, fontSize: '0.875rem', letterSpacing: '-0.3px' }}>
-          BidWatt
-        </span>
+        <img
+          src="/bidwatt-logo.png"
+          alt="BidWatt"
+          style={{
+            height: collapsed ? 32 : 40,
+            width: 'auto',
+            maxWidth: collapsed ? 32 : 40,
+          }}
+        />
+        {!collapsed && (
+          <span style={{ color: 'var(--sb-text)', fontWeight: 700, fontSize: '0.875rem', letterSpacing: '-0.3px' }}>
+            BidWatt
+          </span>
+        )}
       </div>
 
       {/* Nav */}
       <nav className="px-2 py-4 space-y-0.5 flex-1">
-        {navLinks.map(({ href, label, Icon }) => {
-          const isActive = pathname === href
-          return (
-            <Link
-              key={href}
-              href={href}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 200ms ease',
-                background: isActive ? 'var(--sb-active)' : 'transparent',
-                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
-                textDecoration: 'none',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
-              }}
-            >
-              <Icon size={15} />
-              {label}
-            </Link>
-          )
-        })}
+        {navLinks.map(({ href, label, Icon }) => (
+          <NavItem
+            key={href}
+            href={href}
+            label={label}
+            Icon={Icon}
+            isActive={pathname === href}
+            collapsed={collapsed}
+          />
+        ))}
 
         {/* Toolbox */}
-        {(() => {
-          const isActive = pathname.startsWith('/dashboard/toolbox')
-          return (
-            <Link
-              href="/dashboard/toolbox"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 200ms ease',
-                background: isActive ? 'var(--sb-active)' : 'transparent',
-                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
-                textDecoration: 'none',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
-              }}
-            >
-              <Wrench size={15} />
-              Toolbox
-            </Link>
-          )
-        })()}
+        <NavItem
+          href="/dashboard/toolbox"
+          label="Toolbox"
+          Icon={Wrench}
+          isActive={pathname.startsWith('/dashboard/toolbox')}
+          collapsed={collapsed}
+        />
 
         {/* Reports (branch manager) */}
-        {isBranchManager && (() => {
-          const isActive = pathname === '/dashboard/admin/reports'
-          return (
-            <Link
-              href="/dashboard/admin/reports"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 200ms ease',
-                background: isActive ? 'var(--sb-active)' : 'transparent',
-                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
-                textDecoration: 'none',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
-              }}
-            >
-              <BarChart2 size={15} />
-              Reports
-            </Link>
-          )
-        })()}
+        {isBranchManager && (
+          <NavItem
+            href="/dashboard/admin/reports"
+            label="Reports"
+            Icon={BarChart2}
+            isActive={pathname === '/dashboard/admin/reports'}
+            collapsed={collapsed}
+          />
+        )}
 
         {/* Admin */}
-        {isAdmin && (() => {
-          const isActive = pathname.startsWith('/dashboard/admin')
-          return (
-            <Link
-              href="/dashboard/admin"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                fontSize: '0.875rem',
-                fontWeight: 500,
-                transition: 'all 200ms ease',
-                background: isActive ? 'var(--sb-active)' : 'transparent',
-                color: isActive ? '#38bdf8' : 'var(--sb-text2)',
-                textDecoration: 'none',
-              }}
-              onMouseEnter={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
-              }}
-              onMouseLeave={(e) => {
-                if (!isActive) (e.currentTarget as HTMLElement).style.background = 'transparent'
-              }}
-            >
-              <Settings size={15} />
-              Admin
-            </Link>
-          )
-        })()}
+        {isAdmin && (
+          <NavItem
+            href="/dashboard/admin"
+            label="Admin"
+            Icon={Settings}
+            isActive={pathname.startsWith('/dashboard/admin')}
+            collapsed={collapsed}
+          />
+        )}
       </nav>
 
       {/* User info + branch badges */}
-      {profile && (
+      {profile && !collapsed && (
         <div
           style={{ borderTop: '1px solid var(--sb-border)' }}
           className="px-4 py-3 shrink-0"
@@ -219,6 +227,42 @@ export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
           </div>
         </div>
       )}
+
+      {/* Collapse toggle */}
+      <div
+        style={{ borderTop: '1px solid var(--sb-border)' }}
+        className={`shrink-0 ${collapsed ? 'px-2' : 'px-3'} py-3 flex ${collapsed ? 'justify-center' : 'justify-end'}`}
+      >
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 32,
+            height: 32,
+            borderRadius: '8px',
+            background: 'transparent',
+            color: 'var(--sb-text2)',
+            border: 'none',
+            cursor: 'pointer',
+            transition: 'background 150ms ease, color 150ms ease',
+          }}
+          onMouseEnter={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'var(--sb-hover)'
+            ;(e.currentTarget as HTMLElement).style.color = 'var(--sb-text)'
+          }}
+          onMouseLeave={(e) => {
+            (e.currentTarget as HTMLElement).style.background = 'transparent'
+            ;(e.currentTarget as HTMLElement).style.color = 'var(--sb-text2)'
+          }}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
+      </div>
     </aside>
   )
 }
@@ -239,8 +283,10 @@ export function TopBar({ userName }: { userName: string }) {
         background: 'var(--surface)',
         borderBottom: '1px solid var(--border)',
         boxShadow: 'var(--shadow-sm)',
+        left: 'var(--main-sidebar-width)',
+        transition: 'left 200ms ease',
       }}
-      className="fixed top-0 left-60 right-0 h-16 flex items-center justify-between px-6 z-10"
+      className="fixed top-0 right-0 h-16 flex items-center justify-between px-6 z-10"
     >
       <div className="flex items-center gap-3">
         {/* User avatar */}
