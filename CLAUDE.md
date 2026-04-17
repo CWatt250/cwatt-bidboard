@@ -67,7 +67,7 @@ app/
 components/
   dashboard/                  — Dashboard charts and cards
   kanban/                     — BidCard, KanbanColumn
-  spreadsheet/                — DataTable, GhostRow, ScopePricingPopover, ClientsPopover
+  spreadsheet/                — DataTable, GhostRow, ScopeEditor, ClientsPopover
   workspace/                  — KpiRow, TodoList, RecentActivity
   ui/                         — shadcn/ui components
 ```
