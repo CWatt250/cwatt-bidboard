@@ -37,21 +37,7 @@ export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
         style={{ borderBottom: '1px solid var(--sb-border)' }}
         className="px-5 py-5 flex items-center gap-3"
       >
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #38bdf8, #0ea5e9)',
-            boxShadow: '0 0 12px rgba(56,189,248,0.4)',
-            borderRadius: '8px',
-            width: 30,
-            height: 30,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ color: 'white', fontWeight: 800, fontSize: '0.8rem' }}>B</span>
-        </div>
+        <img src="/bidwatt-logo.png" alt="BidWatt" style={{ height: 40, width: 'auto' }} />
         <span style={{ color: 'var(--sb-text)', fontWeight: 700, fontSize: '0.875rem', letterSpacing: '-0.3px' }}>
           BidWatt
         </span>
