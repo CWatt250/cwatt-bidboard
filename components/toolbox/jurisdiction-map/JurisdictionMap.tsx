@@ -271,78 +271,78 @@ export default function JurisdictionMap() {
 
   /* ---------- Render ---------- */
   return (
-    <div className="relative h-[calc(100vh-12rem)] rounded-lg overflow-hidden border border-gray-200">
-      {/* Map container */}
-      <div ref={mapContainerRef} className="h-full w-full" />
-
-      {/* Search bar */}
-      <div className="absolute top-3 right-3 z-30 w-72">
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => handleSearch(e.target.value)}
-          onFocus={() => searchResults.length > 0 && setShowResults(true)}
-          onBlur={() => setTimeout(() => setShowResults(false), 200)}
-          placeholder="Search location..."
-          className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
-        />
-        {showResults && searchResults.length > 0 && (
-          <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
-            {searchResults.map((r, i) => (
-              <button
-                key={i}
-                onMouseDown={() => handleSearchSelect(r.lat, r.lon)}
-                className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 border-b border-gray-100 last:border-0"
-              >
-                {r.display_name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Dispatch zone ring buttons */}
-      <div className="absolute top-14 right-3 z-30 flex flex-col gap-1">
-        {DISPATCH_GROUPS.map((group) => (
-          <div key={group.label} className="flex gap-1">
-            {group.cities.map((city) => (
-              <button
-                key={city}
-                onClick={() => drawRings(city)}
-                className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 transition-colors"
-              >
-                {city}
-              </button>
-            ))}
-          </div>
-        ))}
-        <button
-          onClick={clearRings}
-          className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-300 rounded shadow-sm hover:bg-red-50 text-red-500 transition-colors"
-        >
-          Clear
-        </button>
-      </div>
-
+    <div className="flex h-[calc(100vh-12rem)] rounded-lg overflow-hidden border border-gray-200">
       {/* Sidebar */}
-      {selectedCounty && (
-        <Sidebar
-          selectedCounty={selectedCounty}
-          dispatchPoints={dispatchPoints}
-          appendixACounties={appendixACounties}
-          onClose={() => {
-            setSelectedCounty(null)
-            if (pinRef.current && mapRef.current) {
-              mapRef.current.removeLayer(pinRef.current)
-              pinRef.current = null
-            }
-            if (tooltipRef.current && mapRef.current) {
-              mapRef.current.removeLayer(tooltipRef.current)
-              tooltipRef.current = null
-            }
-          }}
-        />
-      )}
+      <Sidebar
+        selectedCounty={selectedCounty}
+        dispatchPoints={dispatchPoints}
+        appendixACounties={appendixACounties}
+        onClose={() => {
+          setSelectedCounty(null)
+          if (pinRef.current && mapRef.current) {
+            mapRef.current.removeLayer(pinRef.current)
+            pinRef.current = null
+          }
+          if (tooltipRef.current && mapRef.current) {
+            mapRef.current.removeLayer(tooltipRef.current)
+            tooltipRef.current = null
+          }
+        }}
+      />
+
+      {/* Map panel */}
+      <div className="relative flex-1 min-w-0">
+        <div ref={mapContainerRef} className="h-full w-full" />
+
+        {/* Search bar */}
+        <div className="absolute top-3 right-3 z-30 w-72">
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => handleSearch(e.target.value)}
+            onFocus={() => searchResults.length > 0 && setShowResults(true)}
+            onBlur={() => setTimeout(() => setShowResults(false), 200)}
+            placeholder="Search location..."
+            className="w-full px-3 py-2 text-sm bg-white border border-gray-200 rounded-lg shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-400"
+          />
+          {showResults && searchResults.length > 0 && (
+            <div className="mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-60 overflow-y-auto">
+              {searchResults.map((r, i) => (
+                <button
+                  key={i}
+                  onMouseDown={() => handleSearchSelect(r.lat, r.lon)}
+                  className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 border-b border-gray-100 last:border-0"
+                >
+                  {r.display_name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Dispatch zone ring buttons */}
+        <div className="absolute top-14 right-3 z-30 flex flex-col gap-1">
+          {DISPATCH_GROUPS.map((group) => (
+            <div key={group.label} className="flex gap-1">
+              {group.cities.map((city) => (
+                <button
+                  key={city}
+                  onClick={() => drawRings(city)}
+                  className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-200 rounded shadow-sm hover:bg-gray-50 transition-colors"
+                >
+                  {city}
+                </button>
+              ))}
+            </div>
+          ))}
+          <button
+            onClick={clearRings}
+            className="px-2 py-1 text-[10px] font-medium bg-white border border-gray-300 rounded shadow-sm hover:bg-red-50 text-red-500 transition-colors"
+          >
+            Clear
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

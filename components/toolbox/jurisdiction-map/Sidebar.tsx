@@ -25,7 +25,7 @@ interface LocalInfo {
 }
 
 interface SidebarProps {
-  selectedCounty: SelectedCounty
+  selectedCounty: SelectedCounty | null
   dispatchPoints: Map<number, DispatchPoint[]>
   appendixACounties: Set<string>
   onClose: () => void
@@ -177,16 +177,38 @@ function ZoneTable({ localId, isAppendixA }: { localId: number; isAppendixA: boo
 }
 
 export function Sidebar({ selectedCounty, dispatchPoints, appendixACounties, onClose }: SidebarProps) {
+  if (!selectedCounty) {
+    return (
+      <aside className="hidden md:flex w-[300px] flex-shrink-0 bg-white border-r border-gray-200 overflow-y-auto flex-col">
+        <div className="flex-1 flex flex-col items-center justify-center p-6 text-center">
+          <div className="opacity-15 mb-4">
+            <svg width="44" height="44" viewBox="0 0 44 44" fill="none" aria-hidden="true">
+              <circle cx="22" cy="22" r="10" stroke="#7aaaf5" strokeWidth="1" />
+              <line x1="22" y1="0" x2="22" y2="44" stroke="#7aaaf5" strokeWidth="1" />
+              <line x1="0" y1="22" x2="44" y2="22" stroke="#7aaaf5" strokeWidth="1" />
+              <circle cx="22" cy="22" r="2" fill="#7aaaf5" />
+            </svg>
+          </div>
+          <p className="text-xs uppercase tracking-wider text-gray-400 mb-2">No Location Selected</p>
+          <p className="text-xs text-gray-400 leading-relaxed max-w-[200px]">
+            Click any county on the map to look up the local, wage package, and per diem.
+          </p>
+        </div>
+      </aside>
+    )
+  }
+
   const localId = selectedCounty.localId ?? 82
   const local = LOCAL_DATA[localId] ?? LOCAL_DATA[82]
   const isAppendixA = localId === 7 && appendixACounties.has(selectedCounty.fips)
 
   return (
-    <div className="absolute left-0 top-0 w-96 h-full overflow-y-auto bg-white shadow-xl z-20 p-5 border-r border-gray-200">
+    <aside className="fixed inset-x-0 bottom-0 z-30 max-h-[70vh] overflow-y-auto bg-white border-t border-gray-200 shadow-xl p-5 md:relative md:inset-auto md:z-auto md:w-[300px] md:max-h-none md:flex-shrink-0 md:border-r md:border-t-0 md:shadow-none">
       {/* Close button */}
       <button
         onClick={onClose}
         className="absolute top-3 right-3 p-1 rounded-md hover:bg-gray-100 transition-colors"
+        aria-label="Close county details"
       >
         <X className="h-4 w-4 text-gray-400" />
       </button>
@@ -241,6 +263,6 @@ export function Sidebar({ selectedCounty, dispatchPoints, appendixACounties, onC
           Reference only — verify rates with the local hall before bidding.
         </p>
       </div>
-    </div>
+    </aside>
   )
 }
