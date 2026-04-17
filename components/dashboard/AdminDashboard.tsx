@@ -729,7 +729,7 @@ const selectStyle: React.CSSProperties = {
 }
 
 export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeRange }) {
-  const { allBids, loading, error } = useDashboard()
+  const { allBids, orgBids, loading, error } = useDashboard()
 
   // Step 2: Pipeline trend range
   const [trendWeeks, setTrendWeeks] = useState<TrendWeeks>(8)
@@ -741,12 +741,19 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [branchFilter, setBranchFilter] = useState<string>('all')
 
-  // Filter allBids by global timeRange (for charts + KPIs)
+  // Filter allBids by global timeRange (for personal KPIs + charts)
   const filteredBids = useMemo(() => {
     const start = getTimeRangeStart(timeRange)
     if (!start) return allBids
     return allBids.filter((b) => b.updated_at >= start)
   }, [allBids, timeRange])
+
+  // Filter orgBids by global timeRange (for org-wide breakdown charts)
+  const filteredOrgBids = useMemo(() => {
+    const start = getTimeRangeStart(timeRange)
+    if (!start) return orgBids
+    return orgBids.filter((b) => b.updated_at >= start)
+  }, [orgBids, timeRange])
 
   if (loading) {
     return (
@@ -882,7 +889,7 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
               onChange={setBranchMetric}
             />
           </div>
-          <BranchPerformanceChart bids={filteredBids} metric={branchMetric} />
+          <BranchPerformanceChart bids={filteredOrgBids} metric={branchMetric} />
         </div>
 
         <div style={cardStyle}>
@@ -894,7 +901,7 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
               </p>
             </div>
           </div>
-          <RevenueByScope bids={filteredBids} />
+          <RevenueByScope bids={filteredOrgBids} />
         </div>
       </div>
 
