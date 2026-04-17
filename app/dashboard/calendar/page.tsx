@@ -56,8 +56,17 @@ function DateHeader({ date, label }: { date: Date; label: string }) {
         fontWeight: isToday ? 700 : 500,
         color: isToday ? '#2563EB' : 'inherit',
         fontSize: isToday ? '0.85rem' : '0.8rem',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        lineHeight: 1.2,
       }}
     >
+      {isToday && (
+        <span style={{ fontSize: '10px', fontWeight: 700, color: '#2563EB' }}>
+          Today
+        </span>
+      )}
       {label}
     </span>
   )
