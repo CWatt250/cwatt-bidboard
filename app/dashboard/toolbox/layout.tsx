@@ -7,7 +7,6 @@ const tabs = [
   { href: '/dashboard/toolbox/mike-discount', label: 'MIKE Discount Calculator' },
   { href: '/dashboard/toolbox/material-price', label: 'Material Price Calculator' },
   { href: '/dashboard/toolbox/crew-size', label: 'Crew Size Calculator' },
-  { href: '/dashboard/toolbox/jurisdiction-map', label: 'Jurisdiction Map' },
 ]
 
 export default function ToolboxLayout({ children }: { children: React.ReactNode }) {

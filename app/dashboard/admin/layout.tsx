@@ -11,7 +11,6 @@ const ADMIN_TABS = [
   { href: '/dashboard/admin/permissions', label: 'Permissions' },
   { href: '/dashboard/admin/reports', label: 'Reports' },
   { href: '/dashboard/admin/system', label: 'System' },
-  { href: '/dashboard/admin/cba-data', label: 'CBA Data' },
 ]
 
 const REPORTS_PATH = '/dashboard/admin/reports'

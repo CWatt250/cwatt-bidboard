@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(gh pr:*)",
-      "Bash(gh api:*)"
+      "Bash(gh api:*)",
+      "Bash(npm install *)",
+      "Bash(npm run *)"
     ]
   }
 }
