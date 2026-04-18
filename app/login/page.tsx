@@ -36,7 +36,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <img src="/bidwatt-logo.png" alt="BidWatt" style={{ height: 80, width: 'auto' }} className="mx-auto mb-4" />
+          <img src="/bidwatt-logo.svg" alt="BidWatt" style={{ height: 80, width: 'auto' }} className="mx-auto mb-4" />
           <CardTitle className="text-2xl">BidWatt</CardTitle>
           <p className="text-sm text-muted-foreground">Sign in to your account</p>
         </CardHeader>
