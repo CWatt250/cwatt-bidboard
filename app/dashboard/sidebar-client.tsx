@@ -122,7 +122,7 @@ export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
         className={`${collapsed ? 'px-3 justify-center' : 'px-5'} py-5 flex items-center gap-3`}
       >
         <img
-          src="/bidwatt-logo.png"
+          src="/bidwatt-logo.svg"
           alt="BidWatt"
           style={{
             height: collapsed ? 32 : 40,
