@@ -69,7 +69,7 @@ function dueDateStyle(dateStr: string): React.CSSProperties {
   today.setHours(0, 0, 0, 0)
   const due = new Date(dateStr + 'T00:00:00')
   const diffDays = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diffDays < 0) return { color: '#A32D2D', fontWeight: 600 }  // overdue
+  if (diffDays <= 0) return { color: '#A32D2D', fontWeight: 600 } // overdue or due today
   if (diffDays <= 5) return { color: '#854F0B', fontWeight: 600 } // within 5 days
   return {}
 }
