@@ -47,6 +47,8 @@ interface ScopeEditorProps {
   onDraftSave?: (items: DraftItem[]) => void
   placeholder?: React.ReactNode
   triggerClassName?: string
+  /** Fully override the trigger content (replaces default badges + placeholder). */
+  trigger?: React.ReactNode
 }
 
 type ScopeState = Record<BidScope, { checked: boolean; price: string; id?: string }>
@@ -65,6 +67,7 @@ export function ScopeEditor({
   onDraftSave,
   placeholder,
   triggerClassName,
+  trigger,
 }: ScopeEditorProps) {
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<ScopeState>(emptyState)
@@ -99,7 +102,8 @@ export function ScopeEditor({
     : [...new Set((bid?.line_items ?? []).map((li) => li.scope))]
 
   const triggerContent =
-    displayScopes.length === 0 ? (
+    trigger ??
+    (displayScopes.length === 0 ? (
       placeholder ?? <span className="italic text-muted-foreground text-xs">&mdash;</span>
     ) : (
       <div className="flex flex-wrap gap-1">
@@ -109,7 +113,7 @@ export function ScopeEditor({
           </Badge>
         ))}
       </div>
-    )
+    ))
 
   const total = ALL_SCOPES.reduce((sum, s) => {
     if (!state[s].checked) return sum
