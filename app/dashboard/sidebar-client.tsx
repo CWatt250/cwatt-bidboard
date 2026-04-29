@@ -9,6 +9,7 @@ import {
   Table2,
   Calendar,
   Contact,
+  FolderOpen,
   Settings,
   Wrench,
   BarChart2,
@@ -28,6 +29,7 @@ const navLinks = [
   { href: '/dashboard/kanban', label: 'My Workspace', Icon: LayoutGrid },
   { href: '/dashboard/spreadsheet', label: 'Bid Board', Icon: Table2 },
   { href: '/dashboard/calendar', label: 'Calendar', Icon: Calendar },
+  { href: '/dashboard/projects-library', label: 'Projects Library', Icon: FolderOpen },
   { href: '/dashboard/clients', label: 'Clients', Icon: Contact },
 ]
 
