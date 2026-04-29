@@ -186,6 +186,7 @@ export function ScopeEditor({
         if (error) throw error
       }
 
+      window.dispatchEvent(new Event('bidwatt:bid-created'))
       toast.success('Scope pricing saved.')
       setOpen(false)
     } catch (err) {
