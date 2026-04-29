@@ -105,8 +105,11 @@ export function KpiRow({ bids }: KpiRowProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  const in7 = new Date(today)
-  in7.setDate(in7.getDate() + 7)
+  // Current calendar week, Sunday → Saturday (matches kanban week filter)
+  const startOfWeek = new Date(today)
+  startOfWeek.setDate(today.getDate() - today.getDay())
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
 
   const weekAgo = new Date(today)
   weekAgo.setDate(weekAgo.getDate() - 7)
@@ -119,11 +122,11 @@ export function KpiRow({ bids }: KpiRowProps) {
   })
   const dueTodayValue = dueTodayBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Due This Week (today through +7 days)
+  // Due This Week (Sunday through Saturday of current calendar week, all statuses)
   const dueWeekBids = bids.filter((b) => {
     if (!b.bid_due_date) return false
     const d = new Date(b.bid_due_date + 'T00:00:00')
-    return d >= today && d <= in7
+    return d >= startOfWeek && d <= endOfWeek
   })
   const dueWeekValue = dueWeekBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
