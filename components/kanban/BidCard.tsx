@@ -19,16 +19,16 @@ const SCOPE_COLORS: Record<string, { bg: string; text: string }> = {
   'Other':           { bg: 'rgba(148,163,184,0.12)', text: '#64748b' },
 }
 
-/** Returns due-date badge info: null = omit, else pill props */
-function getDueBadge(dateStr: string | null): { label: string; bg: string; color: string } | null {
-  if (!dateStr) return null
+/** Color-coding for the due date text. Red = overdue/today, orange = 1-5 days, else default. */
+function dueDateColor(dateStr: string | null): string {
+  if (!dateStr) return 'var(--text3)'
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const due = new Date(dateStr + 'T00:00:00')
   const diffDays = Math.round((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diffDays === 0) return { label: 'Due Today', bg: '#FCEBEB', color: '#A32D2D' }
-  if (diffDays >= 1 && diffDays <= 5) return { label: 'Due Soon', bg: '#FAEEDA', color: '#854F0B' }
-  return null
+  if (diffDays <= 0) return '#A32D2D'
+  if (diffDays <= 5) return '#854F0B'
+  return 'var(--text3)'
 }
 
 function formatCurrency(value: number): string {
@@ -84,8 +84,9 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
   const hasPrice = lineItems.some((li) => li.price !== null)
   const totalPriceDisplay = hasPrice ? formatCurrency(bid.total_price ?? 0) : 'TBD'
 
-  const dueBadge = getDueBadge(bid.bid_due_date)
-  const dueDateFormatted = bid.bid_due_date ? formatDate(bid.bid_due_date) : null
+  const dueDateFormatted = bid.bid_due_date ? formatDate(bid.bid_due_date) : '—'
+  const dueColor = dueDateColor(bid.bid_due_date)
+  const isUrgent = dueColor !== 'var(--text3)'
 
   return (
     <Draggable draggableId={bid.id} index={index}>
@@ -200,24 +201,15 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
               {totalPriceDisplay}
             </span>
 
-            {/* Due date badge or muted text */}
-            {dueBadge ? (
-              <span style={{
-                background: dueBadge.bg,
-                color: dueBadge.color,
-                fontSize: '0.63rem',
-                fontWeight: 700,
-                padding: '2px 7px',
-                borderRadius: '100px',
-                flexShrink: 0,
-              }}>
-                {dueBadge.label}
-              </span>
-            ) : dueDateFormatted ? (
-              <span style={{ fontSize: '0.68rem', color: 'var(--text3)', flexShrink: 0 }}>
-                {dueDateFormatted}
-              </span>
-            ) : null}
+            {/* Due date — color-coded text */}
+            <span style={{
+              fontSize: '0.68rem',
+              fontWeight: isUrgent ? 700 : 400,
+              color: dueColor,
+              flexShrink: 0,
+            }}>
+              {dueDateFormatted}
+            </span>
           </div>
 
           {/* Claim button — Unassigned only */}
