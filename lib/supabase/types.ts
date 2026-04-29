@@ -97,6 +97,8 @@ export interface BidDocument {
 export interface Bid {
   id: string
   project_name: string
+  project_location: string | null
+  mike_estimate_number: string | null
   branch: Branch
   estimator_id: string | null
   estimator_name: string | null

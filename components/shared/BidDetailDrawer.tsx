@@ -61,6 +61,8 @@ const BRANCH_LABELS: Record<string, string> = {
 
 const bidDetailSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
+  project_location: z.string().optional(),
+  mike_estimate_number: z.string().optional(),
   branch: z.enum(['PSC', 'SEA', 'POR', 'PHX', 'SLC']),
   status: z.enum(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']),
   estimator_id: z.string().nullable().optional(),
@@ -164,6 +166,8 @@ export function BidDetailDrawer() {
       if (cancelled) return
       reset({
         project_name: selectedBid.project_name,
+        project_location: selectedBid.project_location ?? '',
+        mike_estimate_number: selectedBid.mike_estimate_number ?? '',
         branch: selectedBid.branch,
         status: selectedBid.status,
         estimator_id: estimatorId ?? undefined,
@@ -197,6 +201,8 @@ export function BidDetailDrawer() {
             .select(`
               id,
               project_name,
+              project_location,
+              mike_estimate_number,
               branch,
               estimator_id,
               status,
@@ -237,6 +243,8 @@ export function BidDetailDrawer() {
       .from('bids')
       .update({
         project_name: values.project_name,
+        project_location: values.project_location?.trim() ? values.project_location.trim() : null,
+        mike_estimate_number: values.mike_estimate_number?.trim() ? values.mike_estimate_number.trim() : null,
         branch: values.branch,
         status: values.status,
         estimator_id: values.estimator_id ?? null,
@@ -335,6 +343,26 @@ export function BidDetailDrawer() {
                   {errors.project_name && (
                     <p className="text-xs text-destructive">{errors.project_name.message}</p>
                   )}
+                </div>
+
+                {/* Project Location + MIKE Estimate # */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="dd-project_location">Project Location</Label>
+                    <Input
+                      id="dd-project_location"
+                      {...register('project_location')}
+                      placeholder="City, State or full address"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="dd-mike_estimate_number">MIKE Estimate #</Label>
+                    <Input
+                      id="dd-mike_estimate_number"
+                      {...register('mike_estimate_number')}
+                      placeholder="e.g. 181656"
+                    />
+                  </div>
                 </div>
 
                 {/* Bid Total (calculated, read-only) */}

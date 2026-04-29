@@ -87,6 +87,7 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
         }}
       >
         {initials ? `${initials} — ${bid.project_name}` : bid.project_name}
+        {bid.project_location ? ` · ${bid.project_location}` : ''}
       </span>
 
       {isUnassigned ? (

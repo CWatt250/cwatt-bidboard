@@ -118,7 +118,10 @@ export function DataTable({
   const { openBid } = useBidDetail()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
-  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
+    project_location: false,
+    mike_estimate_number: false,
+  })
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     statuses: new Set<BidStatus>(),
     branches: new Set<string>(),
@@ -138,7 +141,7 @@ export function DataTable({
   const updateBid = useCallback(
     async (
       id: string,
-      field: 'notes',
+      field: 'notes' | 'project_location' | 'mike_estimate_number',
       value: string | null
     ) => {
       const supabase = createClient()
@@ -181,8 +184,10 @@ export function DataTable({
 
   const columnLabels: Record<string, string> = {
     project_name: 'Project Name',
+    project_location: 'Project Location',
     scope: 'Scope',
     total_price: 'Bid Price',
+    mike_estimate_number: 'MIKE #',
     bid_due_date: 'Bid Due Date',
     estimator_name: 'Estimator',
     client: 'Client(s)',

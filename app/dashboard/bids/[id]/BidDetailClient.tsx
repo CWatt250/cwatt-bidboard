@@ -13,6 +13,7 @@ import {
   ChevronRightIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  MapPinIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -96,6 +97,8 @@ const lineItemSchema = z.object({
 
 const bidFormSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
+  project_location: z.string().optional(),
+  mike_estimate_number: z.string().optional(),
   branch: z.enum(['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const),
   estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
@@ -186,6 +189,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
     reset({
       project_name: bid.project_name,
+      project_location: bid.project_location ?? '',
+      mike_estimate_number: bid.mike_estimate_number ?? '',
       branch: bid.branch,
       estimator_id: bid.estimator_id ?? profile?.id ?? undefined,
       bid_due_date: bid.bid_due_date,
@@ -216,6 +221,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       .from('bids')
       .update({
         project_name: values.project_name,
+        project_location: values.project_location?.trim() ? values.project_location.trim() : null,
+        mike_estimate_number: values.mike_estimate_number?.trim() ? values.mike_estimate_number.trim() : null,
         branch: values.branch,
         estimator_id: values.estimator_id ?? null,
         bid_due_date: values.bid_due_date,
@@ -381,6 +388,24 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           <p className="text-sm" style={{ color: 'var(--text3)' }}>
             Branch: {bid.branch} · Estimator: {bid.estimator_name ?? 'Unassigned'}
           </p>
+          {(bid.project_location || bid.mike_estimate_number) && (
+            <p className="text-sm" style={{ color: 'var(--text3)' }}>
+              {bid.project_location && (
+                <span>
+                  <MapPinIcon className="inline-block size-3.5 -mt-0.5 mr-1" />
+                  {bid.project_location}
+                </span>
+              )}
+              {bid.project_location && bid.mike_estimate_number && (
+                <span style={{ margin: '0 8px', color: 'var(--text3)' }}>·</span>
+              )}
+              {bid.mike_estimate_number && (
+                <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}>
+                  MIKE #{bid.mike_estimate_number}
+                </span>
+              )}
+            </p>
+          )}
           <p className="text-sm font-medium" style={{ color: 'var(--accent2)' }}>
             Due: {formatDate(bid.bid_due_date)}
           </p>
@@ -895,6 +920,31 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                         }}
                       />
                     )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-4 mt-4">
+                  <div className="space-y-1">
+                    <Label htmlFor="bd-project_location" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      Project Location
+                    </Label>
+                    <Input
+                      id="bd-project_location"
+                      {...register('project_location')}
+                      placeholder="City, State or full address"
+                      className="border-[var(--border)]"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="bd-mike_estimate_number" className="text-sm" style={{ color: 'var(--text3)' }}>
+                      MIKE Estimate #
+                    </Label>
+                    <Input
+                      id="bd-mike_estimate_number"
+                      {...register('mike_estimate_number')}
+                      placeholder="e.g. 181656"
+                      className="border-[var(--border)]"
+                    />
                   </div>
                 </div>
               </div>
