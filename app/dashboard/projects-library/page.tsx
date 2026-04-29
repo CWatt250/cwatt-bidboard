@@ -116,6 +116,8 @@ export default function ProjectsLibraryPage() {
       .select(`
         id,
         project_name,
+        project_location,
+        mike_estimate_number,
         branch,
         estimator_id,
         status,

@@ -44,7 +44,7 @@ declare module '@tanstack/react-table' {
   interface TableMeta<TData extends RowData> {
     updateBid: (
       id: string,
-      field: 'notes',
+      field: 'notes' | 'project_location' | 'mike_estimate_number',
       value: string | null
     ) => Promise<void>
   }
@@ -277,6 +277,27 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
         </button>
       ),
     },
+    // 1b. Project Location (inline editable, hidden by default)
+    {
+      accessorKey: 'project_location',
+      header: ({ column }) => <SortableHeader label="Project Location" column={column} />,
+      cell: ({ row, table }) => (
+        <InlineEditCell
+          defaultValue={row.original.project_location ?? ''}
+          type="text"
+          placeholder="City, State…"
+          onSave={async (raw) => {
+            const value = raw.trim() === '' ? null : raw.trim()
+            await table.options.meta?.updateBid(row.original.id, 'project_location', value)
+          }}
+          renderDisplay={(raw) => (
+            <span className={raw === '' ? 'italic text-muted-foreground text-xs' : 'text-sm'}>
+              {raw === '' ? 'Add location…' : raw}
+            </span>
+          )}
+        />
+      ),
+    },
     // 2. Scope (click to open pricing popover)
     {
       id: 'scope',
@@ -298,6 +319,30 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
           </span>
         )
       },
+    },
+    // 3b. MIKE Estimate # (inline editable, hidden by default)
+    {
+      accessorKey: 'mike_estimate_number',
+      header: ({ column }) => <SortableHeader label="MIKE #" column={column} />,
+      cell: ({ row, table }) => (
+        <InlineEditCell
+          defaultValue={row.original.mike_estimate_number ?? ''}
+          type="text"
+          placeholder="MIKE #"
+          onSave={async (raw) => {
+            const value = raw.trim() === '' ? null : raw.trim()
+            await table.options.meta?.updateBid(row.original.id, 'mike_estimate_number', value)
+          }}
+          renderDisplay={(raw) => (
+            <span
+              className={raw === '' ? 'italic text-muted-foreground text-xs' : 'text-sm'}
+              style={raw === '' ? undefined : { fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
+            >
+              {raw === '' ? 'Add MIKE #…' : `#${raw}`}
+            </span>
+          )}
+        />
+      ),
     },
     // 4. Bid Due Date
     {

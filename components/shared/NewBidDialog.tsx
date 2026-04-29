@@ -166,6 +166,8 @@ const lineItemSchema = z.object({
 
 const newBidSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
+  project_location: z.string().optional(),
+  mike_estimate_number: z.string().optional(),
   branch: z.enum(BRANCHES, { error: 'Branch is required' }),
   estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
@@ -205,6 +207,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     resolver: zodResolver(newBidSchema),
     defaultValues: {
       project_name: defaultProjectName ?? '',
+      project_location: '',
+      mike_estimate_number: '',
       branch: '' as any,
       estimator_id: profile?.id ?? null,
       bid_due_date: '',
@@ -221,6 +225,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     setCreateAsUnassigned(false)
     reset({
       project_name: defaultProjectName ?? '',
+      project_location: '',
+      mike_estimate_number: '',
       branch: '' as any,
       estimator_id: profile?.id ?? null,
       bid_due_date: '',
@@ -262,6 +268,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
       .from('bids')
       .insert({
         project_name: values.project_name,
+        project_location: values.project_location?.trim() ? values.project_location.trim() : null,
+        mike_estimate_number: values.mike_estimate_number?.trim() ? values.mike_estimate_number.trim() : null,
         branch: values.branch,
         bid_due_date: values.bid_due_date,
         notes: values.notes || null,
@@ -306,6 +314,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     setCreateAsUnassigned(false)
     reset({
       project_name: '',
+      project_location: '',
+      mike_estimate_number: '',
       branch: '' as any,
       estimator_id: profile?.id ?? null,
       bid_due_date: '',
@@ -354,6 +364,26 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
             {errors.project_name && (
               <p className="text-xs text-destructive">{errors.project_name.message}</p>
             )}
+          </div>
+
+          {/* Project Location + MIKE Estimate # (both optional) */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="project_location">Project Location</Label>
+              <Input
+                id="project_location"
+                {...register('project_location')}
+                placeholder="City, State or full address"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="mike_estimate_number">MIKE Estimate #</Label>
+              <Input
+                id="mike_estimate_number"
+                {...register('mike_estimate_number')}
+                placeholder="e.g. 181656"
+              />
+            </div>
           </div>
 
           {/* Branch + Bid Due Date */}

@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Draggable } from '@hello-pangea/dnd'
 import { toast } from 'sonner'
+import { MapPin, Hash } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
@@ -134,6 +135,26 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
           <div style={{ fontWeight: 700, fontSize: '0.82rem', lineHeight: 1.3, color: 'var(--text)', marginBottom: 3 }}>
             {bid.project_name}
           </div>
+
+          {/* Project location + MIKE estimate # — wrap to new row if both present */}
+          {(bid.project_location || bid.mike_estimate_number) && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 10px', marginBottom: 5 }}>
+              {bid.project_location && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.7rem', color: 'var(--text3)', minWidth: 0 }}>
+                  <MapPin size={11} style={{ flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {bid.project_location}
+                  </span>
+                </span>
+              )}
+              {bid.mike_estimate_number && (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: '0.7rem', color: 'var(--text3)', fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}>
+                  <Hash size={10} style={{ flexShrink: 0 }} />
+                  {bid.mike_estimate_number}
+                </span>
+              )}
+            </div>
+          )}
 
           {/* GC / client name */}
           {clientsDisplay && (
