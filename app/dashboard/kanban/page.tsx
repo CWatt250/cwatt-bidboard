@@ -80,9 +80,34 @@ export default function KanbanPage() {
     }
   }
 
+  // Current calendar week (Sunday → Saturday), recomputed on each render so
+  // it auto-rolls forward at midnight without a refresh.
+  const today = new Date()
+  const startOfWeek = new Date(today)
+  startOfWeek.setDate(today.getDate() - today.getDay())
+  const endOfWeek = new Date(startOfWeek)
+  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  const toDateStr = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const startStr = toDateStr(startOfWeek)
+  const endStr = toDateStr(endOfWeek)
+
+  function inCurrentWeek(bid: Bid): boolean {
+    if (!bid.bid_due_date) return false
+    return bid.bid_due_date >= startStr && bid.bid_due_date <= endStr
+  }
+  function currentWeekOrFuture(bid: Bid): boolean {
+    if (!bid.bid_due_date) return true
+    return bid.bid_due_date >= startStr
+  }
+
   const bidsByStatus = STATUSES.reduce<Record<BidStatus, Bid[]>>(
     (acc, status) => {
-      acc[status] = localBids.filter((b) => b.status === status)
+      const ofStatus = localBids.filter((b) => b.status === status)
+      acc[status] =
+        status === 'Unassigned'
+          ? ofStatus.filter(currentWeekOrFuture)
+          : ofStatus.filter(inCurrentWeek)
       return acc
     },
     { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [] } as unknown as Record<BidStatus, Bid[]>
