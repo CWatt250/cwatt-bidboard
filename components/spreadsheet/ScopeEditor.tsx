@@ -169,12 +169,14 @@ export function ScopeEditor({
       }
 
       // Upsert selected items
+      // NOTE: bid_line_items.client is NOT NULL (legacy schema). Multi-client
+      // lives in bid_clients junction now, so write '' here.
       const upsertRows = items.map((item) => ({
         ...(item.id ? { id: item.id } : {}),
         bid_id: bid.id,
         scope: item.scope as BidScope,
         price: item.price.trim() ? parseFloat(item.price) : null,
-        client: null as string | null,
+        client: '',
       }))
 
       if (upsertRows.length > 0) {
@@ -186,8 +188,10 @@ export function ScopeEditor({
 
       toast.success('Scope pricing saved.')
       setOpen(false)
-    } catch {
-      toast.error('Failed to save scope pricing.')
+    } catch (err) {
+      console.error('[ScopeEditor] save failed', err)
+      const msg = err instanceof Error ? err.message : 'Failed to save scope pricing.'
+      toast.error(msg)
     } finally {
       setSaving(false)
     }
