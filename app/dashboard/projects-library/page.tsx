@@ -6,11 +6,11 @@ import {
   Search,
   Filter as FilterIcon,
   FolderOpen,
+  Folder as FolderIcon,
   List as ListIcon,
   ArrowUp,
   ArrowDown,
   X,
-  ChevronRight as ChevronRightIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useUserRole } from '@/contexts/userRole'
@@ -25,10 +25,6 @@ import {
   type BidStatus,
   type Branch,
 } from '@/lib/supabase/types'
-import {
-  STATUS_BADGE_CLASSES,
-  BRANCH_BADGE_CLASSES,
-} from '@/config/colors'
 
 const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const ALL_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
@@ -71,14 +67,6 @@ const EMPTY_FILTERS: Filters = {
   dueEnd: '',
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
 function formatDate(dateStr: string | null): string {
   if (!dateStr) return '—'
   const d = new Date(dateStr + 'T00:00:00')
@@ -106,7 +94,6 @@ export default function ProjectsLibraryPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [showFilters, setShowFilters] = useState(false)
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
-  const [folderPath, setFolderPath] = useState<{ branch?: Branch; year?: number }>({})
   const [sortKey, setSortKey] = useState<'name' | 'due'>('due')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
 
@@ -268,31 +255,10 @@ export default function ProjectsLibraryPage() {
     (filters.dueStart ? 1 : 0) +
     (filters.dueEnd ? 1 : 0)
 
-  // Folder counts
-  const branchCounts = useMemo(() => {
-    const counts = new Map<Branch, number>()
-    for (const b of filteredBids) counts.set(b.branch, (counts.get(b.branch) ?? 0) + 1)
-    return counts
-  }, [filteredBids])
-
-  const yearCounts = useMemo(() => {
-    if (!folderPath.branch) return new Map<number, number>()
-    const counts = new Map<number, number>()
-    for (const b of filteredBids) {
-      if (b.branch !== folderPath.branch) continue
-      const y = yearOf(b.bid_due_date)
-      if (!y) continue
-      counts.set(y, (counts.get(y) ?? 0) + 1)
-    }
-    return counts
-  }, [filteredBids, folderPath.branch])
-
+  // Folder view: flat alphabetical list
   const folderProjects = useMemo(() => {
-    if (!folderPath.branch || !folderPath.year) return []
-    return filteredBids
-      .filter((b) => b.branch === folderPath.branch && yearOf(b.bid_due_date) === folderPath.year)
-      .sort((a, b) => (a.bid_due_date < b.bid_due_date ? 1 : -1))
-  }, [filteredBids, folderPath])
+    return [...filteredBids].sort((a, b) => a.project_name.localeCompare(b.project_name))
+  }, [filteredBids])
 
   // List view sorting (Project Name + Due Date only)
   const listBids = useMemo(() => {
@@ -566,14 +532,7 @@ export default function ProjectsLibraryPage() {
         ) : error ? (
           <div className="error-card">Error loading bids: {error}</div>
         ) : viewMode === 'folder' ? (
-          <FolderView
-            folderPath={folderPath}
-            setFolderPath={setFolderPath}
-            accessibleBranches={accessibleBranches}
-            branchCounts={branchCounts}
-            yearCounts={yearCounts}
-            folderProjects={folderProjects}
-          />
+          <FolderView projects={folderProjects} />
         ) : (
           <ListView
             bids={listBids}
@@ -701,265 +660,82 @@ function ViewToggleButton({
 
 // ─── Folder View ────────────────────────────────────────────────────────────
 
-function FolderView({
-  folderPath,
-  setFolderPath,
-  accessibleBranches,
-  branchCounts,
-  yearCounts,
-  folderProjects,
-}: {
-  folderPath: { branch?: Branch; year?: number }
-  setFolderPath: (p: { branch?: Branch; year?: number }) => void
-  accessibleBranches: Branch[]
-  branchCounts: Map<Branch, number>
-  yearCounts: Map<number, number>
-  folderProjects: Bid[]
-}) {
+function FolderView({ projects }: { projects: Bid[] }) {
+  if (projects.length === 0) {
+    return (
+      <div
+        style={{
+          padding: 32,
+          textAlign: 'center',
+          color: 'var(--text3)',
+          fontSize: '0.85rem',
+          fontStyle: 'italic',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-sm)',
+        }}
+      >
+        No projects match the current filters.
+      </div>
+    )
+  }
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Breadcrumb */}
-      <nav style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.8rem', color: 'var(--text3)' }}>
-        <button
-          type="button"
-          onClick={() => setFolderPath({})}
-          style={{
-            background: 'transparent',
-            border: 'none',
-            padding: 0,
-            color: folderPath.branch ? 'var(--accent)' : 'var(--text)',
-            fontWeight: folderPath.branch ? 500 : 700,
-            cursor: 'pointer',
-            fontSize: 'inherit',
-          }}
-        >
-          All Branches
-        </button>
-        {folderPath.branch && (
-          <>
-            <ChevronRightIcon size={12} />
-            <button
-              type="button"
-              onClick={() => setFolderPath({ branch: folderPath.branch })}
-              style={{
-                background: 'transparent',
-                border: 'none',
-                padding: 0,
-                color: folderPath.year ? 'var(--accent)' : 'var(--text)',
-                fontWeight: folderPath.year ? 500 : 700,
-                cursor: 'pointer',
-                fontSize: 'inherit',
-              }}
-            >
-              {folderPath.branch}
-            </button>
-          </>
-        )}
-        {folderPath.year && (
-          <>
-            <ChevronRightIcon size={12} />
-            <span style={{ color: 'var(--text)', fontWeight: 700 }}>{folderPath.year}</span>
-          </>
-        )}
-      </nav>
-
-      {/* Level 1 — Branches */}
-      {!folderPath.branch && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: 12,
-          }}
-        >
-          {accessibleBranches.map((b) => {
-            const count = branchCounts.get(b) ?? 0
-            return (
-              <FolderCard
-                key={b}
-                title={b}
-                subtitle={BRANCH_LABELS[b]}
-                count={count}
-                onClick={() => setFolderPath({ branch: b })}
-              />
-            )
-          })}
-        </div>
-      )}
-
-      {/* Level 2 — Years */}
-      {folderPath.branch && !folderPath.year && (
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))',
-            gap: 12,
-          }}
-        >
-          {[...yearCounts.entries()]
-            .sort(([a], [b]) => b - a)
-            .map(([year, count]) => (
-              <FolderCard
-                key={year}
-                title={String(year)}
-                count={count}
-                onClick={() => setFolderPath({ branch: folderPath.branch, year })}
-              />
-            ))}
-          {yearCounts.size === 0 && (
-            <p style={{ color: 'var(--text3)', fontSize: '0.85rem', fontStyle: 'italic' }}>
-              No bids match the current filters.
-            </p>
-          )}
-        </div>
-      )}
-
-      {/* Level 3 — Projects */}
-      {folderPath.branch && folderPath.year && (
-        <div
-          style={{
-            background: 'var(--surface)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius-sm)',
-            overflow: 'hidden',
-          }}
-        >
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 2fr) 110px minmax(0, 1fr) minmax(0, 1.2fr) 110px',
-              gap: 12,
-              padding: '10px 14px',
-              borderBottom: '1px solid var(--border)',
-              background: 'var(--surface2)',
-              fontSize: '0.7rem',
-              fontWeight: 700,
-              color: 'var(--text3)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-            }}
-          >
-            <span>Project</span>
-            <span>Status</span>
-            <span style={{ textAlign: 'right' }}>Bid Value</span>
-            <span>Estimator / Client</span>
-            <span style={{ textAlign: 'right' }}>Due</span>
-          </div>
-          {folderProjects.length === 0 ? (
-            <div style={{ padding: 24, textAlign: 'center', color: 'var(--text3)', fontSize: '0.85rem', fontStyle: 'italic' }}>
-              No projects in {folderPath.branch} for {folderPath.year}.
-            </div>
-          ) : (
-            folderProjects.map((bid) => (
-              <FolderProjectRow key={bid.id} bid={bid} />
-            ))
-          )}
-        </div>
-      )}
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: 8,
+      }}
+    >
+      {projects.map((bid) => (
+        <ProjectFolder key={bid.id} bid={bid} />
+      ))}
     </div>
   )
 }
 
-function FolderCard({
-  title,
-  subtitle,
-  count,
-  onClick,
-}: {
-  title: string
-  subtitle?: string
-  count: number
-  onClick: () => void
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        textAlign: 'left',
-        padding: 14,
-        background: 'var(--surface)',
-        border: '1px solid var(--border)',
-        borderRadius: 'var(--radius)',
-        boxShadow: 'var(--shadow-sm)',
-        cursor: 'pointer',
-        transition: 'all 150ms',
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-      }}
-      onMouseEnter={(e) => {
-        const t = e.currentTarget as HTMLElement
-        t.style.borderColor = 'var(--accent)'
-        t.style.boxShadow = 'var(--shadow)'
-      }}
-      onMouseLeave={(e) => {
-        const t = e.currentTarget as HTMLElement
-        t.style.borderColor = 'var(--border)'
-        t.style.boxShadow = 'var(--shadow-sm)'
-      }}
-    >
-      <FolderOpen size={20} style={{ color: 'var(--accent)', flexShrink: 0, marginTop: 2 }} />
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <p style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--text)', margin: 0, lineHeight: 1.2 }}>
-          {title}
-        </p>
-        {subtitle && (
-          <p style={{ fontSize: '0.7rem', color: 'var(--text3)', margin: '2px 0 0' }}>{subtitle}</p>
-        )}
-        <p style={{ fontSize: '0.72rem', color: 'var(--text3)', margin: '6px 0 0' }}>
-          {count} bid{count === 1 ? '' : 's'}
-        </p>
-      </div>
-    </button>
-  )
-}
-
-function FolderProjectRow({ bid }: { bid: Bid }) {
-  const clientNames = bidClientNames(bid)
-  const value = bid.total_price ?? 0
+function ProjectFolder({ bid }: { bid: Bid }) {
   return (
     <Link
       href={`/dashboard/bids/${bid.id}`}
+      title={bid.project_name}
       style={{
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 2fr) 110px minmax(0, 1fr) minmax(0, 1.2fr) 110px',
-        gap: 12,
-        padding: '10px 14px',
-        borderBottom: '1px solid var(--border)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        padding: '8px 10px',
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 6,
         textDecoration: 'none',
         color: 'inherit',
-        alignItems: 'center',
-        transition: 'background 120ms',
+        transition: 'all 120ms',
+        minWidth: 0,
       }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = 'var(--surface2)' }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = 'transparent' }}
+      onMouseEnter={(e) => {
+        const t = e.currentTarget as HTMLElement
+        t.style.background = 'var(--surface2)'
+        t.style.borderColor = 'var(--accent)'
+      }}
+      onMouseLeave={(e) => {
+        const t = e.currentTarget as HTMLElement
+        t.style.background = 'var(--surface)'
+        t.style.borderColor = 'var(--border)'
+      }}
     >
-      <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--accent)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {bid.project_name}
-      </span>
+      <FolderIcon size={16} style={{ color: 'var(--accent)', flexShrink: 0, fill: 'rgba(56,189,248,0.15)' }} />
       <span
-        className={`inline-flex items-center justify-center rounded px-1.5 py-0.5 border text-xs font-medium w-fit ${STATUS_BADGE_CLASSES[bid.status]}`}
+        style={{
+          fontSize: '0.82rem',
+          fontWeight: 500,
+          color: 'var(--text)',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          minWidth: 0,
+        }}
       >
-        {bid.status}
-      </span>
-      <span style={{
-        textAlign: 'right',
-        fontSize: '0.85rem',
-        fontWeight: 600,
-        color: 'var(--text)',
-        fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-      }}>
-        {value > 0 ? formatCurrency(value) : '—'}
-      </span>
-      <span style={{ fontSize: '0.78rem', color: 'var(--text2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {bid.estimator_name ?? 'Unassigned'}
-        {clientNames.length > 0 && (
-          <span style={{ color: 'var(--text3)' }}> · {clientNames.join(', ')}</span>
-        )}
-      </span>
-      <span style={{ textAlign: 'right', fontSize: '0.8rem', color: 'var(--text2)' }}>
-        {formatDate(bid.bid_due_date)}
+        {bid.project_name}
       </span>
     </Link>
   )
