@@ -288,10 +288,6 @@ export default function CalendarPage() {
           <span style={{ display: 'inline-block', height: 10, width: 10, borderRadius: '50%', background: 'var(--yellow)' }} />
           Due within 7 days
         </span>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ display: 'inline-block', height: 10, width: 10, borderRadius: '50%', background: 'var(--accent)' }} />
-          On track
-        </span>
       </div>
     </div>
   )
