@@ -393,6 +393,30 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
+/* ── Bid Board: always-visible horizontal scrollbar ── */
+.bidboard-scroll {
+  scrollbar-gutter: stable;
+}
+.bidboard-scroll::-webkit-scrollbar {
+  height: 12px;
+  background: var(--surface2);
+}
+.bidboard-scroll::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.5);
+  border: 2px solid var(--surface2);
+  border-radius: 6px;
+}
+.bidboard-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.7);
+}
+.bidboard-scroll::-webkit-scrollbar-track {
+  background: var(--surface2);
+}
+.bidboard-scroll {
+  scrollbar-color: rgba(148, 163, 184, 0.5) var(--surface2);
+  scrollbar-width: auto;
+}
+
 /* Print styles */
 @media print {
   body {
