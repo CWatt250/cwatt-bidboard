@@ -393,28 +393,32 @@ input[type=number] {
   -moz-appearance: textfield;
 }
 
-/* ── Bid Board: always-visible horizontal scrollbar ── */
-.bidboard-scroll {
+/* ── Bid Board: always-visible horizontal scrollbar ──
+   The shadcn Table wraps <table> in a div[data-slot="table-container"]
+   with its own overflow-x. We force that inner container to always
+   show a horizontal scrollbar (overflow: scroll, not auto), styled so
+   it's visible without hover regardless of OS scrollbar mode. */
+.bidboard-scroll [data-slot="table-container"] {
+  overflow-x: scroll;
+  overflow-y: visible;
   scrollbar-gutter: stable;
+  scrollbar-width: auto;
+  scrollbar-color: rgba(148, 163, 184, 0.6) var(--surface2);
 }
-.bidboard-scroll::-webkit-scrollbar {
+.bidboard-scroll [data-slot="table-container"]::-webkit-scrollbar {
   height: 12px;
   background: var(--surface2);
 }
-.bidboard-scroll::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.5);
+.bidboard-scroll [data-slot="table-container"]::-webkit-scrollbar-track {
+  background: var(--surface2);
+}
+.bidboard-scroll [data-slot="table-container"]::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.6);
   border: 2px solid var(--surface2);
   border-radius: 6px;
 }
-.bidboard-scroll::-webkit-scrollbar-thumb:hover {
-  background: rgba(100, 116, 139, 0.7);
-}
-.bidboard-scroll::-webkit-scrollbar-track {
-  background: var(--surface2);
-}
-.bidboard-scroll {
-  scrollbar-color: rgba(148, 163, 184, 0.5) var(--surface2);
-  scrollbar-width: auto;
+.bidboard-scroll [data-slot="table-container"]::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.8);
 }
 
 /* Print styles */

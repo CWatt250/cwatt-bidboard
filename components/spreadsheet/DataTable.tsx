@@ -119,8 +119,8 @@ export function DataTable({
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
-    project_location: false,
-    mike_estimate_number: false,
+    project_location: true,
+    mike_estimate_number: true,
   })
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>({
     statuses: new Set<BidStatus>(),
@@ -267,19 +267,17 @@ export function DataTable({
       />
       </div>
 
-      {/* Table — horizontal scroll for wide column sets */}
+      {/* Table — always-visible horizontal scroll for wide column sets */}
       <div
         className="bidboard-scroll"
         style={{
           background: 'var(--surface)',
           borderRadius: 'var(--radius)',
           border: '1px solid var(--border)',
-          overflowX: 'auto',
-          overflowY: 'visible',
           boxShadow: 'var(--shadow-sm)',
         }}
       >
-        <Table>
+        <Table className="min-w-max">
           <TableHeader style={{ position: 'sticky', top: 0, zIndex: 1 }}>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow

@@ -178,12 +178,13 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
           bid_id: bidId,
           scope: s.scope as BidScope,
           price: s.price.trim() ? (isNaN(n) ? null : n) : null,
-          client: null as string | null,
+          client: '',
         }
       })
     if (lineItems.length > 0) {
       const { error: liErr } = await supabase.from('bid_line_items').insert(lineItems)
       if (liErr) {
+        console.error('[GhostRow] line item insert failed', liErr)
         toast.error(`Scope pricing not saved: ${liErr.message}`)
       }
     }
