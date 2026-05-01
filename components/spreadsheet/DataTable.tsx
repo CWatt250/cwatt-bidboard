@@ -267,13 +267,15 @@ export function DataTable({
       />
       </div>
 
-      {/* Table */}
+      {/* Table — horizontal scroll for wide column sets */}
       <div
+        className="bidboard-scroll"
         style={{
           background: 'var(--surface)',
           borderRadius: 'var(--radius)',
           border: '1px solid var(--border)',
-          overflow: 'hidden',
+          overflowX: 'auto',
+          overflowY: 'visible',
           boxShadow: 'var(--shadow-sm)',
         }}
       >

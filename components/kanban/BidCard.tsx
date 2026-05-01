@@ -3,13 +3,12 @@
 import { useState } from 'react'
 import { Draggable } from '@hello-pangea/dnd'
 import { toast } from 'sonner'
-import { MapPin, Hash } from 'lucide-react'
+import { Hash } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
 import { logActivity } from '@/lib/activity'
 import type { Bid } from '@/hooks/useBids'
-import { getBidClientName } from '@/lib/supabase/types'
 
 const SCOPE_COLORS: Record<string, { bg: string; text: string }> = {
   'Plumbing Piping': { bg: 'rgba(56,189,248,0.12)', text: '#0ea5e9' },
@@ -71,15 +70,6 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
   }
 
   const lineItems = bid.line_items ?? []
-  const bidClients = bid.clients ?? []
-  const clientNames = bidClients.map(getBidClientName).filter(Boolean)
-  const clientsDisplay =
-    clientNames.length === 0
-      ? null
-      : clientNames.length === 1
-        ? clientNames[0]
-        : `${clientNames[0]} +${clientNames.length - 1}`
-
   const uniqueScopes = [...new Set(lineItems.map((li) => li.scope))]
   const extraScopes = uniqueScopes.length > 2 ? uniqueScopes.length - 2 : 0
   const hasPrice = lineItems.some((li) => li.price !== null)
@@ -136,35 +126,32 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
             {bid.project_name}
           </div>
 
-          {/* Project location + MIKE estimate # — wrap to new row if both present */}
-          {(bid.project_location || bid.mike_estimate_number) && (
-            <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '2px 10px', marginBottom: 5 }}>
-              {bid.project_location && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.7rem', color: 'var(--text3)', minWidth: 0 }}>
-                  <MapPin size={11} style={{ flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {bid.project_location}
-                  </span>
-                </span>
-              )}
-              {bid.mike_estimate_number && (
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: '0.7rem', color: 'var(--text3)', fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}>
-                  <Hash size={10} style={{ flexShrink: 0 }} />
-                  {bid.mike_estimate_number}
-                </span>
-              )}
+          {/* MIKE estimate # */}
+          {bid.mike_estimate_number && (
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: '0.7rem', color: 'var(--text3)', fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace', marginBottom: 5 }}>
+              <Hash size={10} style={{ flexShrink: 0 }} />
+              {bid.mike_estimate_number}
             </div>
           )}
 
-          {/* GC / client name */}
-          {clientsDisplay && (
-            <div style={{ fontSize: '0.72rem', color: 'var(--text3)', marginBottom: 7 }}>
-              {clientsDisplay}
+          {/* Branch tag — own row */}
+          {bid.branch && (
+            <div style={{ marginBottom: 6 }}>
+              <span style={{
+                background: 'var(--surface2)',
+                color: 'var(--text2)',
+                fontSize: '0.63rem',
+                fontWeight: 600,
+                padding: '2px 6px',
+                borderRadius: '4px',
+              }}>
+                {bid.branch}
+              </span>
             </div>
           )}
 
-          {/* Scope + branch tags row */}
-          {(uniqueScopes.length > 0 || bid.branch) && (
+          {/* Scope tags — own row */}
+          {uniqueScopes.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
               {uniqueScopes.slice(0, 2).map((scope) => {
                 const c = SCOPE_COLORS[scope] ?? { bg: 'var(--surface2)', text: 'var(--text2)' }
@@ -194,18 +181,6 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
                   borderRadius: '4px',
                 }}>
                   +{extraScopes}
-                </span>
-              )}
-              {bid.branch && (
-                <span style={{
-                  background: 'var(--surface2)',
-                  color: 'var(--text2)',
-                  fontSize: '0.63rem',
-                  fontWeight: 600,
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                }}>
-                  {bid.branch}
                 </span>
               )}
             </div>
