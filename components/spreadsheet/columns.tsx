@@ -217,13 +217,13 @@ function ActionsCell({ row, onEdit }: { row: Row<Bid>; onEdit: (bid: Bid) => voi
           }
         />
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => onEdit(bid)}>
+          <DropdownMenuItem onClick={() => onEdit(bid)}>
             <PencilIcon className="size-3.5" />
             Edit
           </DropdownMenuItem>
           <DropdownMenuItem
             className="text-destructive focus:text-destructive"
-            onSelect={() => setDeleteOpen(true)}
+            onClick={() => setDeleteOpen(true)}
           >
             <Trash2Icon className="size-3.5" />
             Delete
