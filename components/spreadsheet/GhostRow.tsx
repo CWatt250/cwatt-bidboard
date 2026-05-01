@@ -19,6 +19,8 @@ const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', '
 
 interface GhostState {
   project_name: string
+  project_location: string
+  mike_estimate_number: string
   scopes: DraftItem[]
   bid_due_date: string
   estimator_id: string | null
@@ -30,6 +32,8 @@ interface GhostState {
 
 const EMPTY_GHOST: GhostState = {
   project_name: '',
+  project_location: '',
+  mike_estimate_number: '',
   scopes: [],
   bid_due_date: '',
   estimator_id: null,
@@ -130,6 +134,8 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
   async function commit() {
     if (saving) return
+    console.log('[GhostRow] commit() start', { ghost, dueDateText })
+
     if (!ghost.project_name.trim()) {
       toast.error('Project name is required.')
       projectNameRef.current?.focus()
@@ -148,27 +154,41 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
     setSaving(true)
     const supabase = createClient()
 
+    const bidPayload = {
+      project_name: ghost.project_name.trim(),
+      project_location: ghost.project_location.trim() || null,
+      mike_estimate_number: ghost.mike_estimate_number.trim() || null,
+      branch: ghost.branch,
+      estimator_id: ghost.status === 'Unassigned' ? null : ghost.estimator_id,
+      status: ghost.status,
+      bid_due_date: isoDue,
+      notes: ghost.notes.trim() || null,
+    }
+    console.log('[GhostRow] inserting bid', bidPayload)
+
     const { data: bidData, error: bidError } = await supabase
       .from('bids')
-      .insert({
-        project_name: ghost.project_name.trim(),
-        branch: ghost.branch,
-        estimator_id: ghost.status === 'Unassigned' ? null : ghost.estimator_id,
-        status: ghost.status,
-        bid_due_date: isoDue,
-        notes: ghost.notes.trim() || null,
-      })
+      .insert(bidPayload)
       .select('id')
       .single()
 
     if (bidError || !bidData) {
+      console.error('[GhostRow] bid insert failed', bidError)
       setSaving(false)
-      toast.error('Failed to create bid.')
+      const detail = bidError?.message ? `: ${bidError.message}` : ''
+      toast.error(`Failed to create bid${detail}`)
       return
     }
     const bidId = bidData.id
+    console.log('[GhostRow] bid created', bidId)
 
-    if (profile) await logActivity(bidId, profile.id, 'Created bid')
+    if (profile) {
+      try {
+        await logActivity(bidId, profile.id, 'Created bid')
+      } catch (err) {
+        console.error('[GhostRow] logActivity failed (non-fatal)', err)
+      }
+    }
 
     const lineItems = ghost.scopes
       .filter((s) => s.scope !== '')
@@ -182,14 +202,18 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
         }
       })
     if (lineItems.length > 0) {
+      console.log('[GhostRow] inserting line items', lineItems)
       const { error: liErr } = await supabase.from('bid_line_items').insert(lineItems)
       if (liErr) {
         console.error('[GhostRow] line item insert failed', liErr)
         toast.error(`Scope pricing not saved: ${liErr.message}`)
+      } else {
+        console.log('[GhostRow] line items inserted')
       }
     }
 
     if (ghost.clients.length > 0) {
+      console.log('[GhostRow] inserting bid_clients', ghost.clients)
       const rows = await Promise.all(
         ghost.clients.map(async (client_name) => ({
           bid_id: bidId,
@@ -199,7 +223,10 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       )
       const { error: cErr } = await supabase.from('bid_clients').insert(rows)
       if (cErr) {
+        console.error('[GhostRow] bid_clients insert failed', cErr)
         toast.error(`Clients not saved: ${cErr.message}`)
+      } else {
+        console.log('[GhostRow] bid_clients inserted')
       }
     }
 
@@ -224,6 +251,32 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
             onKeyDown={handleEnter}
             className="ghost-cell-input"
             style={cellInputStyle}
+          />
+        )
+
+      case 'project_location':
+        return (
+          <input
+            type="text"
+            value={ghost.project_location}
+            placeholder="City, State…"
+            onChange={(e) => setGhost((g) => ({ ...g, project_location: e.target.value }))}
+            onKeyDown={handleEnter}
+            className="ghost-cell-input"
+            style={cellInputStyle}
+          />
+        )
+
+      case 'mike_estimate_number':
+        return (
+          <input
+            type="text"
+            value={ghost.mike_estimate_number}
+            placeholder="MIKE #"
+            onChange={(e) => setGhost((g) => ({ ...g, mike_estimate_number: e.target.value }))}
+            onKeyDown={handleEnter}
+            className="ghost-cell-input"
+            style={{ ...cellInputStyle, fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
           />
         )
 
