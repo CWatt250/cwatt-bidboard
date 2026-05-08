@@ -145,7 +145,7 @@ export default function CrewSizePage() {
                     </td>
                   </tr>
                   <tr>
-                    <td className="px-3 py-2 text-muted-foreground">Total Hours Available</td>
+                    <td className="px-3 py-2 text-muted-foreground">Hours Per Worker (Duration of Full Project)</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">
                       {totalAvailable!.toFixed(2)}
                     </td>
