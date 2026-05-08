@@ -20,14 +20,13 @@ export default function MikeDiscountPage() {
   const actualVal = parsePositiveFloat(actual)
 
   const bothValid = listedVal !== null && actualVal !== null
-  const isError = bothValid && actualVal > listedVal
 
   let discountPct: number | null = null
-  let savingsPerUnit: number | null = null
+  let deltaPerUnit: number | null = null
 
-  if (bothValid && !isError) {
+  if (bothValid) {
     discountPct = ((listedVal - actualVal) / listedVal) * 100
-    savingsPerUnit = listedVal - actualVal
+    deltaPerUnit = listedVal - actualVal
   }
 
   function handleClear() {
@@ -65,26 +64,29 @@ export default function MikeDiscountPage() {
                 placeholder="0.00"
                 value={actual}
                 onChange={(e) => setActual(e.target.value)}
-                aria-invalid={isError || undefined}
               />
             </div>
           </div>
 
-          {isError && (
-            <p className="text-sm text-destructive">Actual price cannot exceed listed price.</p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Negative % means actual price is above MIKE listed.
+          </p>
 
           <div className="border rounded-lg p-4 space-y-4">
             <div className="text-center">
               <div className="text-5xl font-bold tabular-nums">
                 {discountPct !== null ? `${discountPct.toFixed(1)}%` : '—'}
               </div>
-              <div className="text-sm text-muted-foreground mt-1">Discount</div>
+              <div className="text-sm text-muted-foreground mt-1">Discount vs MIKE</div>
             </div>
 
-            {savingsPerUnit !== null && (
+            {deltaPerUnit !== null && (
               <p className="text-center text-sm font-medium">
-                You save ${savingsPerUnit.toFixed(2)} per unit
+                {deltaPerUnit > 0
+                  ? `You save $${deltaPerUnit.toFixed(2)} per unit`
+                  : deltaPerUnit < 0
+                    ? `$${Math.abs(deltaPerUnit).toFixed(2)} per unit above MIKE`
+                    : 'Matches MIKE listed price'}
               </p>
             )}
 
