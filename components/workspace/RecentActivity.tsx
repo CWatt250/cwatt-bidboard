@@ -12,6 +12,7 @@ interface ActivityEntry {
   created_at: string
   project_name: string | null
   author_name: string | null
+  user_id: string | null
 }
 
 function relativeTime(dateStr: string): string {
@@ -38,9 +39,19 @@ function Skeleton() {
 
 export function RecentActivity() {
   const { profile } = useUserRole()
-  const userId = profile?.id ?? null
+  // Authoritative user id — fetched from auth directly so we don't depend on
+  // the role-context profile being populated. profile.id is used as a fallback
+  // for the first paint, then auth.getUser() takes over.
+  const [authUserId, setAuthUserId] = useState<string | null>(null)
+  const userId = authUserId ?? profile?.id ?? null
   const [entries, setEntries] = useState<ActivityEntry[]>([])
   const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    createClient().auth.getUser().then(({ data }) => {
+      setAuthUserId(data.user?.id ?? null)
+    })
+  }, [])
 
   const fetchActivity = useCallback(async () => {
     if (!userId) {
@@ -50,21 +61,25 @@ export function RecentActivity() {
     const supabase = createClient()
     const { data } = await supabase
       .from('bid_activity')
-      .select('id, bid_id, action, created_at, bids(id, project_name), profiles(name)')
+      .select('id, bid_id, user_id, action, created_at, bids(id, project_name), profiles(name)')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(10)
 
-    setEntries(
-      (data ?? []).map((a: any) => ({
-        id: a.id,
-        bid_id: a.bid_id,
-        action: a.action,
-        created_at: a.created_at,
-        project_name: a.bids?.project_name ?? null,
-        author_name: a.profiles?.name ?? null,
-      }))
-    )
+    const mapped: ActivityEntry[] = (data ?? []).map((a: any) => ({
+      id: a.id,
+      bid_id: a.bid_id,
+      user_id: a.user_id,
+      action: a.action,
+      created_at: a.created_at,
+      project_name: a.bids?.project_name ?? null,
+      author_name: a.profiles?.name ?? null,
+    }))
+
+    // Defense in depth: drop anything that doesn't belong to this user even
+    // if the server somehow returned it (RLS lets admins/branch managers see
+    // others' activity, so we must guard client-side too).
+    setEntries(mapped.filter((e) => e.user_id === userId))
   }, [userId])
 
   useEffect(() => {
@@ -75,8 +90,10 @@ export function RecentActivity() {
   useEffect(() => {
     if (!userId) return
     const supabase = createClient()
+    // Per-user channel name — prevents cross-user channel reuse if multiple
+    // users hot-swap in the same browser session.
     const channel = supabase
-      .channel('recent-activity-feed')
+      .channel(`recent-activity-feed-${userId}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'bid_activity', filter: `user_id=eq.${userId}` },

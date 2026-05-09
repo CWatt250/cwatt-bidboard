@@ -116,6 +116,12 @@ export default function KanbanPage() {
     { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [] } as unknown as Record<BidStatus, Bid[]>
   )
 
+  // Single source of truth for what's actually rendered on the board. KpiRow
+  // derives Sent + Total Bid Value from these arrays so the KPIs can never
+  // disagree with the columns.
+  const boardBids = STATUSES.flatMap((s) => bidsByStatus[s])
+  const sentColumnBids = bidsByStatus['Sent']
+
   return (
     <div className="flex flex-col h-full gap-4 min-h-0" style={{ background: 'var(--bg)' }}>
       {/* Breadcrumb */}
@@ -162,7 +168,7 @@ export default function KanbanPage() {
       </div>
 
       {/* KPI Row */}
-      <KpiRow bids={localBids} />
+      <KpiRow bids={localBids} boardBids={boardBids} sentBids={sentColumnBids} />
 
       {/* Main content: kanban + right panel */}
       <div className="flex gap-4 flex-1 min-h-0">

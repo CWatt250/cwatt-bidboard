@@ -22,13 +22,12 @@ interface KpiCardProps {
   count?: number
   value: number
   compact?: boolean
-  trend?: number
   icon: React.ReactNode
   iconBg: string
   iconColor: string
 }
 
-function KpiCard({ label, count, value, compact, trend, icon, iconBg, iconColor }: KpiCardProps) {
+function KpiCard({ label, count, value, compact, icon, iconBg, iconColor }: KpiCardProps) {
   return (
     <div
       style={{
@@ -80,17 +79,6 @@ function KpiCard({ label, count, value, compact, trend, icon, iconBg, iconColor 
               </span>
             </>
           )}
-          {trend !== undefined && (
-            <span
-              style={{
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                color: trend >= 0 ? '#059669' : '#ef4444',
-              }}
-            >
-              {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%
-            </span>
-          )}
         </div>
       </div>
     </div>
@@ -98,32 +86,23 @@ function KpiCard({ label, count, value, compact, trend, icon, iconBg, iconColor 
 }
 
 interface KpiRowProps {
+  /** All of the user's bids — used for Due Today / Due This Week (date-based, not board-based). */
   bids: Bid[]
+  /** Bids currently visible on the kanban board (union of every column). */
+  boardBids: Bid[]
+  /** Bids currently in the kanban Sent column. Source of truth for the Sent KPI. */
+  sentBids: Bid[]
 }
 
-export function KpiRow({ bids }: KpiRowProps) {
+export function KpiRow({ bids, boardBids, sentBids }: KpiRowProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  // Current calendar week, Sunday → Saturday (matches kanban week filter)
+  // Current calendar week, Sunday → Saturday
   const startOfWeek = new Date(today)
   startOfWeek.setDate(today.getDate() - today.getDay())
   const endOfWeek = new Date(startOfWeek)
   endOfWeek.setDate(startOfWeek.getDate() + 6)
-
-  // Bids visible on the kanban board: Unassigned shows current week + future
-  // (or no due date); other statuses show only current week. Mirrors the
-  // filter logic on the workspace page so KPIs reflect what the user sees.
-  const boardBids = bids.filter((b) => {
-    if (b.status === 'Unassigned') {
-      if (!b.bid_due_date) return true
-      const d = new Date(b.bid_due_date + 'T00:00:00')
-      return d >= startOfWeek
-    }
-    if (!b.bid_due_date) return false
-    const d = new Date(b.bid_due_date + 'T00:00:00')
-    return d >= startOfWeek && d <= endOfWeek
-  })
 
   // Due Today
   const dueTodayBids = bids.filter((b) => {
@@ -141,8 +120,7 @@ export function KpiRow({ bids }: KpiRowProps) {
   })
   const dueWeekValue = dueWeekBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Sent status — only bids currently on the board
-  const sentBids = boardBids.filter((b) => b.status === 'Sent')
+  // Sent — exactly the bids in the kanban Sent column
   const sentValue = sentBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
   // Total Bid Value — sum across all bids currently on the board
