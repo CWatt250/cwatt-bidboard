@@ -1,8 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/client'
+import { useUserRole } from '@/contexts/userRole'
 
 interface ActivityEntry {
   id: string
@@ -36,14 +37,21 @@ function Skeleton() {
 }
 
 export function RecentActivity() {
+  const { profile } = useUserRole()
+  const userId = profile?.id ?? null
   const [entries, setEntries] = useState<ActivityEntry[]>([])
   const [loading, setLoading] = useState(true)
 
-  async function fetchActivity() {
+  const fetchActivity = useCallback(async () => {
+    if (!userId) {
+      setEntries([])
+      return
+    }
     const supabase = createClient()
     const { data } = await supabase
       .from('bid_activity')
       .select('id, bid_id, action, created_at, bids(id, project_name), profiles(name)')
+      .eq('user_id', userId)
       .order('created_at', { ascending: false })
       .limit(10)
 
@@ -57,25 +65,26 @@ export function RecentActivity() {
         author_name: a.profiles?.name ?? null,
       }))
     )
-  }
+  }, [userId])
 
   useEffect(() => {
     setLoading(true)
     fetchActivity().finally(() => setLoading(false))
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [fetchActivity])
 
   useEffect(() => {
+    if (!userId) return
     const supabase = createClient()
     const channel = supabase
       .channel('recent-activity-feed')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'bid_activity' },
+        { event: 'INSERT', schema: 'public', table: 'bid_activity', filter: `user_id=eq.${userId}` },
         () => fetchActivity()
       )
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, fetchActivity])
 
   return (
     <div className="bg-card border rounded-lg flex flex-col overflow-hidden">
