@@ -81,7 +81,27 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
 
   return (
     <Draggable draggableId={bid.id} index={index}>
-      {(provided, snapshot) => (
+      {(provided, snapshot) => {
+        // Compose: when dnd is dragging us, append the tilt to its transform so
+        // the card still follows the cursor exactly. When not dragging, leave
+        // dnd's transform (or lack thereof) untouched — never apply our own
+        // transform, since a stale transform offsets the bounding rect that
+        // @hello-pangea/dnd captures on mousedown and makes the card jump.
+        const dndTransform = provided.draggableProps.style?.transform
+        const composedTransform =
+          snapshot.isDragging && dndTransform
+            ? `${dndTransform} rotate(1.5deg)`
+            : dndTransform
+
+        // Scope our transition to visual-only properties. dnd controls the
+        // transform/transition during drop; overriding `transition: all`
+        // breaks the drop animation.
+        const visualTransition = 'box-shadow 180ms ease, border-color 180ms ease'
+        const composedTransition = provided.draggableProps.style?.transition
+          ? `${provided.draggableProps.style.transition}, ${visualTransition}`
+          : visualTransition
+
+        return (
         <div
           ref={provided.innerRef}
           {...provided.draggableProps}
@@ -98,27 +118,21 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
             boxShadow: snapshot.isDragging
               ? '0 8px 24px rgba(56,189,248,0.25), 0 2px 8px rgba(0,0,0,0.08)'
               : 'var(--shadow-sm)',
-            transform: snapshot.isDragging
-              ? `${provided.draggableProps.style?.transform ?? ''} rotate(1.5deg)`
-              : provided.draggableProps.style?.transform,
+            transform: composedTransform,
             opacity: snapshot.isDragging ? 0.95 : 1,
-            transition: snapshot.isDragging ? undefined : 'all 0.18s cubic-bezier(0.4,0,0.2,1)',
+            transition: composedTransition,
           }}
           onMouseEnter={(e) => {
-            if (!snapshot.isDragging) {
-              const el = e.currentTarget as HTMLElement
-              el.style.boxShadow = '0 6px 20px rgba(56,189,248,0.28), 0 2px 8px rgba(0,0,0,0.08)'
-              el.style.borderColor = 'var(--accent)'
-              el.style.transform = 'translateY(-2px)'
-            }
+            if (snapshot.isDragging) return
+            const el = e.currentTarget as HTMLElement
+            el.style.boxShadow = '0 6px 20px rgba(56,189,248,0.28), 0 2px 8px rgba(0,0,0,0.08)'
+            el.style.borderColor = 'var(--accent)'
           }}
           onMouseLeave={(e) => {
-            if (!snapshot.isDragging) {
-              const el = e.currentTarget as HTMLElement
-              el.style.boxShadow = 'var(--shadow-sm)'
-              el.style.borderColor = 'var(--border)'
-              el.style.transform = 'translateY(0)'
-            }
+            if (snapshot.isDragging) return
+            const el = e.currentTarget as HTMLElement
+            el.style.boxShadow = 'var(--shadow-sm)'
+            el.style.borderColor = 'var(--border)'
           }}
         >
           {/* Project name */}
@@ -234,7 +248,8 @@ export function BidCard({ bid, index, currentUserId }: BidCardProps) {
             </div>
           )}
         </div>
-      )}
+        )
+      }}
     </Draggable>
   )
 }

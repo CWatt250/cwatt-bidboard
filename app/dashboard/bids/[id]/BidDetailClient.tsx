@@ -25,6 +25,7 @@ import {
   SCOPE_BADGE_CLASSES,
 } from '@/config/colors'
 import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
+import { InlinePriceCell } from '@/components/bids/InlinePriceCell'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
 import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
@@ -543,59 +544,70 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               </div>
             </CardHeader>
             <CardContent className="space-y-3 p-6">
-              <ScopeEditor
-                bid={bid}
-                triggerClassName="block w-full text-left rounded-md cursor-pointer transition-shadow hover:shadow-md"
-                trigger={
-                  <div className="border rounded-md overflow-hidden">
-                    <div className="grid grid-cols-[1fr_140px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                      <span>Scope</span>
-                      <span className="text-right">Price</span>
-                    </div>
-                    {scopeOnlyItems.length === 0 ? (
+              <div className="border rounded-md overflow-hidden">
+                <div className="grid grid-cols-[1fr_140px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span>Scope</span>
+                  <span className="text-right">Price</span>
+                </div>
+                {scopeOnlyItems.length === 0 ? (
+                  <ScopeEditor
+                    bid={bid}
+                    triggerClassName="block w-full text-left cursor-pointer hover:bg-muted/30 transition-colors"
+                    trigger={
                       <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
                         Click to add scope pricing.
                       </div>
-                    ) : (
-                      scopeOnlyItems.map((li) => (
-                        <div
-                          key={li.id}
-                          className="grid grid-cols-[1fr_140px] gap-2 px-3 py-2 items-center border-b"
-                        >
-                          <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs w-fit ${SCOPE_BADGE_CLASSES[li.scope]}`}>
-                            {li.scope}
-                          </span>
-                          <span
-                            className="text-right text-sm font-semibold tabular-nums"
-                            style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
-                          >
-                            {li.price != null && li.price > 0 ? formatCurrency(li.price) : '—'}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                    {scopeOnlyItems.length > 0 && (
-                      <div className="grid grid-cols-[1fr_140px] gap-2 bg-muted/40 px-3 py-2 items-center">
-                        <span
-                          className="text-xs font-bold uppercase tracking-wider"
-                          style={{ color: 'var(--text2)' }}
-                        >
-                          Total
-                        </span>
-                        <span
-                          className="text-right text-base font-bold tabular-nums"
-                          style={{
-                            fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-                            color: 'var(--accent2)',
-                          }}
-                        >
-                          {formatCurrency(scopeTotal)}
-                        </span>
-                      </div>
-                    )}
+                    }
+                  />
+                ) : (
+                  scopeOnlyItems.map((li) => (
+                    <div
+                      key={li.id}
+                      className="grid grid-cols-[1fr_140px] gap-2 px-3 py-2 items-center border-b"
+                    >
+                      <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs w-fit ${SCOPE_BADGE_CLASSES[li.scope]}`}>
+                        {li.scope}
+                      </span>
+                      <InlinePriceCell
+                        lineItemId={li.id}
+                        bidId={bidId}
+                        userId={profile?.id ?? null}
+                        scope={li.scope}
+                        initialPrice={li.price}
+                      />
+                    </div>
+                  ))
+                )}
+                {scopeOnlyItems.length > 0 && (
+                  <div className="grid grid-cols-[1fr_140px] gap-2 bg-muted/40 px-3 py-2 items-center">
+                    <span
+                      className="text-xs font-bold uppercase tracking-wider"
+                      style={{ color: 'var(--text2)' }}
+                    >
+                      Total
+                    </span>
+                    <span
+                      className="text-right text-base font-bold tabular-nums"
+                      style={{
+                        fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
+                        color: 'var(--accent2)',
+                      }}
+                    >
+                      {formatCurrency(scopeTotal)}
+                    </span>
                   </div>
-                }
-              />
+                )}
+              </div>
+
+              {scopeOnlyItems.length > 0 && (
+                <div className="flex justify-end">
+                  <ScopeEditor
+                    bid={bid}
+                    triggerClassName="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted/60"
+                    trigger={<span>Edit scopes</span>}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
