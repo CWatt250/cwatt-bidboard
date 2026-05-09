@@ -111,8 +111,19 @@ export function KpiRow({ bids }: KpiRowProps) {
   const endOfWeek = new Date(startOfWeek)
   endOfWeek.setDate(startOfWeek.getDate() + 6)
 
-  const weekAgo = new Date(today)
-  weekAgo.setDate(weekAgo.getDate() - 7)
+  // Bids visible on the kanban board: Unassigned shows current week + future
+  // (or no due date); other statuses show only current week. Mirrors the
+  // filter logic on the workspace page so KPIs reflect what the user sees.
+  const boardBids = bids.filter((b) => {
+    if (b.status === 'Unassigned') {
+      if (!b.bid_due_date) return true
+      const d = new Date(b.bid_due_date + 'T00:00:00')
+      return d >= startOfWeek
+    }
+    if (!b.bid_due_date) return false
+    const d = new Date(b.bid_due_date + 'T00:00:00')
+    return d >= startOfWeek && d <= endOfWeek
+  })
 
   // Due Today
   const dueTodayBids = bids.filter((b) => {
@@ -130,13 +141,12 @@ export function KpiRow({ bids }: KpiRowProps) {
   })
   const dueWeekValue = dueWeekBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Sent status
-  const sentBids = bids.filter((b) => b.status === 'Sent')
+  // Sent status — only bids currently on the board
+  const sentBids = boardBids.filter((b) => b.status === 'Sent')
   const sentValue = sentBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Total Bid Value this week (bids updated in last 7 days)
-  const weekBids = bids.filter((b) => new Date(b.updated_at) >= weekAgo)
-  const weekValue = weekBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
+  // Total Bid Value — sum across all bids currently on the board
+  const weekValue = boardBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
   return (
     <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
@@ -168,7 +178,6 @@ export function KpiRow({ bids }: KpiRowProps) {
         label="Total Bid Value (Week)"
         value={weekValue}
         compact
-        trend={8.4}
         icon={<TrendingUp size={18} />}
         iconBg="rgba(5,150,105,0.1)"
         iconColor="#059669"

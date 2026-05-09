@@ -23,9 +23,10 @@ interface KanbanColumnProps {
   status: BidStatus
   bids: Bid[]
   currentUserId: string | null
+  onAddBid?: () => void
 }
 
-export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps) {
+export function KanbanColumn({ status, bids, currentUserId, onAddBid }: KanbanColumnProps) {
   const accentColor = STATUS_LEFT_BORDER[status]
   const totalValue = bids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
@@ -103,6 +104,8 @@ export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps)
             {provided.placeholder}
             {/* Add Bid button */}
             <button
+              type="button"
+              onClick={onAddBid}
               style={{
                 width: '100%',
                 padding: '6px 0',
