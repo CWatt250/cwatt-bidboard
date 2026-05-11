@@ -177,9 +177,9 @@ function InlineEditCell({
 
   return (
     <button
-      className="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
+      className="block w-full text-left truncate rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
       onClick={startEdit}
-      title="Click to edit"
+      title={defaultValue || 'Click to edit'}
     >
       {renderDisplay(defaultValue)}
     </button>
@@ -267,11 +267,15 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     // 1. Project Name
     {
       accessorKey: 'project_name',
+      size: 320,
+      minSize: 240,
+      maxSize: 400,
       header: ({ column }) => <SortableHeader label="Project Name" column={column} />,
       cell: ({ row }) => (
         <button
-          className="font-medium text-left hover:underline text-primary"
+          className="block w-full font-medium text-left truncate hover:underline text-primary"
           onClick={() => onOpenBid(row.original)}
+          title={row.original.project_name}
         >
           {row.original.project_name}
         </button>
@@ -280,6 +284,9 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     // 1b. Project Location (inline editable, hidden by default)
     {
       accessorKey: 'project_location',
+      size: 200,
+      minSize: 140,
+      maxSize: 240,
       header: ({ column }) => <SortableHeader label="Project Location" column={column} />,
       cell: ({ row, table }) => (
         <InlineEditCell
@@ -301,21 +308,33 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     // 2. Scope (click to open pricing popover)
     {
       id: 'scope',
+      size: 180,
+      minSize: 140,
+      maxSize: 240,
       header: ({ column }) => <SortableHeader label="Scope" column={column} />,
-      cell: ({ row }) => <ScopeEditor bid={row.original} />,
+      cell: ({ row }) => (
+        <div className="truncate">
+          <ScopeEditor bid={row.original} />
+        </div>
+      ),
     },
     // 3. Bid Price (computed, never editable)
     {
       id: 'total_price',
+      size: 120,
+      minSize: 100,
+      maxSize: 160,
       header: ({ column }) => <SortableHeader label="Bid Price" column={column} />,
       cell: ({ row }) => {
         const hasPrice = (row.original.line_items ?? []).some((li) => li.price !== null)
+        const display = hasPrice ? formatCurrency(row.original.total_price ?? 0) : 'TBD'
         return (
           <span
             style={{ fontWeight: 500, fontSize: 15 }}
-            className={hasPrice ? '' : 'italic text-muted-foreground'}
+            className={`block truncate ${hasPrice ? '' : 'italic text-muted-foreground'}`}
+            title={display}
           >
-            {hasPrice ? formatCurrency(row.original.total_price ?? 0) : 'TBD'}
+            {display}
           </span>
         )
       },
@@ -350,19 +369,32 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     // 4. Bid Due Date
     {
       accessorKey: 'bid_due_date',
+      size: 120,
+      minSize: 80,
+      maxSize: 140,
       header: ({ column }) => <SortableHeader label="Bid Due Date" column={column} />,
-      cell: ({ row }) => (
-        <span style={dueDateStyle(row.original.bid_due_date)}>
-          {formatDate(row.original.bid_due_date)}
-        </span>
-      ),
+      cell: ({ row }) => {
+        const display = formatDate(row.original.bid_due_date)
+        return (
+          <span style={dueDateStyle(row.original.bid_due_date)} className="block truncate" title={display}>
+            {display}
+          </span>
+        )
+      },
     },
     // 5. Status
     {
       accessorKey: 'status',
+      size: 110,
+      minSize: 80,
+      maxSize: 140,
       header: ({ column }) => <SortableHeader label="Status" column={column} />,
       cell: ({ row }) => (
-        <Badge className={STATUS_BADGE_CLASSES[row.original.status]} variant="outline">
+        <Badge
+          className={STATUS_BADGE_CLASSES[row.original.status]}
+          variant="outline"
+          title={row.original.status}
+        >
           {row.original.status}
         </Badge>
       ),
@@ -370,32 +402,52 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     // 6. Estimator
     {
       accessorKey: 'estimator_name',
+      size: 140,
+      minSize: 110,
+      maxSize: 180,
       header: ({ column }) => <SortableHeader label="Estimator" column={column} />,
       cell: ({ row }) =>
         row.original.estimator_name ? (
-          <span>{row.original.estimator_name}</span>
+          <span className="block truncate" title={row.original.estimator_name}>
+            {row.original.estimator_name}
+          </span>
         ) : (
           <span className="italic text-muted-foreground">Unassigned</span>
         ),
     },
-    // 6. Client(s) (click to open multi-client popover)
+    // 7. Client(s) (click to open multi-client popover)
     {
       id: 'client',
+      size: 180,
+      minSize: 140,
+      maxSize: 240,
       header: ({ column }) => <SortableHeader label="Client(s)" column={column} />,
-      cell: ({ row }) => <ClientsPopover bid={row.original} />,
+      cell: ({ row }) => (
+        <div className="truncate">
+          <ClientsPopover bid={row.original} />
+        </div>
+      ),
     },
-    // 7. Branch
+    // 8. Branch
     {
       accessorKey: 'branch',
+      size: 100,
+      minSize: 80,
+      maxSize: 140,
       header: ({ column }) => <SortableHeader label="Branch" column={column} />,
       cell: ({ row }) => (
-        <span className="text-muted-foreground">{row.original.branch}</span>
+        <span className="block truncate text-muted-foreground" title={row.original.branch}>
+          {row.original.branch}
+        </span>
       ),
       filterFn: 'equals',
     },
-    // 8. Notes (inline editable)
+    // 9. Notes (inline editable)
     {
       accessorKey: 'notes',
+      size: 220,
+      minSize: 140,
+      maxSize: 320,
       header: ({ column }) => <SortableHeader label="Notes" column={column} />,
       cell: ({ row, table }) => (
         <InlineEditCell
