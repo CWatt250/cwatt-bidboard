@@ -15,7 +15,6 @@ import { useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { Bid } from '@/hooks/useBids'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import {
@@ -34,9 +33,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { STATUS_BADGE_CLASSES } from '@/config/colors'
 import { ScopeEditor } from './ScopeEditor'
 import { ClientsPopover } from './ClientsPopover'
+import { InlineDateCell } from '@/components/bids/InlineDateCell'
+import { InlineStatusCell } from '@/components/bids/InlineStatusCell'
+import { InlineEstimatorCell } from '@/components/bids/InlineEstimatorCell'
 
 // Augment TanStack Table meta so cells can call updateBid
 declare module '@tanstack/react-table' {
@@ -80,15 +81,6 @@ function formatCurrency(value: number): string {
     currency: 'USD',
     maximumFractionDigits: 0,
   }).format(value)
-}
-
-function formatDate(dateStr: string | null): string {
-  if (!dateStr) return '—'
-  return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  })
 }
 
 // ─── InlineEditCell ───────────────────────────────────────────────────────────
@@ -260,9 +252,10 @@ function ActionsCell({ row, onEdit }: { row: Row<Bid>; onEdit: (bid: Bid) => voi
 interface ColumnCallbacks {
   onOpenBid: (bid: Bid) => void
   onEdit: (bid: Bid) => void
+  currentUserId: string | null
 }
 
-export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef<Bid>[] {
+export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallbacks): ColumnDef<Bid>[] {
   return [
     // 1. Project Name
     {
@@ -366,23 +359,27 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
         />
       ),
     },
-    // 4. Bid Due Date
+    // 4. Bid Due Date (inline editable)
     {
       accessorKey: 'bid_due_date',
       size: 120,
       minSize: 80,
       maxSize: 140,
       header: ({ column }) => <SortableHeader label="Bid Due Date" column={column} />,
-      cell: ({ row }) => {
-        const display = formatDate(row.original.bid_due_date)
-        return (
-          <span style={dueDateStyle(row.original.bid_due_date)} className="block truncate" title={display}>
-            {display}
-          </span>
-        )
-      },
+      cell: ({ row }) => (
+        <InlineDateCell
+          bidId={row.original.id}
+          userId={currentUserId}
+          projectName={row.original.project_name}
+          initialDate={row.original.bid_due_date}
+          displayClassName="block w-full text-left truncate rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
+          displayStyle={
+            row.original.bid_due_date ? dueDateStyle(row.original.bid_due_date) : undefined
+          }
+        />
+      ),
     },
-    // 5. Status
+    // 5. Status (inline editable)
     {
       accessorKey: 'status',
       size: 110,
@@ -390,30 +387,30 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
       maxSize: 140,
       header: ({ column }) => <SortableHeader label="Status" column={column} />,
       cell: ({ row }) => (
-        <Badge
-          className={STATUS_BADGE_CLASSES[row.original.status]}
-          variant="outline"
-          title={row.original.status}
-        >
-          {row.original.status}
-        </Badge>
+        <InlineStatusCell
+          bidId={row.original.id}
+          userId={currentUserId}
+          projectName={row.original.project_name}
+          initialStatus={row.original.status}
+        />
       ),
     },
-    // 6. Estimator
+    // 6. Estimator (inline editable)
     {
       accessorKey: 'estimator_name',
       size: 140,
       minSize: 110,
       maxSize: 180,
       header: ({ column }) => <SortableHeader label="Estimator" column={column} />,
-      cell: ({ row }) =>
-        row.original.estimator_name ? (
-          <span className="block truncate" title={row.original.estimator_name}>
-            {row.original.estimator_name}
-          </span>
-        ) : (
-          <span className="italic text-muted-foreground">Unassigned</span>
-        ),
+      cell: ({ row }) => (
+        <InlineEstimatorCell
+          bidId={row.original.id}
+          userId={currentUserId}
+          projectName={row.original.project_name}
+          initialEstimatorId={row.original.estimator_id}
+          initialEstimatorName={row.original.estimator_name}
+        />
+      ),
     },
     // 7. Client(s) (click to open multi-client popover)
     {

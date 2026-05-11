@@ -1,0 +1,111 @@
+'use client'
+
+import { useState } from 'react'
+import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
+import { logActivity } from '@/lib/activity'
+import { Badge } from '@/components/ui/badge'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+} from '@/components/ui/select'
+import { STATUS_BADGE_CLASSES } from '@/config/colors'
+import type { BidStatus } from '@/lib/supabase/types'
+
+const ALL_STATUSES: BidStatus[] = [
+  'Unassigned',
+  'Bidding',
+  'In Progress',
+  'Sent',
+  'Awarded',
+  'Lost',
+]
+
+interface InlineStatusCellProps {
+  bidId: string
+  userId: string | null
+  projectName: string
+  initialStatus: BidStatus
+}
+
+export function InlineStatusCell({
+  bidId,
+  userId,
+  projectName,
+  initialStatus,
+}: InlineStatusCellProps) {
+  const [optimistic, setOptimistic] = useState<BidStatus>(initialStatus)
+  const [saving, setSaving] = useState(false)
+
+  // Reconcile when realtime delivers updates and we're not mid-save
+  if (!saving && initialStatus !== optimistic) {
+    setOptimistic(initialStatus)
+  }
+
+  async function handleChange(next: BidStatus) {
+    if (next === optimistic) return
+    const prev = optimistic
+    setOptimistic(next)
+    setSaving(true)
+
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('bids')
+      .update({ status: next })
+      .eq('id', bidId)
+
+    if (error) {
+      setOptimistic(prev)
+      setSaving(false)
+      toast.error('Failed to update status.')
+      return
+    }
+
+    if (userId) {
+      await logActivity(
+        bidId,
+        userId,
+        `Updated status from ${prev} to ${next} on ${projectName}`,
+      )
+    }
+
+    setSaving(false)
+    toast.success(`Status updated to ${next}.`)
+  }
+
+  return (
+    <div onClick={(e) => e.stopPropagation()}>
+      <Select
+        value={optimistic}
+        onValueChange={(v) => handleChange(v as BidStatus)}
+        disabled={saving}
+      >
+        <SelectTrigger
+          className={`h-6 px-2 py-0 rounded-full text-xs font-medium border ${STATUS_BADGE_CLASSES[optimistic]} w-auto gap-1`}
+          aria-label="Change status"
+        >
+          <Badge
+            className={`${STATUS_BADGE_CLASSES[optimistic]} border-0 px-0 py-0 bg-transparent`}
+            variant="outline"
+          >
+            {optimistic}
+          </Badge>
+        </SelectTrigger>
+        <SelectContent>
+          {ALL_STATUSES.map((s) => (
+            <SelectItem key={s} value={s}>
+              <span className="flex items-center gap-2">
+                <span
+                  className={`size-2 rounded-full ${STATUS_BADGE_CLASSES[s].split(' ')[0]}`}
+                />
+                {s}
+              </span>
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+}

@@ -16,6 +16,7 @@ import { useState, useMemo, useCallback } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { useUserRole } from '@/contexts/userRole'
 import { GhostRow } from './GhostRow'
 import {
   ChevronLeftIcon,
@@ -116,6 +117,7 @@ export function DataTable({
   canSeeAllEstimators,
 }: DataTableProps) {
   const { openBid } = useBidDetail()
+  const { profile } = useUserRole()
   const [sorting, setSorting] = useState<SortingState>([])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
@@ -134,8 +136,9 @@ export function DataTable({
       createColumns({
         onOpenBid: openBid,
         onEdit: openBid,
+        currentUserId: profile?.id ?? null,
       }),
-    [openBid]
+    [openBid, profile?.id]
   )
 
   const updateBid = useCallback(
