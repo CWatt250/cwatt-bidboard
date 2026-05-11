@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd'
 import { toast } from 'sonner'
+import { PlusIcon } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { KanbanColumn } from '@/components/kanban/KanbanColumn'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { TodoList } from '@/components/workspace/TodoList'
@@ -23,6 +25,7 @@ export default function KanbanPage() {
   const { profile } = useUserRole()
   const [localBids, setLocalBids] = useState<Bid[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [newBidOpen, setNewBidOpen] = useState(false)
 
   useEffect(() => {
     const myBids = profile
@@ -113,6 +116,12 @@ export default function KanbanPage() {
     { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [] } as unknown as Record<BidStatus, Bid[]>
   )
 
+  // Single source of truth for what's actually rendered on the board. KpiRow
+  // derives Sent + Total Bid Value from these arrays so the KPIs can never
+  // disagree with the columns.
+  const boardBids = STATUSES.flatMap((s) => bidsByStatus[s])
+  const sentColumnBids = bidsByStatus['Sent']
+
   return (
     <div className="flex flex-col h-full gap-4 min-h-0" style={{ background: 'var(--bg)' }}>
       {/* Breadcrumb */}
@@ -139,11 +148,27 @@ export default function KanbanPage() {
             Drag and drop bids to move them through your process
           </p>
         </div>
-        <NewBidDialog />
+        <Button
+          onClick={() => setNewBidOpen(true)}
+          style={{
+            background: '#2563EB',
+            color: '#fff',
+            fontWeight: 500,
+            padding: '10px 20px',
+            borderRadius: 8,
+            border: 'none',
+          }}
+          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#1D4ED8' }}
+          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = '#2563EB' }}
+        >
+          <PlusIcon />
+          New Bid
+        </Button>
+        <NewBidDialog open={newBidOpen} onOpenChange={setNewBidOpen} />
       </div>
 
       {/* KPI Row */}
-      <KpiRow bids={localBids} />
+      <KpiRow bids={localBids} boardBids={boardBids} sentBids={sentColumnBids} />
 
       {/* Main content: kanban + right panel */}
       <div className="flex gap-4 flex-1 min-h-0">
@@ -182,6 +207,7 @@ export default function KanbanPage() {
                     status={status}
                     bids={bidsByStatus[status]}
                     currentUserId={currentUserId}
+                    onAddBid={() => setNewBidOpen(true)}
                   />
                 ))}
               </div>

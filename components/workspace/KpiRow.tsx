@@ -22,13 +22,12 @@ interface KpiCardProps {
   count?: number
   value: number
   compact?: boolean
-  trend?: number
   icon: React.ReactNode
   iconBg: string
   iconColor: string
 }
 
-function KpiCard({ label, count, value, compact, trend, icon, iconBg, iconColor }: KpiCardProps) {
+function KpiCard({ label, count, value, compact, icon, iconBg, iconColor }: KpiCardProps) {
   return (
     <div
       style={{
@@ -80,17 +79,6 @@ function KpiCard({ label, count, value, compact, trend, icon, iconBg, iconColor 
               </span>
             </>
           )}
-          {trend !== undefined && (
-            <span
-              style={{
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                color: trend >= 0 ? '#059669' : '#ef4444',
-              }}
-            >
-              {trend >= 0 ? '▲' : '▼'} {Math.abs(trend).toFixed(1)}%
-            </span>
-          )}
         </div>
       </div>
     </div>
@@ -98,21 +86,23 @@ function KpiCard({ label, count, value, compact, trend, icon, iconBg, iconColor 
 }
 
 interface KpiRowProps {
+  /** All of the user's bids — used for Due Today / Due This Week (date-based, not board-based). */
   bids: Bid[]
+  /** Bids currently visible on the kanban board (union of every column). */
+  boardBids: Bid[]
+  /** Bids currently in the kanban Sent column. Source of truth for the Sent KPI. */
+  sentBids: Bid[]
 }
 
-export function KpiRow({ bids }: KpiRowProps) {
+export function KpiRow({ bids, boardBids, sentBids }: KpiRowProps) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
 
-  // Current calendar week, Sunday → Saturday (matches kanban week filter)
+  // Current calendar week, Sunday → Saturday
   const startOfWeek = new Date(today)
   startOfWeek.setDate(today.getDate() - today.getDay())
   const endOfWeek = new Date(startOfWeek)
   endOfWeek.setDate(startOfWeek.getDate() + 6)
-
-  const weekAgo = new Date(today)
-  weekAgo.setDate(weekAgo.getDate() - 7)
 
   // Due Today
   const dueTodayBids = bids.filter((b) => {
@@ -130,13 +120,11 @@ export function KpiRow({ bids }: KpiRowProps) {
   })
   const dueWeekValue = dueWeekBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Sent status
-  const sentBids = bids.filter((b) => b.status === 'Sent')
+  // Sent — exactly the bids in the kanban Sent column
   const sentValue = sentBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Total Bid Value this week (bids updated in last 7 days)
-  const weekBids = bids.filter((b) => new Date(b.updated_at) >= weekAgo)
-  const weekValue = weekBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
+  // Total Bid Value — sum across all bids currently on the board
+  const weekValue = boardBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
   return (
     <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
@@ -168,7 +156,6 @@ export function KpiRow({ bids }: KpiRowProps) {
         label="Total Bid Value (Week)"
         value={weekValue}
         compact
-        trend={8.4}
         icon={<TrendingUp size={18} />}
         iconBg="rgba(5,150,105,0.1)"
         iconColor="#059669"

@@ -23,9 +23,10 @@ interface KanbanColumnProps {
   status: BidStatus
   bids: Bid[]
   currentUserId: string | null
+  onAddBid?: () => void
 }
 
-export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps) {
+export function KanbanColumn({ status, bids, currentUserId, onAddBid }: KanbanColumnProps) {
   const accentColor = STATUS_LEFT_BORDER[status]
   const totalValue = bids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
@@ -101,39 +102,46 @@ export function KanbanColumn({ status, bids, currentUserId }: KanbanColumnProps)
               <BidCard key={bid.id} bid={bid} index={index} currentUserId={currentUserId} />
             ))}
             {provided.placeholder}
-            {/* Add Bid button */}
-            <button
-              style={{
-                width: '100%',
-                padding: '6px 0',
-                borderRadius: 6,
-                fontSize: '0.72rem',
-                fontWeight: 600,
-                color: 'var(--text3)',
-                background: 'transparent',
-                border: '1px dashed var(--border)',
-                cursor: 'pointer',
-                transition: 'all 150ms ease',
-                marginTop: 2,
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLButtonElement
-                el.style.color = 'var(--accent)'
-                el.style.borderColor = 'var(--accent)'
-                el.style.background = 'var(--accent-light)'
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLButtonElement
-                el.style.color = 'var(--text3)'
-                el.style.borderColor = 'var(--border)'
-                el.style.background = 'transparent'
-              }}
-            >
-              + Add Bid
-            </button>
           </div>
         )}
       </Droppable>
+
+      {/* Add Bid button — lives OUTSIDE the Droppable so dnd's placeholder
+          and event capturing can never swallow the click. */}
+      <button
+        type="button"
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          onAddBid?.()
+        }}
+        style={{
+          margin: '0 8px 8px 8px',
+          padding: '6px 0',
+          borderRadius: 6,
+          fontSize: '0.72rem',
+          fontWeight: 600,
+          color: 'var(--text3)',
+          background: 'transparent',
+          border: '1px dashed var(--border)',
+          cursor: 'pointer',
+          transition: 'all 150ms ease',
+        }}
+        onMouseEnter={(e) => {
+          const el = e.currentTarget as HTMLButtonElement
+          el.style.color = 'var(--accent)'
+          el.style.borderColor = 'var(--accent)'
+          el.style.background = 'var(--accent-light)'
+        }}
+        onMouseLeave={(e) => {
+          const el = e.currentTarget as HTMLButtonElement
+          el.style.color = 'var(--text3)'
+          el.style.borderColor = 'var(--border)'
+          el.style.background = 'transparent'
+        }}
+      >
+        + Add Bid
+      </button>
     </div>
   )
 }
