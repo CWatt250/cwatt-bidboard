@@ -67,6 +67,25 @@ export function useBranchStats() {
 
   useEffect(() => { fetchStats() }, [fetchStats])
 
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('branch-stats')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, () => {
+        fetchStats()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'user_branches' }, () => {
+        fetchStats()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        fetchStats()
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchStats])
+
   return { stats, loading, refetch: fetchStats }
 }
 

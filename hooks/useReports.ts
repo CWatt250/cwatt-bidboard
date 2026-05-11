@@ -333,6 +333,26 @@ export function useReports(filters: ReportFilters = DEFAULT_FILTERS): UseReports
     fetchData()
   }, [fetchData, roleLoading])
 
+  useEffect(() => {
+    if (roleLoading || isEstimator) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel('reports-feed')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, () => {
+        fetchData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bid_line_items' }, () => {
+        fetchData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bid_clients' }, () => {
+        fetchData()
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchData, roleLoading, isEstimator])
+
   const filteredBids = useMemo(() => applyFilters(allBids, filters), [allBids, filters])
 
   const metrics = useMemo(

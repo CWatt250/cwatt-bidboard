@@ -148,6 +148,43 @@ export default function ClientDetailPage() {
     fetchAll()
   }, [fetchAll])
 
+  useEffect(() => {
+    if (!clientId) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`client-detail-${clientId}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'clients', filter: `id=eq.${clientId}` },
+        () => { void fetchAll() }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'client_contacts', filter: `client_id=eq.${clientId}` },
+        () => { void fetchAll() }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bid_clients', filter: `client_id=eq.${clientId}` },
+        () => { void fetchAll() }
+      )
+      // Bids can change line items / status without touching bid_clients — refetch broadly.
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bids' },
+        () => { void fetchAll() }
+      )
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'bid_line_items' },
+        () => { void fetchAll() }
+      )
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [clientId, fetchAll])
+
   async function saveName() {
     if (!client) return
     const trimmed = nameDraft.trim()

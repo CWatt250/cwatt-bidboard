@@ -299,5 +299,28 @@ export function useDashboard(): UseDashboardResult {
     fetchDashboard()
   }, [fetchDashboard, roleLoading])
 
+  // Realtime: any change to a bid, line item, or client junction invalidates
+  // the aggregations. Refetch on every event — cheap relative to the impact
+  // of stale KPIs.
+  useEffect(() => {
+    if (roleLoading) return
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`dashboard-${profile?.id ?? 'anon'}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, () => {
+        fetchDashboard()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bid_line_items' }, () => {
+        fetchDashboard()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bid_clients' }, () => {
+        fetchDashboard()
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchDashboard, roleLoading, profile?.id])
+
   return result
 }

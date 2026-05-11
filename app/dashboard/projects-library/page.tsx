@@ -177,6 +177,25 @@ export default function ProjectsLibraryPage() {
     return () => window.removeEventListener('bidwatt:bid-created', handler)
   }, [fetchBids])
 
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel(`projects-library-${profile?.id ?? 'anon'}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bids' }, () => {
+        void fetchBids()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bid_line_items' }, () => {
+        void fetchBids()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bid_clients' }, () => {
+        void fetchBids()
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [fetchBids, profile?.id])
+
   // Branches the user can see (for filter and folder Level 1)
   const accessibleBranches = useMemo<Branch[]>(() => {
     if (isAdmin) return ALL_BRANCHES

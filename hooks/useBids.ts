@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useId, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useFilters } from '@/contexts/filters'
 import { useUserRole } from '@/contexts/userRole'
@@ -21,6 +21,7 @@ export function useBids(): UseBidsResult {
   const [error, setError] = useState<string | null>(null)
   const { branch, scope, status } = useFilters()
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches, profile } = useUserRole()
+  const channelId = useId()
 
   const fetchBids = useCallback(async () => {
     const supabase = createClient()
@@ -145,7 +146,7 @@ export function useBids(): UseBidsResult {
     }
 
     const channel = supabase
-      .channel('bids-realtime')
+      .channel(`bids-realtime-${channelId}`)
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'bids' },
@@ -206,7 +207,7 @@ export function useBids(): UseBidsResult {
     return () => {
       supabase.removeChannel(channel)
     }
-  }, [])
+  }, [channelId])
 
   return { bids, loading, error }
 }

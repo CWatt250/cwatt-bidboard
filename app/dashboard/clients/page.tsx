@@ -200,6 +200,25 @@ export default function ClientsPage() {
     fetchClients()
   }, [])
 
+  useEffect(() => {
+    const supabase = createClient()
+    const channel = supabase
+      .channel('clients-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'clients' }, () => {
+        void fetchClients()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'client_contacts' }, () => {
+        void fetchClients()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bid_clients' }, () => {
+        void fetchClients()
+      })
+      .subscribe()
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [])
+
   async function handleAdd() {
     const trimmed = newName.trim()
     if (!trimmed) return
