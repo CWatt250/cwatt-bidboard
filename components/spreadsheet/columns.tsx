@@ -323,6 +323,9 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
     // 3b. MIKE Estimate # (inline editable, hidden by default)
     {
       accessorKey: 'mike_estimate_number',
+      size: 110,
+      minSize: 90,
+      maxSize: 130,
       header: ({ column }) => <SortableHeader label="MIKE #" column={column} />,
       cell: ({ row, table }) => (
         <InlineEditCell
@@ -354,7 +357,17 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
         </span>
       ),
     },
-    // 5. Estimator
+    // 5. Status
+    {
+      accessorKey: 'status',
+      header: ({ column }) => <SortableHeader label="Status" column={column} />,
+      cell: ({ row }) => (
+        <Badge className={STATUS_BADGE_CLASSES[row.original.status]} variant="outline">
+          {row.original.status}
+        </Badge>
+      ),
+    },
+    // 6. Estimator
     {
       accessorKey: 'estimator_name',
       header: ({ column }) => <SortableHeader label="Estimator" column={column} />,
@@ -399,16 +412,6 @@ export function createColumns({ onOpenBid, onEdit }: ColumnCallbacks): ColumnDef
             </span>
           )}
         />
-      ),
-    },
-    // 9. Status
-    {
-      accessorKey: 'status',
-      header: ({ column }) => <SortableHeader label="Status" column={column} />,
-      cell: ({ row }) => (
-        <Badge className={STATUS_BADGE_CLASSES[row.original.status]} variant="outline">
-          {row.original.status}
-        </Badge>
       ),
     },
     // 10. Actions

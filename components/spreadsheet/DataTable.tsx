@@ -285,16 +285,28 @@ export function DataTable({
                 style={{ background: 'var(--surface2)', borderBottom: '1px solid var(--border)' }}
                 className="hover:bg-[var(--surface2)]"
               >
-                {headerGroup.headers.map((header) => (
+                {headerGroup.headers.map((header) => {
+                  const explicitSize = header.column.columnDef.size
+                  return (
                   <TableHead
                     key={header.id}
-                    style={{ color: 'var(--text3)', fontSize: '0.7rem', fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase' }}
+                    style={{
+                      color: 'var(--text3)',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      letterSpacing: '0.07em',
+                      textTransform: 'uppercase',
+                      ...(explicitSize != null
+                        ? { width: explicitSize, minWidth: explicitSize, maxWidth: explicitSize }
+                        : {}),
+                    }}
                   >
                     {header.isPlaceholder
                       ? null
                       : flexRender(header.column.columnDef.header, header.getContext())}
                   </TableHead>
-                ))}
+                  )
+                })}
               </TableRow>
             ))}
           </TableHeader>
@@ -326,11 +338,23 @@ export function DataTable({
                   style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface)', transition: 'background 120ms ease' }}
                   className="hover:bg-[var(--surface2)]"
                 >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id} style={{ color: 'var(--text)', fontSize: '0.8rem' }}>
+                  {row.getVisibleCells().map((cell) => {
+                    const explicitSize = cell.column.columnDef.size
+                    return (
+                    <TableCell
+                      key={cell.id}
+                      style={{
+                        color: 'var(--text)',
+                        fontSize: '0.8rem',
+                        ...(explicitSize != null
+                          ? { width: explicitSize, minWidth: explicitSize, maxWidth: explicitSize }
+                          : {}),
+                      }}
+                    >
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
-                  ))}
+                    )
+                  })}
                 </TableRow>
               ))
             )}
