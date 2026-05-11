@@ -225,26 +225,30 @@ export function ScopeEditor({
           </p>
         </div>
 
-        {/* Scope checklist — fixed-width grid keeps price column aligned regardless of chip width */}
-        <div
-          style={{
-            padding: '8px 12px',
-            display: 'grid',
-            gridTemplateColumns: '16px 1fr 96px',
-            columnGap: 8,
-            rowGap: 6,
-            alignItems: 'center',
-          }}
-        >
-          {ALL_SCOPES.map((scope) => {
+        {/* Scope checklist. Each row is its own flex container so the chip and
+            price input form a tight visual pair with the same gap on every row.
+            Hover background + thin row dividers make the chip↔price pairing
+            unambiguous even at a glance. The chip cell is fixed-width (sized to
+            "Plumbing Piping", the longest scope name) so chips don't bleed into
+            the price area. */}
+        <div style={{ padding: '4px 8px' }}>
+          {ALL_SCOPES.map((scope, idx) => {
             const row = state[scope]
+            const isLast = idx === ALL_SCOPES.length - 1
             return (
               <label
                 key={scope}
                 htmlFor={`scope-${scope}`}
+                className="hover:bg-muted/60"
                 style={{
-                  display: 'contents',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '5px 6px',
+                  borderRadius: 6,
                   cursor: 'pointer',
+                  borderBottom: isLast ? 'none' : '1px dashed var(--border)',
+                  transition: 'background 120ms ease',
                 }}
               >
                 <input
@@ -252,9 +256,9 @@ export function ScopeEditor({
                   type="checkbox"
                   checked={row.checked}
                   onChange={(e) => toggleScope(scope, e.target.checked)}
-                  style={{ width: 14, height: 14, cursor: 'pointer', justifySelf: 'start' }}
+                  style={{ width: 14, height: 14, cursor: 'pointer', flexShrink: 0 }}
                 />
-                <div style={{ minWidth: 0 }}>
+                <div style={{ width: 132, flexShrink: 0 }}>
                   <Badge
                     className={SCOPE_BADGE_CLASSES[scope]}
                     variant="outline"
@@ -273,37 +277,43 @@ export function ScopeEditor({
                     onChange={(e) => updatePrice(scope, e.target.value)}
                     onClick={(e) => e.stopPropagation()}
                     style={{
-                      width: '100%',
+                      width: 96,
                       height: 28,
                       fontSize: '0.75rem',
                       padding: '2px 6px',
                       textAlign: 'right',
+                      flexShrink: 0,
                     }}
                     className="h-7 text-xs"
                   />
                 ) : (
-                  <span aria-hidden="true" />
+                  <span
+                    aria-hidden="true"
+                    style={{ width: 96, flexShrink: 0 }}
+                  />
                 )}
               </label>
             )
           })}
         </div>
 
-        {/* Running total — aligned with the price input column above */}
+        {/* Running total — same row layout as scope rows so the amount lands
+            directly under the price input column. */}
         <div
           style={{
-            display: 'grid',
-            gridTemplateColumns: '16px 1fr 96px',
-            columnGap: 8,
+            display: 'flex',
             alignItems: 'center',
-            padding: '6px 12px',
+            gap: 8,
+            padding: '8px 14px',
             borderTop: '1px solid var(--border)',
             background: 'var(--surface2)',
           }}
         >
-          <span aria-hidden="true" />
+          <span aria-hidden="true" style={{ width: 14, flexShrink: 0 }} />
           <span
             style={{
+              width: 132,
+              flexShrink: 0,
               fontSize: '0.72rem',
               fontWeight: 600,
               color: 'var(--text2)',
@@ -314,6 +324,8 @@ export function ScopeEditor({
           </span>
           <span
             style={{
+              width: 96,
+              flexShrink: 0,
               fontSize: '0.8rem',
               fontWeight: 700,
               fontFamily: '"IBM Plex Mono", monospace',

@@ -153,8 +153,13 @@ export function InlineDateCell({
   const [optimistic, setOptimistic] = useState<string | null>(initialDate)
   const [saving, setSaving] = useState(false)
 
-  // Reconcile when realtime brings a new value and we're closed
-  if (!open && initialDate !== optimistic && !saving) {
+  // Reseed only when the upstream value CHANGES, not every render. See
+  // InlineStatusCell for the full rationale: the prior reseed-on-every-render
+  // logic clobbered the optimistic value the instant `setSaving(false)` /
+  // `setOpen(false)` fired, before realtime updated the parent's row.
+  const [prevInitialDate, setPrevInitialDate] = useState<string | null>(initialDate)
+  if (prevInitialDate !== initialDate) {
+    setPrevInitialDate(initialDate)
     setOptimistic(initialDate)
   }
 

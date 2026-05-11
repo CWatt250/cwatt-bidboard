@@ -39,8 +39,15 @@ export function InlineStatusCell({
   const [optimistic, setOptimistic] = useState<BidStatus>(initialStatus)
   const [saving, setSaving] = useState(false)
 
-  // Reconcile when realtime delivers updates and we're not mid-save
-  if (!saving && initialStatus !== optimistic) {
+  // Reseed only when the upstream value CHANGES, not every render. The previous
+  // implementation reseeded whenever `initialStatus !== optimistic` and `!saving`,
+  // which clobbered the optimistic value the instant `setSaving(false)` ran —
+  // before useBids' realtime event landed and refreshed the parent's row data.
+  // Tracking the last-seen prop value via state lets us distinguish "prop just
+  // changed (trust it)" from "prop is the same stale value as before (ignore)".
+  const [prevInitialStatus, setPrevInitialStatus] = useState<BidStatus>(initialStatus)
+  if (prevInitialStatus !== initialStatus) {
+    setPrevInitialStatus(initialStatus)
     setOptimistic(initialStatus)
   }
 

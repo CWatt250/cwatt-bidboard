@@ -33,8 +33,13 @@ export function InlineEstimatorCell({
   const [optimisticId, setOptimisticId] = useState<string | null>(initialEstimatorId)
   const [saving, setSaving] = useState(false)
 
-  // Reconcile when realtime brings a new value (and we're not mid-save)
-  if (!saving && initialEstimatorId !== optimisticId) {
+  // Reseed only when the upstream value CHANGES, not every render. See
+  // InlineStatusCell for the full rationale: the prior "!saving && a !== b"
+  // guard clobbered optimistic updates the instant `setSaving(false)` fired,
+  // before realtime had a chance to refresh the parent's row.
+  const [prevInitialEstimatorId, setPrevInitialEstimatorId] = useState<string | null>(initialEstimatorId)
+  if (prevInitialEstimatorId !== initialEstimatorId) {
+    setPrevInitialEstimatorId(initialEstimatorId)
     setOptimisticId(initialEstimatorId)
   }
 
