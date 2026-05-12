@@ -407,7 +407,7 @@ input[type=number] {
    Uses 100dvh so mobile browser chrome doesn't push the scrollbar offscreen. */
 .bidboard-scroll [data-slot="table-container"] {
   overflow: auto;
-  max-height: calc(100dvh - 320px);
+  max-height: calc(100dvh - 240px);
   scrollbar-gutter: stable;
   scrollbar-width: auto;
   scrollbar-color: rgba(148, 163, 184, 0.6) var(--surface2);

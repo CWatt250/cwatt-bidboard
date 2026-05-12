@@ -210,7 +210,7 @@ export function DataTable({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-1.5">
       <div
         style={{
           position: 'sticky',
@@ -219,15 +219,55 @@ export function DataTable({
           background: 'white',
           display: 'flex',
           flexDirection: 'column',
-          gap: 12,
-          paddingTop: 8,
-          paddingBottom: 8,
+          gap: 8,
+          paddingTop: 4,
+          paddingBottom: 4,
         }}
       >
       {topBar}
-      {/* Toolbar */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1 max-w-sm">
+      {/* Merged filter pills + search row.
+          Left: filter pills + Columns button. Right: search input.
+          flex-wrap lets the search drop below the pills on narrow viewports. */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <FilterBar
+            filters={activeFilters}
+            onChange={setActiveFilters}
+            estimatorFilter={estimatorFilter}
+            onEstimatorFilterChange={onEstimatorFilterChange}
+            estimators={estimators}
+            canSeeAllEstimators={canSeeAllEstimators}
+          />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button variant="outline" size="sm">
+                  <Columns3Icon />
+                  Columns
+                </Button>
+              }
+            />
+            <DropdownMenuContent align="start">
+              <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {table
+                .getAllColumns()
+                .filter((col) => col.getCanHide())
+                .map((col) => (
+                  <DropdownMenuCheckboxItem
+                    key={col.id}
+                    checked={col.getIsVisible()}
+                    onCheckedChange={(checked) => col.toggleVisibility(!!checked)}
+                  >
+                    {columnLabels[col.id] ?? col.id}
+                  </DropdownMenuCheckboxItem>
+                ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+
+        <div className="relative" style={{ width: 300, maxWidth: '100%' }}>
           <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
           <Input
             placeholder="Search bids…"
@@ -240,44 +280,7 @@ export function DataTable({
             style={{ borderRadius: '8px', borderColor: 'var(--border)' }}
           />
         </div>
-
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button variant="outline">
-                <Columns3Icon />
-                Columns
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="end">
-            <DropdownMenuLabel>Toggle columns</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {table
-              .getAllColumns()
-              .filter((col) => col.getCanHide())
-              .map((col) => (
-                <DropdownMenuCheckboxItem
-                  key={col.id}
-                  checked={col.getIsVisible()}
-                  onCheckedChange={(checked) => col.toggleVisibility(!!checked)}
-                >
-                  {columnLabels[col.id] ?? col.id}
-                </DropdownMenuCheckboxItem>
-              ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
-
-      {/* Filter bar */}
-      <FilterBar
-        filters={activeFilters}
-        onChange={setActiveFilters}
-        estimatorFilter={estimatorFilter}
-        onEstimatorFilterChange={onEstimatorFilterChange}
-        estimators={estimators}
-        canSeeAllEstimators={canSeeAllEstimators}
-      />
       </div>
 
       {/* Table — always-visible horizontal scroll for wide column sets */}
