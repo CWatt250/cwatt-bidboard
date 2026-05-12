@@ -20,6 +20,7 @@ export const metadata: Metadata = {
   title: "BidWatt",
   description: "Bid management dashboard",
   applicationName: "BidWatt",
+  manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
