@@ -79,6 +79,8 @@ export interface BidClient {
   client_name: string | null
   /** Joined from clients table — preferred display name when present */
   clients?: { name: string } | null
+  /** Subset of scopes on the parent bid that apply to this client. Drives the per-client total. */
+  scopes: string[]
   created_at: string
 }
 

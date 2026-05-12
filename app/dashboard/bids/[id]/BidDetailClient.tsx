@@ -19,16 +19,14 @@ import { ensureClientId } from '@/lib/clients'
 import { useBid } from '@/hooks/useBid'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
-import {
-  STATUS_BADGE_CLASSES,
-  SCOPE_BADGE_CLASSES,
-} from '@/config/colors'
+import { SCOPE_BADGE_CLASSES } from '@/config/colors'
 import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
 import { InlinePriceCell } from '@/components/bids/InlinePriceCell'
 import { InlineAwardedCell } from '@/components/bids/InlineAwardedCell'
 import { InlineScopeEstimatorCell } from '@/components/bids/InlineScopeEstimatorCell'
+import { ProminentStatusCell } from '@/components/bids/ProminentStatusCell'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
-import type { BidStatus, Branch } from '@/lib/supabase/types'
+import type { BidStatus, Branch, BidScope } from '@/lib/supabase/types'
 import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import {
@@ -53,15 +51,12 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 const BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 
-const ALL_STATUSES: BidStatus[] = [
+/** Statuses where the bid is still being worked — Due In should count down here. */
+const ACTIVE_STATUSES: ReadonlySet<BidStatus> = new Set<BidStatus>([
   'Unassigned',
   'Bidding',
   'In Progress',
-  'Sent',
-  'Verbal',
-  'Awarded',
-  'Lost',
-]
+])
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
@@ -118,10 +113,15 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches, profile } = useUserRole()
 
   const [saving, setSaving] = useState(false)
-  const [changingStatus, setChangingStatus] = useState<BidStatus | null>(null)
-  const [clientNames, setClientNames] = useState<string[]>([])
+  // Client rows mirror bid.bid_clients (id, name, selected scopes). Each row's
+  // scope toggles persist to bid_clients.scopes immediately — they don't wait
+  // for the Save Changes button.
+  const [clientRows, setClientRows] = useState<
+    Array<{ id: string; name: string; scopes: string[] }>
+  >([])
   const [allClients, setAllClients] = useState<string[]>([])
   const [newClientName, setNewClientName] = useState('')
+  const [addingClient, setAddingClient] = useState(false)
 
   const estimatorProfiles = (() => {
     if (isAdmin) return profiles
@@ -161,8 +161,14 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       bid_due_date: bid.bid_due_date,
     })
 
-    setClientNames(
-      (bid.clients ?? []).map(getBidClientName).filter(Boolean)
+    setClientRows(
+      (bid.clients ?? [])
+        .map((c) => ({
+          id: c.id,
+          name: getBidClientName(c),
+          scopes: c.scopes ?? [],
+        }))
+        .filter((r) => r.name),
     )
   }, [bid, reset])
 
@@ -180,15 +186,106 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       })
   }, [])
 
-  function addClient(name: string) {
-    const trimmed = name.trim()
-    if (!trimmed) return
-    setClientNames((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]))
-    setAllClients((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed].sort((a, b) => a.localeCompare(b))))
+  // When a scope is removed from the bid entirely (Scope Pricing card), purge
+  // it from every client's scopes array. Detected after each bid refetch.
+  useEffect(() => {
+    if (!bid?.clients) return
+    const currentScopes = new Set(
+      (bid.line_items ?? []).filter((li) => !li.client).map((li) => li.scope as string),
+    )
+    const stale = bid.clients.filter(
+      (c) => (c.scopes ?? []).some((s) => !currentScopes.has(s)),
+    )
+    if (stale.length === 0) return
+    const supabase = createClient()
+    Promise.all(
+      stale.map((c) =>
+        supabase
+          .from('bid_clients')
+          .update({
+            scopes: (c.scopes ?? []).filter((s) => currentScopes.has(s)),
+          })
+          .eq('id', c.id),
+      ),
+    ).then(() => refetch())
+  }, [bid, refetch])
+
+  // Distinct scopes available on this bid (sourced from scope-only line items).
+  function getBidScopes(): BidScope[] {
+    const items = (bid?.line_items ?? []).filter((li) => !li.client)
+    return Array.from(new Set(items.map((li) => li.scope))) as BidScope[]
   }
 
-  function removeClient(name: string) {
-    setClientNames((prev) => prev.filter((n) => n !== name))
+  async function addClient(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed || addingClient) return
+    if (clientRows.some((r) => r.name === trimmed)) return
+
+    setAddingClient(true)
+    const supabase = createClient()
+    const client_id = await ensureClientId(supabase, trimmed)
+
+    // Default new clients to all current bid scopes (matches migration backfill
+    // behavior — user can deselect any that don't apply).
+    const defaultScopes = getBidScopes()
+
+    const { error } = await supabase
+      .from('bid_clients')
+      .insert({ bid_id: bidId, client_id, client_name: trimmed, scopes: defaultScopes })
+
+    if (error) {
+      setAddingClient(false)
+      toast.error('Failed to add client.')
+      return
+    }
+
+    setAllClients((prev) =>
+      prev.includes(trimmed)
+        ? prev
+        : [...prev, trimmed].sort((a, b) => a.localeCompare(b)),
+    )
+    if (profile) {
+      await logActivity(bidId, profile.id, `Added client ${trimmed}`)
+    }
+    setAddingClient(false)
+    refetch()
+  }
+
+  async function removeClient(rowId: string, name: string) {
+    const supabase = createClient()
+    setClientRows((prev) => prev.filter((r) => r.id !== rowId))
+    const { error } = await supabase.from('bid_clients').delete().eq('id', rowId)
+    if (error) {
+      toast.error('Failed to remove client.')
+      refetch()
+      return
+    }
+    if (profile) {
+      await logActivity(bidId, profile.id, `Removed client ${name}`)
+    }
+    refetch()
+  }
+
+  async function toggleClientScope(rowId: string, scope: string) {
+    const row = clientRows.find((r) => r.id === rowId)
+    if (!row) return
+    const next = row.scopes.includes(scope)
+      ? row.scopes.filter((s) => s !== scope)
+      : [...row.scopes, scope]
+
+    setClientRows((prev) =>
+      prev.map((r) => (r.id === rowId ? { ...r, scopes: next } : r)),
+    )
+
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('bid_clients')
+      .update({ scopes: next })
+      .eq('id', rowId)
+    if (error) {
+      toast.error('Failed to update client scopes.')
+      refetch()
+    }
   }
 
   // ─── Handlers ────────────────────────────────────────────────────────────
@@ -218,54 +315,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       return
     }
 
-    // Diff clientNames against the bid's current bid_clients rows and apply
-    // additions/removals to the junction table.
-    const currentNames = new Set(
-      (bid.clients ?? []).map(getBidClientName).filter(Boolean)
-    )
-    const targetNames = new Set(clientNames)
-    const toAdd = clientNames.filter((n) => !currentNames.has(n))
-    const toRemove = [...currentNames].filter((n) => !targetNames.has(n))
-
-    if (toAdd.length > 0) {
-      const rows = await Promise.all(
-        toAdd.map(async (client_name) => ({
-          bid_id: bidId,
-          client_id: await ensureClientId(supabase, client_name),
-          client_name,
-        }))
-      )
-      const { error: addError } = await supabase.from('bid_clients').insert(rows)
-      if (addError) {
-        setSaving(false)
-        toast.error('Failed to save clients. Please try again.')
-        return
-      }
-      if (profile) {
-        await Promise.all(
-          toAdd.map((name) => logActivity(bidId, profile.id, `Added client ${name}`))
-        )
-      }
-    }
-
-    if (toRemove.length > 0) {
-      const { error: rmError } = await supabase
-        .from('bid_clients')
-        .delete()
-        .eq('bid_id', bidId)
-        .in('client_name', toRemove)
-      if (rmError) {
-        setSaving(false)
-        toast.error('Failed to remove clients. Please try again.')
-        return
-      }
-      if (profile) {
-        await Promise.all(
-          toRemove.map((name) => logActivity(bidId, profile.id, `Removed client ${name}`))
-        )
-      }
-    }
-
     if (profile && values.estimator_id !== prevEstimatorId) {
       const newProfile = profiles.find((p) => p.id === values.estimator_id)
       const newName = newProfile?.name ?? 'Unknown'
@@ -277,29 +326,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
     setSaving(false)
     toast.success('Bid saved successfully.')
-    refetch()
-  }
-
-  async function handleStatusChange(newStatus: BidStatus) {
-    if (!bid || !profile || newStatus === bid.status) return
-    setChangingStatus(newStatus)
-    const supabase = createClient()
-    const prevStatus = bid.status
-
-    const { error } = await supabase
-      .from('bids')
-      .update({ status: newStatus })
-      .eq('id', bidId)
-
-    if (error) {
-      setChangingStatus(null)
-      toast.error('Failed to update status.')
-      return
-    }
-
-    await logActivity(bidId, profile.id, `Status changed from ${prevStatus} to ${newStatus}`)
-    setChangingStatus(null)
-    toast.success(`Status updated to ${newStatus}.`)
     refetch()
   }
 
@@ -329,13 +355,35 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   const scopeOnlyItems = (bid.line_items ?? []).filter((li) => !li.client)
   const scopeTotal = scopeOnlyItems.reduce((s, li) => s + (li.price ?? 0), 0)
+  const bidScopes = Array.from(new Set(scopeOnlyItems.map((li) => li.scope))) as BidScope[]
+  const priceByScope = new Map<string, number>(
+    scopeOnlyItems.map((li) => [li.scope as string, li.price ?? 0]),
+  )
 
-  const uniqueClientCount = clientNames.length
+  function perClientTotal(scopes: string[]): number {
+    return scopes.reduce((s, scope) => s + (priceByScope.get(scope) ?? 0), 0)
+  }
+
+  const uniqueClientCount = clientRows.length
   const totalLineItems = (bid.line_items ?? []).length
 
-  const availableClientOptions = allClients.filter((c) => !clientNames.includes(c))
+  const clientNamesSet = new Set(clientRows.map((r) => r.name))
+  const availableClientOptions = allClients.filter((c) => !clientNamesSet.has(c))
 
-  const displayStatus = changingStatus ?? bid.status
+  const isClosed = !ACTIVE_STATUSES.has(bid.status)
+  // Due In styling: when closed, neutral; otherwise red ≤3d, amber ≤7d, green >7d.
+  const dueInColor = isClosed
+    ? 'var(--text3)'
+    : days <= 3
+    ? 'var(--red)'
+    : days <= 7
+    ? 'var(--yellow)'
+    : 'var(--green)'
+  const dueInLabel = isClosed
+    ? 'Submitted'
+    : days < 0
+    ? `${Math.abs(days)}d overdue`
+    : `${days}d`
 
   // ─── Render ───────────────────────────────────────────────────────────────
 
@@ -357,73 +405,60 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         <span className="text-foreground font-medium truncate">{bid.project_name}</span>
       </nav>
 
-      {/* Page Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        {/* Left side */}
-        <div className="flex-1 min-w-0 space-y-1">
-          <h1
-            className="text-2xl font-extrabold tracking-tight leading-tight"
-            style={{ color: 'var(--text)' }}
-          >
-            {bid.project_name}
-          </h1>
+      {/* Page Header — status now lives in the KPI row as a prominent card. */}
+      <div className="flex-1 min-w-0 space-y-1">
+        <h1
+          className="text-2xl font-extrabold tracking-tight leading-tight"
+          style={{ color: 'var(--text)' }}
+        >
+          {bid.project_name}
+        </h1>
+        <p className="text-sm" style={{ color: 'var(--text3)' }}>
+          Branch: {bid.branch} · Estimator: {bid.estimator_name ?? 'Unassigned'}
+        </p>
+        {(bid.project_location || bid.mike_estimate_number) && (
           <p className="text-sm" style={{ color: 'var(--text3)' }}>
-            Branch: {bid.branch} · Estimator: {bid.estimator_name ?? 'Unassigned'}
+            {bid.project_location && (
+              <span>
+                <MapPinIcon className="inline-block size-3.5 -mt-0.5 mr-1" />
+                {bid.project_location}
+              </span>
+            )}
+            {bid.project_location && bid.mike_estimate_number && (
+              <span style={{ margin: '0 8px', color: 'var(--text3)' }}>·</span>
+            )}
+            {bid.mike_estimate_number && (
+              <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}>
+                MIKE #{bid.mike_estimate_number}
+              </span>
+            )}
           </p>
-          {(bid.project_location || bid.mike_estimate_number) && (
-            <p className="text-sm" style={{ color: 'var(--text3)' }}>
-              {bid.project_location && (
-                <span>
-                  <MapPinIcon className="inline-block size-3.5 -mt-0.5 mr-1" />
-                  {bid.project_location}
-                </span>
-              )}
-              {bid.project_location && bid.mike_estimate_number && (
-                <span style={{ margin: '0 8px', color: 'var(--text3)' }}>·</span>
-              )}
-              {bid.mike_estimate_number && (
-                <span style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}>
-                  MIKE #{bid.mike_estimate_number}
-                </span>
-              )}
-            </p>
-          )}
-          <p className="text-sm font-medium" style={{ color: 'var(--accent2)' }}>
-            Due: {formatDate(bid.bid_due_date)}
-          </p>
-        </div>
-
-        {/* Right side: single pill status control */}
-        <div className="flex items-center gap-3 shrink-0">
-          <Select
-            value={bid.status}
-            onValueChange={(v) => handleStatusChange(v as BidStatus)}
-            disabled={changingStatus !== null}
-          >
-            <SelectTrigger
-              className={`h-8 px-3 rounded-full text-xs font-semibold border ${STATUS_BADGE_CLASSES[displayStatus]} w-auto gap-1.5`}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {ALL_STATUSES.map((s) => (
-                <SelectItem key={s} value={s}>
-                  <span className="flex items-center gap-2">
-                    <span
-                      className={`size-2 rounded-full ${STATUS_BADGE_CLASSES[s].split(' ')[0]}`}
-                    />
-                    {s}
-                  </span>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        )}
+        <p className="text-sm font-medium" style={{ color: 'var(--accent2)' }}>
+          Due: {formatDate(bid.bid_due_date)}
+        </p>
       </div>
 
       {/* ── Task 2: KPI Bar ─────────────────────────────────────────────────── */}
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-5 gap-4">
+        {/* KPI: Status — prominent, clickable */}
+        <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
+          <CardContent className="py-5 px-5">
+            <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
+              Status
+            </p>
+            <div className="mt-1.5">
+              <ProminentStatusCell
+                bidId={bid.id}
+                userId={profile?.id ?? null}
+                initialStatus={bid.status}
+                onChanged={refetch}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         {/* KPI: Total Bid Value — sum of scope-only line items */}
         <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardContent className="py-5 px-5">
@@ -460,7 +495,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </CardContent>
         </Card>
 
-        {/* KPI: Clients — unique clients with line items */}
+        {/* KPI: Clients — unique clients on this bid */}
         <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardContent className="py-5 px-5">
             <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
@@ -478,7 +513,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           </CardContent>
         </Card>
 
-        {/* KPI: Due In — green >7d, amber ≤7d, red ≤3d or overdue */}
+        {/* KPI: Due In — neutral "Submitted" for closed bids, otherwise countdown. */}
         <Card className="overflow-hidden shadow-[var(--shadow)] border border-[var(--border)] rounded-[var(--radius-lg)]">
           <CardContent className="py-5 px-5">
             <p className="text-xs uppercase tracking-wider font-medium truncate" style={{ color: 'var(--text3)' }}>
@@ -488,15 +523,10 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               className="text-[28px] font-bold mt-1.5 tabular-nums truncate leading-none"
               style={{
                 fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-                color:
-                  days <= 3
-                    ? 'var(--red)'
-                    : days <= 7
-                    ? 'var(--yellow)'
-                    : 'var(--green)',
+                color: dueInColor,
               }}
             >
-              {days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}
+              {dueInLabel}
             </p>
           </CardContent>
         </Card>
@@ -649,33 +679,80 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               </div>
             </CardHeader>
             <CardContent className="space-y-3 p-6">
-              {/* Current clients */}
+              {/* Per-client rows: name · scope chips · per-client total · remove */}
               <div className="border rounded-md overflow-hidden">
-                <div className="bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                  Client
+                <div className="grid grid-cols-[1fr_minmax(0,2fr)_120px_32px] gap-3 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span>Client</span>
+                  <span>Scopes</span>
+                  <span className="text-right">Total</span>
+                  <span />
                 </div>
-                {clientNames.length === 0 ? (
+                {clientRows.length === 0 ? (
                   <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
                     No clients added yet.
                   </div>
                 ) : (
-                  clientNames.map((name) => (
-                    <div
-                      key={name}
-                      className="flex items-center justify-between gap-2 px-3 py-2 border-b last:border-b-0"
-                    >
-                      <span className="text-sm font-medium truncate">{name}</span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => removeClient(name)}
-                        aria-label={`Remove client ${name}`}
+                  clientRows.map((row) => {
+                    const rowTotal = perClientTotal(row.scopes)
+                    return (
+                      <div
+                        key={row.id}
+                        className="grid grid-cols-[1fr_minmax(0,2fr)_120px_32px] gap-3 px-3 py-2 items-center border-b last:border-b-0"
                       >
-                        <XIcon className="size-3.5 text-destructive" />
-                      </Button>
-                    </div>
-                  ))
+                        <span className="text-sm font-medium truncate" title={row.name}>
+                          {row.name}
+                        </span>
+
+                        {/* Scope chips — toggling persists immediately */}
+                        <div className="flex flex-wrap gap-1">
+                          {bidScopes.length === 0 ? (
+                            <span className="text-xs italic text-muted-foreground">
+                              Add scopes first
+                            </span>
+                          ) : (
+                            bidScopes.map((s) => {
+                              const selected = row.scopes.includes(s)
+                              return (
+                                <button
+                                  key={s}
+                                  type="button"
+                                  onClick={() => toggleClientScope(row.id, s)}
+                                  aria-pressed={selected}
+                                  aria-label={`Toggle ${s} for ${row.name}`}
+                                  className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs transition-opacity ${
+                                    SCOPE_BADGE_CLASSES[s]
+                                  } ${selected ? 'opacity-100' : 'opacity-40 hover:opacity-70'}`}
+                                >
+                                  {s}
+                                </button>
+                              )
+                            })
+                          )}
+                        </div>
+
+                        <span
+                          className="text-right text-sm font-bold tabular-nums"
+                          style={{
+                            fontFamily:
+                              'var(--font-mono), "IBM Plex Mono", monospace',
+                            color: 'var(--accent2)',
+                          }}
+                        >
+                          {rowTotal > 0 ? formatCurrency(rowTotal) : '—'}
+                        </span>
+
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => removeClient(row.id, row.name)}
+                          aria-label={`Remove client ${row.name}`}
+                        >
+                          <XIcon className="size-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                    )
+                  })
                 )}
               </div>
 
@@ -687,7 +764,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 <Select
                   value=""
                   onValueChange={(v) => { if (v) addClient(v) }}
-                  disabled={availableClientOptions.length === 0}
+                  disabled={availableClientOptions.length === 0 || addingClient}
                 >
                   <SelectTrigger className="w-full h-8 text-sm">
                     <SelectValue
@@ -716,8 +793,9 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
                         e.preventDefault()
-                        addClient(newClientName)
+                        const v = newClientName
                         setNewClientName('')
+                        addClient(v)
                       }
                     }}
                   />
@@ -725,10 +803,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                     type="button"
                     variant="outline"
                     size="sm"
-                    disabled={!newClientName.trim()}
+                    disabled={!newClientName.trim() || addingClient}
                     onClick={() => {
-                      addClient(newClientName)
+                      const v = newClientName
                       setNewClientName('')
+                      addClient(v)
                     }}
                   >
                     <PlusIcon className="size-3.5" />
@@ -736,7 +815,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Changes save when you click Save Changes below.
+                  New clients default to all current bid scopes — deselect any that
+                  don't apply. Changes save instantly.
                 </p>
               </div>
             </CardContent>
