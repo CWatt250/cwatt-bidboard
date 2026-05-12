@@ -26,7 +26,14 @@ import type { Bid, BidScope, Branch, BidStatus } from '@/lib/supabase/types'
 export type TimeRange = 'this-month' | 'this-quarter' | 'this-year' | 'all-time'
 
 type TrendWeeks = 4 | 8 | 12
-type BranchMetric = 'Pipeline' | 'Awarded'
+type BranchMetric = 'Pipeline' | 'Awarded' | 'Verbal'
+
+// Bar gradient per metric — Verbal uses violet to match the Verbal status pill.
+const BRANCH_METRIC_BAR: Record<BranchMetric, string> = {
+  Pipeline: 'linear-gradient(90deg, #38bdf8, #0ea5e9)',
+  Awarded: 'linear-gradient(90deg, #34d399, #10b981)',
+  Verbal: 'linear-gradient(90deg, #a78bfa, #8b5cf6)',
+}
 
 // ─── helpers ───────────────────────────────────────────────────────────────
 
@@ -284,8 +291,9 @@ function getPipelineTrendData(bids: Bid[], weeks: TrendWeeks) {
   return buckets.map(({ label, weekStart, weekEnd }) => {
     const activeBids = bids.filter((b) => {
       if (b.status === 'Lost') return false
-      const updatedAt = new Date(b.updated_at)
-      return updatedAt >= weekStart && updatedAt <= weekEnd
+      if (!b.bid_due_date) return false
+      const dueAt = new Date(b.bid_due_date + 'T00:00:00')
+      return dueAt >= weekStart && dueAt <= weekEnd
     })
     const value = activeBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
     return { label, value }
@@ -357,10 +365,13 @@ function BranchPerformanceChart({
         (b) => b.status === 'Bidding' || b.status === 'In Progress' || b.status === 'Sent'
       )
       const awardedBids = branchBids.filter((b) => b.status === 'Awarded')
+      const verbalBids = branchBids.filter((b) => b.status === 'Verbal')
       const value =
         metric === 'Pipeline'
           ? pipelineBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-          : awardedBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+          : metric === 'Awarded'
+          ? awardedBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+          : verbalBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
       const activeCount = branchBids.filter(
         (b) => b.status === 'Bidding' || b.status === 'In Progress'
       ).length
@@ -369,6 +380,7 @@ function BranchPerformanceChart({
   }, [bids, metric])
 
   const maxValue = Math.max(...breakdown.map((b) => b.value), 1)
+  const barBackground = BRANCH_METRIC_BAR[metric]
 
   return (
     <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
@@ -423,7 +435,7 @@ function BranchPerformanceChart({
                   height: '100%',
                   width: `${pct}%`,
                   borderRadius: '5px',
-                  background: 'linear-gradient(90deg, #38bdf8, #0ea5e9)',
+                  background: barBackground,
                   transition: 'width 300ms ease',
                 }}
               />
@@ -741,18 +753,20 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [branchFilter, setBranchFilter] = useState<string>('all')
 
-  // Filter allBids by global timeRange (for personal KPIs + charts)
+  // Filter allBids by global timeRange (for personal KPIs + charts). The window
+  // is applied to bid_due_date — when a bid is "happening" — not to created_at
+  // or updated_at, both of which are dominated by import/edit churn.
   const filteredBids = useMemo(() => {
     const start = getTimeRangeStart(timeRange)
     if (!start) return allBids
-    return allBids.filter((b) => b.updated_at >= start)
+    return allBids.filter((b) => b.bid_due_date >= start)
   }, [allBids, timeRange])
 
   // Filter orgBids by global timeRange (for org-wide breakdown charts)
   const filteredOrgBids = useMemo(() => {
     const start = getTimeRangeStart(timeRange)
     if (!start) return orgBids
-    return orgBids.filter((b) => b.updated_at >= start)
+    return orgBids.filter((b) => b.bid_due_date >= start)
   }, [orgBids, timeRange])
 
   if (loading) {
@@ -784,6 +798,30 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
     return <div className="error-card">Failed to load dashboard: {error}</div>
   }
 
+  // ── Pinned "Total Secured This Year" — org-wide, line-item-level. Always YTD,
+  // ignoring the active time-window filter. Each awarded line item counts if its
+  // awarded_at falls in the current calendar year; pre-feature rows (awarded_at
+  // null) fall back to the parent bid's bid_due_date in the current year.
+  const ytdYear = new Date().getFullYear()
+  const ytdYearStr = String(ytdYear)
+  const ytdBidIds = new Set<string>()
+  let ytdSecuredValue = 0
+  for (const b of orgBids) {
+    for (const li of b.line_items ?? []) {
+      if (!li.is_awarded) continue
+      let inYear = false
+      if (li.awarded_at) {
+        inYear = new Date(li.awarded_at).getFullYear() === ytdYear
+      } else if (b.bid_due_date) {
+        inYear = b.bid_due_date.startsWith(ytdYearStr)
+      }
+      if (!inYear) continue
+      ytdSecuredValue += li.price ?? 0
+      ytdBidIds.add(b.id)
+    }
+  }
+  const ytdJobCount = ytdBidIds.size
+
   // ── KPI calculations (from filteredBids) ────────────────────────────────
   const totalSecuredValue = filteredBids
     .filter((b) => b.status === 'Awarded')
@@ -810,6 +848,74 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* ── Row 0: Pinned headline — TOTAL SECURED THIS YEAR (org-wide, YTD) ── */}
+      <div
+        style={{
+          ...cardStyle,
+          background:
+            'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, var(--surface) 65%)',
+          borderColor: 'rgba(16,185,129,0.35)',
+          padding: '20px 24px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 16,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <p
+            style={{
+              fontSize: '0.78rem',
+              fontWeight: 800,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--green, #10b981)',
+            }}
+          >
+            Total Secured This Year
+          </p>
+          <p
+            style={{
+              fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
+              fontSize: '2.4rem',
+              fontWeight: 600,
+              marginTop: 6,
+              color: 'var(--text)',
+              letterSpacing: '-0.8px',
+              lineHeight: 1,
+            }}
+          >
+            {formatCurrencyFull(ytdSecuredValue)}
+          </p>
+          <p
+            style={{
+              color: 'var(--text3)',
+              fontSize: '0.78rem',
+              marginTop: 8,
+            }}
+          >
+            {ytdJobCount} job{ytdJobCount === 1 ? '' : 's'} · year-to-date
+          </p>
+        </div>
+        <span
+          style={{
+            fontSize: '0.7rem',
+            fontWeight: 700,
+            letterSpacing: '0.08em',
+            textTransform: 'uppercase',
+            color: 'var(--green, #10b981)',
+            padding: '4px 10px',
+            borderRadius: 999,
+            border: '0.5px solid rgba(16,185,129,0.4)',
+            background: 'rgba(16,185,129,0.08)',
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          }}
+        >
+          {ytdYear}
+        </span>
+      </div>
+
       {/* ── Row 1: KPI cards ─────────────────────────────────────────── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
         <KpiCard
@@ -877,13 +983,18 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
             <div>
               <p style={cardTitleStyle}>Branch Performance</p>
               <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-                {branchMetric === 'Pipeline' ? 'Pipeline value' : 'Awarded value'} by branch
+                {branchMetric === 'Pipeline'
+                  ? 'Pipeline value'
+                  : branchMetric === 'Awarded'
+                  ? 'Awarded value'
+                  : 'Verbal value'} by branch
               </p>
             </div>
             <SegmentedControl<BranchMetric>
               options={[
                 { label: 'Pipeline', value: 'Pipeline' },
                 { label: 'Awarded', value: 'Awarded' },
+                { label: 'Verbal', value: 'Verbal' },
               ]}
               value={branchMetric}
               onChange={setBranchMetric}
