@@ -10,12 +10,15 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: '#0F2340',
     theme_color: '#0F2340',
     orientation: 'any',
-    // Next's Manifest type narrows `purpose` to a single value, but the W3C
-    // PWA spec accepts space-separated combinations. Cast the array literal
-    // so the rendered manifest serves the icons as both `any` and `maskable`.
+    // Split into separate 'any' and 'maskable' entries. The full-bleed icons
+    // are rendered as-is on Windows desktop / taskbar; the maskable variants
+    // (bolt shrunk to ~60% inside the safe zone) are used by Android adaptive
+    // icon masks so the bolt isn't cropped.
     icons: [
-      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
-    ] as unknown as MetadataRoute.Manifest['icons'],
+      { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: '/icons/icon-192-maskable.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+      { src: '/icons/icon-512-maskable.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
   }
 }
