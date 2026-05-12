@@ -28,6 +28,10 @@ export const STATUS_COLUMN_STYLES: Record<BidStatus, { header: string; bg: strin
     header: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
     bg:     'bg-green-50/50 dark:bg-green-950/20',
   },
+  Verbal: {
+    header: 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300',
+    bg:     'bg-violet-50/50 dark:bg-violet-950/20',
+  },
   Awarded: {
     header: 'bg-emerald-200 text-emerald-800 dark:bg-emerald-800/40 dark:text-emerald-200',
     bg:     'bg-emerald-50/60 dark:bg-emerald-950/20',
@@ -44,6 +48,7 @@ export const STATUS_BADGE_CLASSES: Record<BidStatus, string> = {
   Bidding:       'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
   'In Progress': 'bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
   Sent:          'bg-green-100 text-green-700 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+  Verbal:        'bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
   Awarded:       'bg-emerald-200 text-emerald-800 border-emerald-300 dark:bg-emerald-800/40 dark:text-emerald-200 dark:border-emerald-700',
   Lost:          'bg-rose-100 text-rose-600 border-rose-200 dark:bg-rose-900/30 dark:text-rose-300 dark:border-rose-800',
 }

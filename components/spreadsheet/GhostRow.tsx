@@ -15,7 +15,7 @@ import { ScopeEditor, type DraftItem } from './ScopeEditor'
 import { AutocompleteCell } from './AutocompleteCell'
 
 const BRANCHES: BidBranch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
-const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
+const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
 
 interface GhostState {
   project_name: string

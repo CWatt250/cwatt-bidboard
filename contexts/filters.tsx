@@ -4,7 +4,7 @@ import { createContext, useContext, useState } from 'react'
 
 export type Branch = 'All' | 'PSC' | 'SEA' | 'POR' | 'PHX' | 'SLC'
 export type Scope = 'All' | 'Plumbing Piping' | 'HVAC Piping' | 'HVAC Ductwork' | 'Fire Stopping' | 'Equipment' | 'Other'
-export type Status = 'All' | 'Unassigned' | 'Bidding' | 'In Progress' | 'Sent' | 'Awarded' | 'Lost'
+export type Status = 'All' | 'Unassigned' | 'Bidding' | 'In Progress' | 'Sent' | 'Verbal' | 'Awarded' | 'Lost'
 
 interface FiltersState {
   branch: Branch

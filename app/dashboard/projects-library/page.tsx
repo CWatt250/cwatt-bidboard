@@ -27,7 +27,7 @@ import {
 } from '@/lib/supabase/types'
 
 const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
-const ALL_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
+const ALL_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
 const ALL_SCOPES: BidScope[] = [
   'Plumbing Piping',
   'HVAC Piping',

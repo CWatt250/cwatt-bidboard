@@ -36,7 +36,7 @@ export interface WorkspaceTodo {
   updated_at: string
 }
 
-export type BidStatus = 'Unassigned' | 'Bidding' | 'In Progress' | 'Sent' | 'Awarded' | 'Lost'
+export type BidStatus = 'Unassigned' | 'Bidding' | 'In Progress' | 'Sent' | 'Verbal' | 'Awarded' | 'Lost'
 export type BidScope = 'Plumbing Piping' | 'HVAC Piping' | 'HVAC Ductwork' | 'Fire Stopping' | 'Equipment' | 'Other'
 export type BidBranch = Branch
 
@@ -47,6 +47,7 @@ export interface BidLineItem {
   scope: BidScope
   price: number | null
   is_awarded: boolean
+  awarded_at: string | null
   estimator_id: string | null
   /** Joined from profiles via bid_line_items.estimator_id — null when not overridden */
   estimator_name?: string | null

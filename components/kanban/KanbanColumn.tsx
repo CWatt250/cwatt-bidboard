@@ -15,6 +15,7 @@ const STATUS_LEFT_BORDER: Record<BidStatus, string> = {
   Bidding:       '#38bdf8',
   'In Progress': '#f59e0b',
   Sent:          '#10b981',
+  Verbal:        '#8b5cf6',
   Awarded:       '#059669',
   Lost:          '#ef4444',
 }

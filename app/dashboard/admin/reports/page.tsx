@@ -39,7 +39,7 @@ const ALL_SCOPES: BidScope[] = [
   'Equipment',
   'Other',
 ]
-const ALL_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
+const ALL_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
 
 // ─── Formatters ───────────────────────────────────────────────────────────────
 

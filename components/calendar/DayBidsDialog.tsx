@@ -15,6 +15,7 @@ const STATUS_COLORS: Record<BidStatus, { bg: string; text: string; border: strin
   Bidding:       { bg: '#E0F2FE', text: '#0369A1', border: '#7DD3FC' },
   'In Progress': { bg: '#FEF3C7', text: '#B45309', border: '#FCD34D' },
   Sent:          { bg: '#D1FAE5', text: '#047857', border: '#6EE7B7' },
+  Verbal:        { bg: '#EDE9FE', text: '#6D28D9', border: '#C4B5FD' },
   Awarded:       { bg: '#D1FAE5', text: '#065F46', border: '#34D399' },
   Lost:          { bg: '#FEE2E2', text: '#B91C1C', border: '#FCA5A5' },
 }

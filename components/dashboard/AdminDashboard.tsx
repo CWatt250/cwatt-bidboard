@@ -571,7 +571,7 @@ function getDueDateBadge(
   return { label, bg: '#EAF3DE', color: '#3B6D11' }
 }
 
-const BID_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']
+const BID_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
 
 function RecentBidsTable({
   bids,

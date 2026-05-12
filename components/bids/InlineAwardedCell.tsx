@@ -44,7 +44,7 @@ export function InlineAwardedCell({
     const supabase = createClient()
     const { error } = await supabase
       .from('bid_line_items')
-      .update({ is_awarded: next })
+      .update({ is_awarded: next, awarded_at: next ? new Date().toISOString() : null })
       .eq('id', lineItemId)
 
     if (error) {

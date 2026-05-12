@@ -17,7 +17,7 @@ import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
 import { logActivity } from '@/lib/activity'
 
-const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent']
+const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal']
 
 export default function KanbanPage() {
   const { bids, loading, error } = useBids()
@@ -113,7 +113,7 @@ export default function KanbanPage() {
           : ofStatus.filter(inCurrentWeek)
       return acc
     },
-    { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [] } as unknown as Record<BidStatus, Bid[]>
+    { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [], Verbal: [] } as unknown as Record<BidStatus, Bid[]>
   )
 
   // Single source of truth for what's actually rendered on the board. KpiRow

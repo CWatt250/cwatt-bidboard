@@ -58,6 +58,7 @@ const ALL_STATUSES: BidStatus[] = [
   'Bidding',
   'In Progress',
   'Sent',
+  'Verbal',
   'Awarded',
   'Lost',
 ]

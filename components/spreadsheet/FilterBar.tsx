@@ -16,7 +16,7 @@ export type DueDateFilter = 'all' | 'overdue' | 'this-week' | 'this-month'
 export type EstimatorFilter = 'mine' | 'unassigned' | 'all' | string
 
 const ALL_STATUSES: BidStatus[] = [
-  'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost',
+  'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost',
 ]
 const ALL_BRANCHES = ['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const
 const ALL_SCOPES: BidScope[] = [

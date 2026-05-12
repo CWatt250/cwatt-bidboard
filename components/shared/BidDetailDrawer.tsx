@@ -64,7 +64,7 @@ const bidDetailSchema = z.object({
   project_location: z.string().optional(),
   mike_estimate_number: z.string().optional(),
   branch: z.enum(['PSC', 'SEA', 'POR', 'PHX', 'SLC']),
-  status: z.enum(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost']),
+  status: z.enum(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']),
   estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
 })
@@ -438,7 +438,7 @@ export function BidDetailDrawer() {
                             <SelectValue placeholder="Select status" />
                           </SelectTrigger>
                           <SelectContent>
-                            {(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Awarded', 'Lost'] as const).map((s) => (
+                            {(['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost'] as const).map((s) => (
                               <SelectItem key={s} value={s}>{s}</SelectItem>
                             ))}
                           </SelectContent>
