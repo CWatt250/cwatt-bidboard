@@ -49,6 +49,25 @@ function formatCurrencyFull(value: number): string {
   return `$${value.toFixed(0)}`
 }
 
+// Effective "won" date for a bid as a YYYY-MM-DD string. Prefers the MAX
+// awarded_at among flagged line items (the bid was secured the day the last
+// scope was won); falls back to bid_due_date for status-only Awarded bids
+// where no scope checkbox was ever ticked.
+function bidAwardedYmd(b: Bid): string | null {
+  let maxAwardedAt: string | null = null
+  for (const li of b.line_items ?? []) {
+    if (!li.is_awarded || !li.awarded_at) continue
+    if (maxAwardedAt == null || li.awarded_at > maxAwardedAt) {
+      maxAwardedAt = li.awarded_at
+    }
+  }
+  if (maxAwardedAt) {
+    const d = new Date(maxAwardedAt)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+  return b.bid_due_date || null
+}
+
 function getTimeRangeStart(range: TimeRange): string | null {
   if (range === 'all-time') return null
   const now = new Date()
@@ -465,7 +484,7 @@ function RevenueByScope({ bids }: { bids: Bid[] }) {
   for (const bid of awardedBids) {
     for (const li of bid.line_items ?? []) {
       const prev = scopeMap.get(li.scope) ?? 0
-      scopeMap.set(li.scope, prev + (bid.total_price ?? 0))
+      scopeMap.set(li.scope, prev + (li.price ?? 0))
     }
   }
 
@@ -798,17 +817,24 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
     return <div className="error-card">Failed to load dashboard: {error}</div>
   }
 
-  // ── Pinned "Total Secured This Year" — org-wide, line-item-level. Always YTD,
-  // ignoring the active time-window filter. Each awarded line item counts if its
-  // awarded_at falls in the current calendar year; pre-feature rows (awarded_at
-  // null) fall back to the parent bid's bid_due_date in the current year.
+  // ── Pinned "Total Secured This Year" — org-wide, always YTD, ignores the
+  // active time-window filter. Supports both flagging paths:
+  //   • Status-only: bid.status = 'Awarded' (or 'Verbal') with no scope checkboxes
+  //     ticked → count every line item on the bid.
+  //   • Per-scope:  any line_item.is_awarded = true → count only those.
+  // Each surviving line item's "won year" is line_item.awarded_at (when set) or
+  // the parent bid's bid_due_date as a fallback. Lost/active-status bids are
+  // excluded outright so stale is_awarded flags can't leak in.
   const ytdYear = new Date().getFullYear()
   const ytdYearStr = String(ytdYear)
   const ytdBidIds = new Set<string>()
   let ytdSecuredValue = 0
   for (const b of orgBids) {
-    for (const li of b.line_items ?? []) {
-      if (!li.is_awarded) continue
+    if (b.status !== 'Awarded' && b.status !== 'Verbal') continue
+    const lineItems = b.line_items ?? []
+    const anyFlagged = lineItems.some((li) => li.is_awarded)
+    const surviving = anyFlagged ? lineItems.filter((li) => li.is_awarded) : lineItems
+    for (const li of surviving) {
       let inYear = false
       if (li.awarded_at) {
         inYear = new Date(li.awarded_at).getFullYear() === ytdYear
@@ -823,10 +849,19 @@ export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeR
   const ytdJobCount = ytdBidIds.size
 
   // ── KPI calculations (from filteredBids) ────────────────────────────────
-  const totalSecuredValue = filteredBids
-    .filter((b) => b.status === 'Awarded')
-    .reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-  const totalSecuredJobs = filteredBids.filter((b) => b.status === 'Awarded').length
+  // "Total Secured" small card filters Awarded bids by the bid's effective won
+  // date (MAX flagged-line-item awarded_at, falling back to bid_due_date) — not
+  // by bid_due_date alone, so a bid won in Jan with a Dec due date still lands
+  // in "This Year."
+  const securedWindowStart = getTimeRangeStart(timeRange)
+  const securedBids = allBids.filter((b) => {
+    if (b.status !== 'Awarded') return false
+    if (!securedWindowStart) return true
+    const ymd = bidAwardedYmd(b)
+    return ymd != null && ymd >= securedWindowStart
+  })
+  const totalSecuredValue = securedBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+  const totalSecuredJobs = securedBids.length
 
   const openBidsCount = filteredBids.filter(
     (b) => b.status === 'Bidding' || b.status === 'In Progress'
