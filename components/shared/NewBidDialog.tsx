@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
+import { ensureClientId } from '@/lib/clients'
 import { useUserRole } from '@/contexts/userRole'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { Button } from '@/components/ui/button'
@@ -287,26 +288,64 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
 
     const bidId = bidData.id
 
-    if (profile) await logActivity(bidId, profile.id, 'Created bid')
-
-    // Expand: one record per client+scope, with the price entered for that scope
-    const lineItemsToInsert = values.line_items.flatMap((li) =>
-      li.scope_prices.map((sp) => ({
-        bid_id: bidId,
-        client: li.client ?? '',
-        scope: sp.scope,
-        price: sp.price?.trim() ? parseFloat(sp.price) : null,
-      }))
-    )
-
-    const { error: liError } = await supabase.from('bid_line_items').insert(lineItemsToInsert)
-
-    if (liError) {
-      await supabase.from('bids').delete().eq('id', bidId)
-      setSubmitting(false)
-      toast.error('Failed to save line items. Please try again.')
-      return
+    // Collapse the form's per-client scope-pricing groups into one scope-only
+    // line item per unique scope (first non-null price wins). bid_line_items.client
+    // stays as an empty-string placeholder to satisfy the NOT NULL legacy column;
+    // multi-client tracking now lives in bid_clients.
+    const scopePrices = new Map<string, number | null>()
+    for (const li of values.line_items) {
+      for (const sp of li.scope_prices) {
+        if (scopePrices.has(sp.scope)) continue
+        const trimmed = sp.price?.trim()
+        const parsed = trimmed ? parseFloat(trimmed) : null
+        scopePrices.set(sp.scope, parsed !== null && isNaN(parsed) ? null : parsed)
+      }
     }
+
+    const lineItemsToInsert = [...scopePrices.entries()].map(([scope, price]) => ({
+      bid_id: bidId,
+      client: '',
+      scope,
+      price,
+    }))
+
+    if (lineItemsToInsert.length > 0) {
+      const { error: liError } = await supabase.from('bid_line_items').insert(lineItemsToInsert)
+      if (liError) {
+        await supabase.from('bids').delete().eq('id', bidId)
+        setSubmitting(false)
+        toast.error('Failed to save line items. Please try again.')
+        return
+      }
+    }
+
+    const clientNames = [
+      ...new Set(
+        values.line_items
+          .map((li) => li.client?.trim())
+          .filter((c): c is string => !!c)
+      ),
+    ]
+
+    if (clientNames.length > 0) {
+      const clientRows = await Promise.all(
+        clientNames.map(async (client_name) => ({
+          bid_id: bidId,
+          client_id: await ensureClientId(supabase, client_name),
+          client_name,
+        }))
+      )
+      const { error: bcError } = await supabase.from('bid_clients').insert(clientRows)
+      if (bcError) {
+        await supabase.from('bid_line_items').delete().eq('bid_id', bidId)
+        await supabase.from('bids').delete().eq('id', bidId)
+        setSubmitting(false)
+        toast.error('Failed to save clients. Please try again.')
+        return
+      }
+    }
+
+    if (profile) await logActivity(bidId, profile.id, 'Created bid')
 
     setSubmitting(false)
     toast.success('Bid created successfully.')

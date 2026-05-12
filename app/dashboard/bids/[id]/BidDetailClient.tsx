@@ -3,20 +3,19 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { useForm, Controller, useFieldArray } from 'react-hook-form'
+import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import {
   PlusIcon,
-  Trash2Icon,
+  XIcon,
   ChevronRightIcon,
-  ChevronDownIcon,
-  ChevronUpIcon,
   MapPinIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
+import { ensureClientId } from '@/lib/clients'
 import { useBid } from '@/hooks/useBid'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
@@ -27,8 +26,8 @@ import {
 import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
 import { InlinePriceCell } from '@/components/bids/InlinePriceCell'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
-import type { BidStatus, BidScope, Branch } from '@/lib/supabase/types'
-import { BRANCH_LABELS } from '@/lib/supabase/types'
+import type { BidStatus, Branch } from '@/lib/supabase/types'
+import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import {
   Card,
@@ -47,27 +46,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-const SCOPES: BidScope[] = [
-  'Plumbing Piping',
-  'HVAC Piping',
-  'HVAC Ductwork',
-  'Fire Stopping',
-  'Equipment',
-  'Other',
-]
 
 const BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 
@@ -82,20 +62,6 @@ const ALL_STATUSES: BidStatus[] = [
 
 // ─── Zod Schema ───────────────────────────────────────────────────────────────
 
-const lineItemSchema = z.object({
-  id: z.string().optional(),
-  client: z.string().min(1, 'Required'),
-  scope: z.enum([
-    'Plumbing Piping',
-    'HVAC Piping',
-    'HVAC Ductwork',
-    'Fire Stopping',
-    'Equipment',
-    'Other',
-  ] as const),
-  price: z.string().optional(),
-})
-
 const bidFormSchema = z.object({
   project_name: z.string().min(1, 'Project name is required'),
   project_location: z.string().optional(),
@@ -103,7 +69,6 @@ const bidFormSchema = z.object({
   branch: z.enum(['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const),
   estimator_id: z.string().nullable().optional(),
   bid_due_date: z.string().min(1, 'Bid due date is required'),
-  line_items: z.array(lineItemSchema).min(1, 'At least one line item is required'),
 })
 
 type BidFormData = z.infer<typeof bidFormSchema>
@@ -151,8 +116,9 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   const [saving, setSaving] = useState(false)
   const [changingStatus, setChangingStatus] = useState<BidStatus | null>(null)
-  const [deleteLineItemIndex, setDeleteLineItemIndex] = useState<number | null>(null)
-  const [clientsEditOpen, setClientsEditOpen] = useState(false)
+  const [clientNames, setClientNames] = useState<string[]>([])
+  const [allClients, setAllClients] = useState<string[]>([])
+  const [newClientName, setNewClientName] = useState('')
 
   const estimatorProfiles = (() => {
     if (isAdmin) return profiles
@@ -169,13 +135,10 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     handleSubmit,
     control,
     reset,
-    watch,
     formState: { errors },
   } = useForm<BidFormData>({
     resolver: zodResolver(bidFormSchema),
   })
-
-  const { fields, append, remove } = useFieldArray({ control, name: 'line_items' })
 
   useEffect(() => {
     if (!loading && notFound) {
@@ -186,8 +149,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   useEffect(() => {
     if (!bid) return
 
-    const regularItems = (bid.line_items ?? []).filter((li) => li.client)
-
     reset({
       project_name: bid.project_name,
       project_location: bid.project_location ?? '',
@@ -195,19 +156,37 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       branch: bid.branch,
       estimator_id: bid.estimator_id ?? profile?.id ?? undefined,
       bid_due_date: bid.bid_due_date,
-      line_items:
-        regularItems.length > 0
-          ? regularItems.map((li) => ({
-              id: li.id,
-              client: li.client!,
-              scope: li.scope,
-              price: li.price?.toString() ?? '',
-            }))
-          : [{ id: undefined, client: '', scope: undefined as any, price: '' }],
     })
+
+    setClientNames(
+      (bid.clients ?? []).map(getBidClientName).filter(Boolean)
+    )
   }, [bid, reset])
 
-  const watchedItems = watch('line_items') ?? []
+  // Fetch master clients list once for the Add Client dropdown.
+  useEffect(() => {
+    const supabase = createClient()
+    supabase
+      .from('clients')
+      .select('name')
+      .order('name', { ascending: true })
+      .then(({ data }) => {
+        setAllClients(
+          ((data ?? []) as { name: string }[]).map((r) => r.name).filter(Boolean)
+        )
+      })
+  }, [])
+
+  function addClient(name: string) {
+    const trimmed = name.trim()
+    if (!trimmed) return
+    setClientNames((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed]))
+    setAllClients((prev) => (prev.includes(trimmed) ? prev : [...prev, trimmed].sort((a, b) => a.localeCompare(b))))
+  }
+
+  function removeClient(name: string) {
+    setClientNames((prev) => prev.filter((n) => n !== name))
+  }
 
   // ─── Handlers ────────────────────────────────────────────────────────────
 
@@ -236,49 +215,52 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
       return
     }
 
-    const lineItemsToUpsert = values.line_items.map((li) => ({
-      ...(li.id ? { id: li.id } : {}),
-      bid_id: bidId,
-      client: li.client,
-      scope: li.scope,
-      price: li.price?.trim() ? parseFloat(li.price) : null,
-    }))
+    // Diff clientNames against the bid's current bid_clients rows and apply
+    // additions/removals to the junction table.
+    const currentNames = new Set(
+      (bid.clients ?? []).map(getBidClientName).filter(Boolean)
+    )
+    const targetNames = new Set(clientNames)
+    const toAdd = clientNames.filter((n) => !currentNames.has(n))
+    const toRemove = [...currentNames].filter((n) => !targetNames.has(n))
 
-    const { error: liError } = await supabase
-      .from('bid_line_items')
-      .upsert(lineItemsToUpsert, { onConflict: 'id' })
-
-    if (liError) {
-      setSaving(false)
-      toast.error('Failed to save line items. Please try again.')
-      return
-    }
-
-    const formIds = new Set(values.line_items.map((li) => li.id).filter(Boolean))
-    const deletedLineItems = (bid.line_items ?? []).filter((li) => li.client && !formIds.has(li.id))
-
-    if (deletedLineItems.length > 0) {
-      await supabase
-        .from('bid_line_items')
-        .delete()
-        .in('id', deletedLineItems.map((li) => li.id))
-
+    if (toAdd.length > 0) {
+      const rows = await Promise.all(
+        toAdd.map(async (client_name) => ({
+          bid_id: bidId,
+          client_id: await ensureClientId(supabase, client_name),
+          client_name,
+        }))
+      )
+      const { error: addError } = await supabase.from('bid_clients').insert(rows)
+      if (addError) {
+        setSaving(false)
+        toast.error('Failed to save clients. Please try again.')
+        return
+      }
       if (profile) {
         await Promise.all(
-          deletedLineItems.map((li) =>
-            logActivity(bidId, profile.id, `Removed ${li.scope} line item for ${li.client}`)
-          )
+          toAdd.map((name) => logActivity(bidId, profile.id, `Added client ${name}`))
         )
       }
     }
 
-    if (profile) {
-      const newItems = values.line_items.filter((li) => !li.id)
-      await Promise.all(
-        newItems.map((li) =>
-          logActivity(bidId, profile.id, `Added ${li.scope} line item for ${li.client}`)
+    if (toRemove.length > 0) {
+      const { error: rmError } = await supabase
+        .from('bid_clients')
+        .delete()
+        .eq('bid_id', bidId)
+        .in('client_name', toRemove)
+      if (rmError) {
+        setSaving(false)
+        toast.error('Failed to remove clients. Please try again.')
+        return
+      }
+      if (profile) {
+        await Promise.all(
+          toRemove.map((name) => logActivity(bidId, profile.id, `Removed client ${name}`))
         )
-      )
+      }
     }
 
     if (profile && values.estimator_id !== prevEstimatorId) {
@@ -345,14 +327,10 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   const scopeOnlyItems = (bid.line_items ?? []).filter((li) => !li.client)
   const scopeTotal = scopeOnlyItems.reduce((s, li) => s + (li.price ?? 0), 0)
 
-  const clientLineItems = (bid.line_items ?? []).filter((li) => li.client)
-  const uniqueClientCount = new Set(clientLineItems.map((li) => li.client)).size
+  const uniqueClientCount = clientNames.length
   const totalLineItems = (bid.line_items ?? []).length
 
-  const clientRunningTotal = watchedItems.reduce((sum, item) => {
-    const p = parseFloat(item.price ?? '')
-    return sum + (isNaN(p) ? 0 : p)
-  }, 0)
+  const availableClientOptions = allClients.filter((c) => !clientNames.includes(c))
 
   const displayStatus = changingStatus ?? bid.status
 
@@ -618,7 +596,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 <div>
                   <CardTitle className="font-bold text-[var(--text)]">Client Bids</CardTitle>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Which clients are getting which scopes
+                    Clients receiving this bid
                     {uniqueClientCount > 0 && (
                       <span className="ml-1.5 text-muted-foreground/60">
                         · {uniqueClientCount} client{uniqueClientCount !== 1 ? 's' : ''}
@@ -629,197 +607,95 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               </div>
             </CardHeader>
             <CardContent className="space-y-3 p-6">
-              {errors.line_items?.root && (
-                <p className="text-xs text-destructive">{errors.line_items.root.message}</p>
-              )}
-
-              {/* Summary table — always visible */}
+              {/* Current clients */}
               <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_2fr_100px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
-                  <span>Client</span>
-                  <span>Scopes Included</span>
-                  <span className="text-right">Total Bid</span>
+                <div className="bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  Client
                 </div>
-                {clientLineItems.length === 0 ? (
+                {clientNames.length === 0 ? (
                   <div className="px-3 py-4 text-center text-xs text-muted-foreground italic">
                     No clients added yet.
                   </div>
                 ) : (
-                  Object.entries(
-                    clientLineItems.reduce<Record<string, typeof clientLineItems>>(
-                      (acc, li) => {
-                        const key = li.client!
-                        if (!acc[key]) acc[key] = []
-                        acc[key].push(li)
-                        return acc
-                      },
-                      {}
-                    )
-                  ).map(([client, items]) => {
-                    const clientTotal = items.reduce((s, li) => s + (li.price ?? 0), 0)
-                    return (
-                      <div
-                        key={client}
-                        className="grid grid-cols-[1fr_2fr_100px] gap-2 px-3 py-2 items-center border-b last:border-b-0"
-                      >
-                        <span className="text-sm font-medium truncate">{client}</span>
-                        <div className="flex flex-wrap gap-1">
-                          {items.map((li) => (
-                            <span
-                              key={li.id}
-                              className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${SCOPE_BADGE_CLASSES[li.scope]}`}
-                            >
-                              {li.scope}
-                            </span>
-                          ))}
-                        </div>
-                        <span
-                          className="text-right text-sm font-semibold tabular-nums"
-                          style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
-                        >
-                          {clientTotal > 0 ? formatCurrency(clientTotal) : '—'}
-                        </span>
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-
-              {/* Running Total */}
-              <div
-                className="flex items-center justify-end pt-1"
-                style={{ borderTop: '1px solid var(--border)' }}
-              >
-                <span
-                  className="font-bold text-base tabular-nums"
-                  style={{
-                    fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace',
-                    color: 'var(--accent2)',
-                  }}
-                >
-                  {clientRunningTotal > 0 ? formatCurrency(clientRunningTotal) : '—'}
-                </span>
-              </div>
-
-              {/* Collapsible edit section */}
-              <div className="border rounded-md overflow-hidden">
-                <button
-                  type="button"
-                  className="w-full flex items-center justify-between px-3 py-2.5 text-xs font-medium bg-muted/40 hover:bg-muted/60 transition-colors"
-                  onClick={() => setClientsEditOpen((o) => !o)}
-                >
-                  <span style={{ color: 'var(--text2)' }}>Edit Client Scopes</span>
-                  {clientsEditOpen ? (
-                    <ChevronUpIcon className="size-3.5 text-muted-foreground" />
-                  ) : (
-                    <ChevronDownIcon className="size-3.5 text-muted-foreground" />
-                  )}
-                </button>
-
-                {clientsEditOpen && (
-                  <div>
-                    <div className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 bg-muted/20 px-3 py-2 text-xs font-medium text-muted-foreground border-t border-b">
-                      <span>Client</span>
-                      <span>Scope</span>
-                      <span>Price</span>
-                      <span />
-                    </div>
-
-                    {fields.map((field, index) => (
-                      <div
-                        key={field.id}
-                        className="grid grid-cols-[1fr_1fr_100px_36px] gap-2 px-3 py-2 items-start border-b last:border-b-0"
-                      >
-                        <input type="hidden" {...register(`line_items.${index}.id`)} />
-
-                        <div>
-                          <Input
-                            {...register(`line_items.${index}.client`)}
-                            placeholder="Client"
-                            className="h-7 text-xs px-2"
-                          />
-                          {errors.line_items?.[index]?.client && (
-                            <p className="text-xs text-destructive mt-0.5">
-                              {errors.line_items[index]?.client?.message}
-                            </p>
-                          )}
-                        </div>
-
-                        <div>
-                          <Controller
-                            name={`line_items.${index}.scope`}
-                            control={control}
-                            render={({ field: scopeField }) => (
-                              <Select
-                                value={scopeField.value}
-                                onValueChange={scopeField.onChange}
-                              >
-                                <SelectTrigger className="w-full h-7 text-xs">
-                                  <SelectValue placeholder="Scope" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {SCOPES.map((s) => (
-                                    <SelectItem key={s} value={s}>
-                                      <span
-                                        className={`inline-flex items-center rounded px-1 text-xs ${SCOPE_BADGE_CLASSES[s]}`}
-                                      >
-                                        {s}
-                                      </span>
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          />
-                          {errors.line_items?.[index]?.scope && (
-                            <p className="text-xs text-destructive mt-0.5">
-                              {errors.line_items[index]?.scope?.message}
-                            </p>
-                          )}
-                        </div>
-
-                        <Input
-                          {...register(`line_items.${index}.price`)}
-                          type="number"
-                          step="1"
-                          min="0"
-                          placeholder="—"
-                          className="h-7 text-xs px-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                        />
-
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => {
-                            if (fields.length === 1) {
-                              setDeleteLineItemIndex(index)
-                            } else {
-                              remove(index)
-                            }
-                          }}
-                          aria-label="Remove client bid"
-                        >
-                          <Trash2Icon className="size-3.5 text-destructive" />
-                        </Button>
-                      </div>
-                    ))}
-
-                    <div className="px-3 py-2 border-t">
+                  clientNames.map((name) => (
+                    <div
+                      key={name}
+                      className="flex items-center justify-between gap-2 px-3 py-2 border-b last:border-b-0"
+                    >
+                      <span className="text-sm font-medium truncate">{name}</span>
                       <Button
                         type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() =>
-                          append({ id: undefined, client: '', scope: undefined as any, price: '' })
-                        }
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => removeClient(name)}
+                        aria-label={`Remove client ${name}`}
                       >
-                        <PlusIcon className="size-3.5" />
-                        Add Client
+                        <XIcon className="size-3.5 text-destructive" />
                       </Button>
                     </div>
-                  </div>
+                  ))
                 )}
+              </div>
+
+              {/* Add Client — dropdown sourced from clients master table */}
+              <div className="space-y-2 border-t pt-3">
+                <p className="text-xs uppercase tracking-wider font-medium" style={{ color: 'var(--text3)' }}>
+                  Add Client
+                </p>
+                <Select
+                  value=""
+                  onValueChange={(v) => { if (v) addClient(v) }}
+                  disabled={availableClientOptions.length === 0}
+                >
+                  <SelectTrigger className="w-full h-8 text-sm">
+                    <SelectValue
+                      placeholder={
+                        availableClientOptions.length === 0
+                          ? 'All available clients added'
+                          : 'Pick from existing clients…'
+                      }
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableClientOptions.map((c) => (
+                      <SelectItem key={c} value={c}>
+                        {c}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    placeholder="…or type a new client name"
+                    className="h-8 text-sm"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        addClient(newClientName)
+                        setNewClientName('')
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={!newClientName.trim()}
+                    onClick={() => {
+                      addClient(newClientName)
+                      setNewClientName('')
+                    }}
+                  >
+                    <PlusIcon className="size-3.5" />
+                    Add
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Changes save when you click Save Changes below.
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -1069,37 +945,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         </Button>
       </div>
 
-      {/* Confirm remove last line item */}
-      <AlertDialog
-        open={deleteLineItemIndex !== null}
-        onOpenChange={(open) => {
-          if (!open) setDeleteLineItemIndex(null)
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Remove last line item?</AlertDialogTitle>
-            <AlertDialogDescription>
-              This bid will have no line items. You can add a new one after saving.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                if (deleteLineItemIndex !== null) {
-                  remove(deleteLineItemIndex)
-                  append({ id: undefined, client: '', scope: undefined as any, price: '' })
-                  setDeleteLineItemIndex(null)
-                }
-              }}
-            >
-              Remove
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   )
 }

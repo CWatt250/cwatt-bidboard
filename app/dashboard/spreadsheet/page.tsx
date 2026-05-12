@@ -10,6 +10,7 @@ import type { EstimatorFilter } from '@/components/spreadsheet/FilterBar'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
 import { Button } from '@/components/ui/button'
 import type { Bid } from '@/hooks/useBids'
+import { getBidClientName } from '@/lib/supabase/types'
 
 function formatCurrencyRaw(value: number): string {
   return new Intl.NumberFormat('en-US', {
@@ -51,7 +52,7 @@ function exportToCsv(bids: Bid[]) {
 
   const rows = bids.map((bid) => {
     const lineItems = bid.line_items ?? []
-    const clients = [...new Set(lineItems.map((li) => li.client))].join('; ')
+    const clients = (bid.clients ?? []).map(getBidClientName).filter(Boolean).join('; ')
     const scopes = [...new Set(lineItems.map((li) => li.scope))].join('; ')
     const hasPrice = lineItems.some((li) => li.price !== null)
     return [

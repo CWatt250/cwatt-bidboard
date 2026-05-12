@@ -6,7 +6,7 @@ import { useDashboard } from '@/hooks/useDashboard'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
 import { STATUS_BADGE_CLASSES, DUE_DATE_URGENT_CLASS, DUE_DATE_WARNING_CLASS, BRANCH_BADGE_CLASSES } from '@/config/colors'
-import { BRANCH_LABELS } from '@/lib/supabase/types'
+import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
 import type { Bid, Branch } from '@/lib/supabase/types'
 import type { EstimatorBreakdown } from '@/hooks/useDashboard'
 
@@ -70,7 +70,7 @@ function MetricCard({
 
 function BidRow({ bid }: { bid: Bid }) {
   const router = useRouter()
-  const clients = [...new Set((bid.line_items ?? []).map((li) => li.client).filter(Boolean))]
+  const clients = (bid.clients ?? []).map(getBidClientName).filter(Boolean)
   return (
     <button
       onClick={() => router.push(`/dashboard/bids/${bid.id}`)}

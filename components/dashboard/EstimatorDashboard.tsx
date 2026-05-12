@@ -5,6 +5,7 @@ import { useDashboard } from '@/hooks/useDashboard'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { STATUS_BADGE_CLASSES, DUE_DATE_URGENT_CLASS, DUE_DATE_WARNING_CLASS } from '@/config/colors'
 import type { Bid } from '@/lib/supabase/types'
+import { getBidClientName } from '@/lib/supabase/types'
 
 function formatCurrency(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
@@ -64,9 +65,7 @@ function MetricCard({
 
 function BidRow({ bid }: { bid: Bid }) {
   const router = useRouter()
-  const clients = [
-    ...new Set((bid.line_items ?? []).map((li) => li.client).filter(Boolean)),
-  ]
+  const clients = (bid.clients ?? []).map(getBidClientName).filter(Boolean)
   return (
     <button
       onClick={() => router.push(`/dashboard/bids/${bid.id}`)}
