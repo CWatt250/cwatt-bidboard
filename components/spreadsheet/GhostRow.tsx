@@ -487,7 +487,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       `}</style>
       <TableRow
         style={{
-          borderTop: '2px dashed var(--accent-border)',
+          borderBottom: '2px dashed var(--accent-border)',
           background: 'var(--surface)',
         }}
       >

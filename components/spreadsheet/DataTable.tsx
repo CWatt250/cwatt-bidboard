@@ -12,7 +12,7 @@ import {
   type VisibilityState,
   type FilterFn,
 } from '@tanstack/react-table'
-import { useState, useMemo, useCallback } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
@@ -48,7 +48,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
-const PAGE_SIZE = 25
+const PAGE_SIZE = 50
 
 const globalFilterFn: FilterFn<Bid> = (row, _columnId, filterValue: string) => {
   const search = filterValue.toLowerCase()
@@ -175,6 +175,7 @@ export function DataTable({
     getPaginationRowModel: getPaginationRowModel(),
     globalFilterFn,
     initialState: { pagination: { pageSize: PAGE_SIZE } },
+    autoResetPageIndex: false,
     meta: { updateBid },
   })
 
@@ -184,6 +185,15 @@ export function DataTable({
   const pageCount = table.getPageCount()
   const firstRow = pageIndex * PAGE_SIZE + 1
   const lastRow = Math.min((pageIndex + 1) * PAGE_SIZE, filteredCount)
+
+  // Clamp the current page index to the valid range when data shrinks below it.
+  // autoResetPageIndex:false keeps us on our page across data refreshes, but if
+  // the dataset shrinks (e.g. filter removes pages), we'd be stranded past the end.
+  useEffect(() => {
+    if (pageCount > 0 && pageIndex >= pageCount) {
+      table.setPageIndex(pageCount - 1)
+    }
+  }, [pageCount, pageIndex, table])
 
   const columnLabels: Record<string, string> = {
     project_name: 'Project Name',
@@ -315,6 +325,14 @@ export function DataTable({
           </TableHeader>
 
           <TableBody>
+            {/* Ghost row — inline excel-style entry, rendered at the TOP so a
+                new bid is always one tab away regardless of how many rows exist. */}
+            {!loading && (
+              <GhostRow
+                visibleColumnIds={table.getVisibleLeafColumns().map((c) => c.id)}
+              />
+            )}
+
             {loading ? (
               Array.from({ length: 8 }).map((_, i) => (
                 <TableRow key={i} style={{ borderBottom: '1px solid var(--border)' }}>
@@ -360,13 +378,6 @@ export function DataTable({
                   })}
                 </TableRow>
               ))
-            )}
-
-            {/* Ghost row — inline excel-style entry */}
-            {!loading && (
-              <GhostRow
-                visibleColumnIds={table.getVisibleLeafColumns().map((c) => c.id)}
-              />
             )}
           </TableBody>
         </Table>

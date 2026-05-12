@@ -398,19 +398,24 @@ input[type=number] {
 }
 
 /* ── Bid Board: always-visible horizontal scrollbar ──
-   The shadcn Table wraps <table> in a div[data-slot="table-container"]
-   with its own overflow-x. We force that inner container to always
-   show a horizontal scrollbar (overflow: scroll, not auto), styled so
-   it's visible without hover regardless of OS scrollbar mode. */
+   The shadcn Table wraps <table> in a div[data-slot="table-container"].
+   We turn that container into the page's scroll viewport for the table
+   in BOTH axes and cap its height, so the horizontal scrollbar sits at
+   the bottom of the viewport (never buried below 50 rows of data) and
+   vertical scrolling stays inside the container. The sticky table header
+   inside the table latches to top:0 of this container while scrolling.
+   Uses 100dvh so mobile browser chrome doesn't push the scrollbar offscreen. */
 .bidboard-scroll [data-slot="table-container"] {
-  overflow-x: scroll;
-  overflow-y: visible;
+  overflow: auto;
+  max-height: calc(100dvh - 320px);
   scrollbar-gutter: stable;
   scrollbar-width: auto;
   scrollbar-color: rgba(148, 163, 184, 0.6) var(--surface2);
+  -webkit-overflow-scrolling: touch;
 }
 .bidboard-scroll [data-slot="table-container"]::-webkit-scrollbar {
   height: 12px;
+  width: 12px;
   background: var(--surface2);
 }
 .bidboard-scroll [data-slot="table-container"]::-webkit-scrollbar-track {
