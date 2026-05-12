@@ -41,6 +41,8 @@ function exportToCsv(bids: Bid[]) {
     'Project Name',
     'Client',
     'Scope',
+    'Scope Awarded',
+    'Scope Estimator',
     'Branch',
     'Estimator',
     'Bid Price',
@@ -52,13 +54,33 @@ function exportToCsv(bids: Bid[]) {
 
   const rows = bids.map((bid) => {
     const lineItems = bid.line_items ?? []
+
+    // Dedupe by scope while preserving the original row order so the three
+    // per-scope columns line up index-by-index.
+    const seen = new Set<string>()
+    const orderedItems = lineItems.filter((li) => {
+      if (seen.has(li.scope)) return false
+      seen.add(li.scope)
+      return true
+    })
+
     const clients = (bid.clients ?? []).map(getBidClientName).filter(Boolean).join('; ')
-    const scopes = [...new Set(lineItems.map((li) => li.scope))].join('; ')
+    const scopes = orderedItems.map((li) => li.scope).join('; ')
+    const scopeAwarded = orderedItems.map((li) => (li.is_awarded ? 'Yes' : 'No')).join('; ')
+    const scopeEstimator = orderedItems
+      .map((li) =>
+        li.estimator_id
+          ? li.estimator_name ?? 'Unknown'
+          : bid.estimator_name ?? 'Unassigned',
+      )
+      .join('; ')
     const hasPrice = lineItems.some((li) => li.price !== null)
     return [
       bid.project_name,
       clients,
       scopes,
+      scopeAwarded,
+      scopeEstimator,
       bid.branch,
       bid.estimator_name ?? 'Unassigned',
       hasPrice ? formatCurrencyRaw(bid.total_price ?? 0) : 'TBD',

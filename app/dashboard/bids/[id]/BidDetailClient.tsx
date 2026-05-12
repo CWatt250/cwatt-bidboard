@@ -25,6 +25,8 @@ import {
 } from '@/config/colors'
 import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
 import { InlinePriceCell } from '@/components/bids/InlinePriceCell'
+import { InlineAwardedCell } from '@/components/bids/InlineAwardedCell'
+import { InlineScopeEstimatorCell } from '@/components/bids/InlineScopeEstimatorCell'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
 import type { BidStatus, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
@@ -523,8 +525,10 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
             </CardHeader>
             <CardContent className="space-y-3 p-6">
               <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_140px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                <div className="grid grid-cols-[32px_1fr_150px_110px] gap-2 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span className="text-center" title="Awarded">Won</span>
                   <span>Scope</span>
+                  <span>Estimator</span>
                   <span className="text-right">Price</span>
                 </div>
                 {scopeOnlyItems.length === 0 ? (
@@ -541,11 +545,46 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   scopeOnlyItems.map((li) => (
                     <div
                       key={li.id}
-                      className="grid grid-cols-[1fr_140px] gap-2 px-3 py-2 items-center border-b"
+                      className="grid grid-cols-[32px_1fr_150px_110px] gap-2 px-3 py-2 items-center border-b"
+                      style={{
+                        borderLeft: li.is_awarded ? '3px solid var(--green, #16a34a)' : '3px solid transparent',
+                        background: li.is_awarded ? 'rgba(22,163,74,0.04)' : undefined,
+                      }}
                     >
-                      <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs w-fit ${SCOPE_BADGE_CLASSES[li.scope]}`}>
-                        {li.scope}
+                      <InlineAwardedCell
+                        lineItemId={li.id}
+                        bidId={bidId}
+                        bidStatus={bid.status}
+                        userId={profile?.id ?? null}
+                        scope={li.scope}
+                        initialIsAwarded={li.is_awarded}
+                      />
+                      <span className="flex items-center gap-1.5 min-w-0">
+                        <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs w-fit ${SCOPE_BADGE_CLASSES[li.scope]}`}>
+                          {li.scope}
+                        </span>
+                        {li.is_awarded && (
+                          <span
+                            className="inline-flex items-center rounded px-1.5 py-0 text-[10px] font-bold uppercase tracking-wider"
+                            style={{
+                              background: 'rgba(22,163,74,0.12)',
+                              color: 'var(--green, #16a34a)',
+                              letterSpacing: '0.05em',
+                            }}
+                            title="This scope was awarded"
+                          >
+                            Won
+                          </span>
+                        )}
                       </span>
+                      <InlineScopeEstimatorCell
+                        lineItemId={li.id}
+                        bidId={bidId}
+                        userId={profile?.id ?? null}
+                        scope={li.scope}
+                        initialEstimatorId={li.estimator_id}
+                        leadEstimatorName={bid.estimator_name}
+                      />
                       <InlinePriceCell
                         lineItemId={li.id}
                         bidId={bidId}
@@ -557,13 +596,15 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   ))
                 )}
                 {scopeOnlyItems.length > 0 && (
-                  <div className="grid grid-cols-[1fr_140px] gap-2 bg-muted/40 px-3 py-2 items-center">
+                  <div className="grid grid-cols-[32px_1fr_150px_110px] gap-2 bg-muted/40 px-3 py-2 items-center">
+                    <span />
                     <span
                       className="text-xs font-bold uppercase tracking-wider"
                       style={{ color: 'var(--text2)' }}
                     >
                       Total
                     </span>
+                    <span />
                     <span
                       className="text-right text-base font-bold tabular-nums"
                       style={{

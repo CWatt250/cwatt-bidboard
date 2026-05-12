@@ -64,7 +64,10 @@ const ALL_SCOPES: BidScope[] = [
 ]
 
 function mapBidRow(row: any): Bid {
-  const line_items: BidLineItem[] = row.bid_line_items ?? []
+  const line_items: BidLineItem[] = (row.bid_line_items ?? []).map((li: any) => ({
+    ...li,
+    estimator_name: li.estimator?.name ?? null,
+  }))
   const clients: BidClient[] = row.bid_clients ?? []
   const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
   return {
@@ -76,7 +79,22 @@ function mapBidRow(row: any): Bid {
   }
 }
 
-function computeStats(bids: Bid[]): DashboardStats {
+/** Returns true when `userId` either leads `bid` or owns at least one of its line items. */
+export function userIsOnBid(bid: Bid, userId: string): boolean {
+  if (bid.estimator_id === userId) return true
+  return (bid.line_items ?? []).some((li) => li.estimator_id === userId)
+}
+
+/** Sum of line-item prices the given user is responsible for on a single bid. */
+export function userBidValue(bid: Bid, userId: string): number {
+  return (bid.line_items ?? []).reduce((sum, li) => {
+    const owner = li.estimator_id ?? bid.estimator_id
+    if (owner !== userId) return sum
+    return sum + (li.price ?? 0)
+  }, 0)
+}
+
+function computeStats(bids: Bid[], userId: string | null): DashboardStats {
   const now = new Date()
   const todayStr = now.toISOString().slice(0, 10)
   const weekLater = new Date(now)
@@ -88,12 +106,18 @@ function computeStats(bids: Bid[]): DashboardStats {
 
   const activeBids = bids.filter((b) => b.status === 'Bidding' || b.status === 'In Progress')
 
+  // Pipeline value: sum per-user scope value when we know who the user is so a
+  // partial assignment (some scopes only) doesn't credit the full bid total.
+  const pipelineValue = userId
+    ? activeBids.reduce((sum, b) => sum + userBidValue(b, userId), 0)
+    : activeBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+
   return {
     activeCount: activeBids.length,
     sentCount: bids.filter((b) => b.status === 'Sent').length,
     awardedCount: bids.filter((b) => b.status === 'Awarded').length,
     lostCount: bids.filter((b) => b.status === 'Lost').length,
-    pipelineValue: activeBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0),
+    pipelineValue,
     bidsDueThisWeek: bids.filter(
       (b) =>
         b.bid_due_date >= todayStr &&
@@ -132,26 +156,50 @@ function computeEstimatorBreakdown(
 ): EstimatorBreakdown[] {
   const map = new Map<string, EstimatorBreakdown>()
 
-  for (const bid of bids) {
-    if (!bid.estimator_id || !bid.estimator_name) continue
-    if (!map.has(bid.estimator_id)) {
-      map.set(bid.estimator_id, {
-        id: bid.estimator_id,
-        name: bid.estimator_name,
-        branch: profileBranches[bid.estimator_id] ?? '',
+  function ensure(id: string, name: string) {
+    if (!map.has(id)) {
+      map.set(id, {
+        id,
+        name,
+        branch: profileBranches[id] ?? '',
         activeBids: 0,
         sentCount: 0,
         awardedCount: 0,
         pipelineValue: 0,
       })
     }
-    const entry = map.get(bid.estimator_id)!
-    if (bid.status === 'Bidding' || bid.status === 'In Progress') {
-      entry.activeBids++
-      entry.pipelineValue += bid.total_price ?? 0
+    return map.get(id)!
+  }
+
+  // Build a set of (estimatorId → bidIds touched) so activeBids/sentCount/awardedCount
+  // reflect "bids the estimator has any responsibility on", not just bids they lead.
+  const seen = new Map<string, Set<string>>()
+
+  for (const bid of bids) {
+    const owners = new Map<string, string>() // estimatorId → estimator name
+    if (bid.estimator_id && bid.estimator_name) {
+      owners.set(bid.estimator_id, bid.estimator_name)
     }
-    if (bid.status === 'Sent') entry.sentCount++
-    if (bid.status === 'Awarded') entry.awardedCount++
+    for (const li of bid.line_items ?? []) {
+      const ownerId = li.estimator_id ?? bid.estimator_id
+      const ownerName = li.estimator_id ? li.estimator_name : bid.estimator_name
+      if (ownerId && ownerName) owners.set(ownerId, ownerName)
+    }
+
+    for (const [ownerId, ownerName] of owners) {
+      const entry = ensure(ownerId, ownerName)
+      if (!seen.has(ownerId)) seen.set(ownerId, new Set())
+      const seenBids = seen.get(ownerId)!
+      if (!seenBids.has(bid.id)) {
+        seenBids.add(bid.id)
+        if (bid.status === 'Bidding' || bid.status === 'In Progress') entry.activeBids++
+        if (bid.status === 'Sent') entry.sentCount++
+        if (bid.status === 'Awarded') entry.awardedCount++
+      }
+      if (bid.status === 'Bidding' || bid.status === 'In Progress') {
+        entry.pipelineValue += userBidValue(bid, ownerId)
+      }
+    }
   }
 
   return Array.from(map.values()).sort((a, b) => b.pipelineValue - a.pipelineValue)
@@ -206,18 +254,21 @@ export function useDashboard(): UseDashboardResult {
       created_at,
       updated_at,
       profiles!bids_estimator_id_fkey(name),
-      bid_line_items(*),
+      bid_line_items(*, estimator:profiles!bid_line_items_estimator_id_fkey(name)),
       bid_clients(*, clients(name))
     `
 
-    // Personal query: always filter by logged-in user for KPIs
+    // Personal query: fetch by branch scope (or all for admin), then filter
+    // client-side so a user picks up bids they own a scope on, not just bids
+    // they lead. PostgREST doesn't support `OR` across a joined table, so the
+    // intersection has to happen in JS.
     let query = supabase
       .from('bids')
       .select(BID_QUERY)
       .order('created_at', { ascending: false })
 
-    if (profile) {
-      query = query.eq('estimator_id', profile.id)
+    if (!isAdmin && userBranches.length > 0) {
+      query = query.in('branch', userBranches)
     }
 
     // Build org-wide and profile queries for Admin/BranchManager (run in parallel with personal query)
@@ -257,7 +308,11 @@ export function useDashboard(): UseDashboardResult {
       return
     }
 
-    const bids: Bid[] = (data ?? []).map(mapBidRow)
+    const allFetched: Bid[] = (data ?? []).map(mapBidRow)
+    // "Personal" bids = bids the user leads OR owns at least one scope on.
+    const bids: Bid[] = profile
+      ? allFetched.filter((b) => userIsOnBid(b, profile.id))
+      : allFetched
     const orgBids: Bid[] = (orgResult.data ?? []).map(mapBidRow)
 
     let profileBranches: Record<string, string> = {}
@@ -271,7 +326,7 @@ export function useDashboard(): UseDashboardResult {
       }
     }
 
-    const stats = computeStats(bids)
+    const stats = computeStats(bids, profile?.id ?? null)
     stats.totalActiveEstimators = totalActiveEstimators
 
     const recentBids = bids.slice(0, 8)

@@ -69,7 +69,7 @@ export function useBid(id: string): UseBidResult {
         created_at,
         updated_at,
         profiles!bids_estimator_id_fkey(name),
-        bid_line_items(*),
+        bid_line_items(*, estimator:profiles!bid_line_items_estimator_id_fkey(name)),
         bid_clients(*, clients(name))
       `)
       .eq('id', id)
@@ -98,7 +98,10 @@ export function useBid(id: string): UseBidResult {
       }
     }
 
-    const line_items: BidLineItem[] = bidData.bid_line_items ?? []
+    const line_items: BidLineItem[] = (bidData.bid_line_items ?? []).map((li: any) => ({
+      ...li,
+      estimator_name: li.estimator?.name ?? null,
+    }))
     const clients: BidClient[] = bidData.bid_clients ?? []
     const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
     setBid({

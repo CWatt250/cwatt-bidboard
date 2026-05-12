@@ -41,7 +41,7 @@ export function useBids(): UseBidsResult {
         created_at,
         updated_at,
         profiles!bids_estimator_id_fkey(name),
-        bid_line_items(*),
+        bid_line_items(*, estimator:profiles!bid_line_items_estimator_id_fkey(name)),
         bid_clients(*, clients(name))
       `)
       .order('created_at', { ascending: false })
@@ -65,7 +65,10 @@ export function useBids(): UseBidsResult {
     }
 
     const mapped: Bid[] = (data ?? []).map((row: any) => {
-      const line_items: BidLineItem[] = row.bid_line_items ?? []
+      const line_items: BidLineItem[] = (row.bid_line_items ?? []).map((li: any) => ({
+        ...li,
+        estimator_name: li.estimator?.name ?? null,
+      }))
       const clients: BidClient[] = row.bid_clients ?? []
       const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
       return {
@@ -126,14 +129,17 @@ export function useBids(): UseBidsResult {
           created_at,
           updated_at,
           profiles!bids_estimator_id_fkey(name),
-          bid_line_items(*),
+          bid_line_items(*, estimator:profiles!bid_line_items_estimator_id_fkey(name)),
           bid_clients(*, clients(name))
         `)
         .eq('id', bidId)
         .single()
 
       if (!data) return null
-      const line_items: BidLineItem[] = (data as any).bid_line_items ?? []
+      const line_items: BidLineItem[] = ((data as any).bid_line_items ?? []).map((li: any) => ({
+        ...li,
+        estimator_name: li.estimator?.name ?? null,
+      }))
       const clients: BidClient[] = (data as any).bid_clients ?? []
       const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
       return {

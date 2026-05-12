@@ -46,6 +46,10 @@ export interface BidLineItem {
   client: string | null
   scope: BidScope
   price: number | null
+  is_awarded: boolean
+  estimator_id: string | null
+  /** Joined from profiles via bid_line_items.estimator_id — null when not overridden */
+  estimator_name?: string | null
   created_at: string
   updated_at: string
 }
