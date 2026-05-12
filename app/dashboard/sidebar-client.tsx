@@ -19,6 +19,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { useUserRole } from '@/contexts/userRole'
 import { createClient } from '@/lib/supabase/client'
+import { InstallAppButton } from '@/components/pwa/InstallAppButton'
 
 const STORAGE_KEY = 'bidwatt:sidebar-collapsed'
 const EXPANDED_WIDTH = 192
@@ -183,6 +184,17 @@ export function Sidebar({ profiles: _profiles }: { profiles: Profile[] }) {
           />
         )}
       </nav>
+
+      {/* Install App — only renders when the browser has offered a PWA install prompt. */}
+      <div
+        style={{
+          padding: collapsed ? '8px' : '8px 12px',
+          display: 'flex',
+          justifyContent: 'center',
+        }}
+      >
+        <InstallAppButton collapsed={collapsed} className="w-full justify-center" />
+      </div>
 
       {/* User info + branch badges */}
       {profile && !collapsed && (

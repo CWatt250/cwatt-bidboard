@@ -2,7 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans, IBM_Plex_Mono } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
-import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
+import { ServiceWorkerRegister } from "@/components/pwa/ServiceWorkerRegister";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -19,11 +19,24 @@ const ibmPlexMono = IBM_Plex_Mono({
 export const metadata: Metadata = {
   title: "BidWatt",
   description: "Bid management dashboard",
-  manifest: "/manifest.json",
+  applicationName: "BidWatt",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "BidWatt",
+  },
+  icons: {
+    icon: [
+      { url: "/icons/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/icons/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
+    shortcut: "/icons/favicon-32.png",
+  },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#1e3a5f",
+  themeColor: "#0F2340",
 };
 
 export default function RootLayout({
@@ -39,7 +52,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         {children}
         <Toaster />
-        <ServiceWorkerRegistration />
+        <ServiceWorkerRegister />
       </body>
     </html>
   );

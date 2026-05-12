@@ -1,1 +1,3 @@
-self.addEventListener('fetch', function(event) {});
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()))
+self.addEventListener('fetch', () => {}) // intentional no-op
