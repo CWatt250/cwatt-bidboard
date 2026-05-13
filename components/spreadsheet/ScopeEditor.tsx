@@ -184,9 +184,12 @@ export function ScopeEditor({
       }))
 
       if (upsertRows.length > 0) {
+        // defaultToNull:false → rows missing `id` use the column DEFAULT
+        // (gen_random_uuid) instead of being sent as id=null, which would
+        // violate the PK on inserts mixed alongside updates.
         const { error } = await supabase
           .from('bid_line_items')
-          .upsert(upsertRows, { onConflict: 'id' })
+          .upsert(upsertRows, { onConflict: 'id', defaultToNull: false })
         if (error) throw error
       }
 

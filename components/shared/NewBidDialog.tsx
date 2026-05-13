@@ -195,6 +195,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
   const [submitting, setSubmitting] = useState(false)
   const [createAsUnassigned, setCreateAsUnassigned] = useState(false)
   const [dupWarningOpen, setDupWarningOpen] = useState(false)
+  const [allClients, setAllClients] = useState<string[]>([])
   const pendingValuesRef = useRef<NewBidForm | null>(null)
 
   const { profile } = useUserRole()
@@ -247,6 +248,23 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
       }
     })
   }, [open, defaultProjectName, profile?.id, reset, setValue])
+
+  // Fetch master clients list once per dialog open for the client picker.
+  useEffect(() => {
+    if (!open) return
+    const supabase = createClient()
+    supabase
+      .from('clients')
+      .select('name')
+      .order('name', { ascending: true })
+      .then(({ data }) => {
+        setAllClients(
+          ((data ?? []) as { name: string }[])
+            .map((r) => r.name)
+            .filter(Boolean)
+        )
+      })
+  }, [open])
 
   const watchedProjectName = watch('project_name') ?? ''
   const { matches: duplicateMatches } = useDuplicateProjectCheck(watchedProjectName)
@@ -576,11 +594,39 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
                 return (
                   <div key={field.id} className="space-y-2">
                     <div className="grid grid-cols-[1fr_1fr_32px] gap-2 items-start">
-                      <div>
-                        <Input
-                          {...register(`line_items.${index}.client`)}
-                          placeholder="Client name (optional)"
-                          className="h-8 text-sm"
+                      <div className="space-y-1">
+                        <Controller
+                          name={`line_items.${index}.client`}
+                          control={control}
+                          render={({ field }) => {
+                            const current = field.value ?? ''
+                            const selectValue = allClients.includes(current) ? current : ''
+                            return (
+                              <>
+                                <Select
+                                  value={selectValue}
+                                  onValueChange={(v) => field.onChange(v)}
+                                >
+                                  <SelectTrigger className="w-full h-8 text-sm">
+                                    <SelectValue placeholder="Pick a client…" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {allClients.map((c) => (
+                                      <SelectItem key={c} value={c}>
+                                        {c}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Input
+                                  value={current}
+                                  onChange={(e) => field.onChange(e.target.value)}
+                                  placeholder="…or type a new client name"
+                                  className="h-7 text-xs"
+                                />
+                              </>
+                            )
+                          }}
                         />
                       </div>
 

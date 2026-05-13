@@ -552,6 +552,17 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                     )}
                   </p>
                 </div>
+                {scopeOnlyItems.length > 0 && (
+                  <ScopeEditor
+                    bid={bid}
+                    trigger={
+                      <Button variant="outline" size="sm" type="button">
+                        <PlusIcon className="size-3.5 mr-1" />
+                        Add Scope
+                      </Button>
+                    }
+                  />
+                )}
               </div>
             </CardHeader>
             <CardContent className="space-y-3 p-6">
@@ -649,15 +660,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                 )}
               </div>
 
-              {scopeOnlyItems.length > 0 && (
-                <div className="flex justify-end">
-                  <ScopeEditor
-                    bid={bid}
-                    triggerClassName="text-xs font-medium text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded hover:bg-muted/60"
-                    trigger={<span>Edit scopes</span>}
-                  />
-                </div>
-              )}
             </CardContent>
           </Card>
 
