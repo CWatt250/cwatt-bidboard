@@ -15,7 +15,17 @@ interface UseBidsResult {
   error: string | null
 }
 
-export function useBids(): UseBidsResult {
+interface UseBidsOptions {
+  /**
+   * When true, skip the "estimator sees only own + unassigned" narrowing
+   * applied to estimator-role users. Branch-level RLS / branch filter still
+   * applies. Used by the Calendar, which is intentionally branch-wide.
+   */
+  skipEstimatorSelfFilter?: boolean
+}
+
+export function useBids(options: UseBidsOptions = {}): UseBidsResult {
+  const { skipEstimatorSelfFilter = false } = options
   const [bids, setBids] = useState<Bid[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -82,8 +92,9 @@ export function useBids(): UseBidsResult {
 
     let filtered = mapped
 
-    // Estimator: further filter to own bids only (estimator_id matches or unassigned)
-    if (isEstimator && profile) {
+    // Estimator: further filter to own bids only (estimator_id matches or unassigned).
+    // Calendar opts out via skipEstimatorSelfFilter so it stays branch-wide.
+    if (isEstimator && profile && !skipEstimatorSelfFilter) {
       filtered = filtered.filter((b) => b.estimator_id === profile.id || b.estimator_id === null)
     }
 
@@ -96,7 +107,7 @@ export function useBids(): UseBidsResult {
 
     setBids(filtered)
     setError(null)
-  }, [branch, scope, status, isAdmin, isBranchManager, isEstimator, userBranches, profile])
+  }, [branch, scope, status, isAdmin, isBranchManager, isEstimator, userBranches, profile, skipEstimatorSelfFilter])
 
   useEffect(() => {
     setLoading(true)

@@ -16,7 +16,6 @@ import { useFilters, type Branch, type Status } from '@/contexts/filters'
 import { useUserRole } from '@/contexts/userRole'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
-import type { Branch as DBBranch } from '@/lib/supabase/types'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
 import type { Bid } from '@/hooks/useBids'
 
@@ -73,8 +72,23 @@ function DateHeader({ date, label }: { date: Date; label: string }) {
 }
 
 export default function CalendarPage() {
-  const { bids, loading } = useBids()
-  const events = useMemo(() => transformBidsToEvents(bids), [bids])
+  // Calendar is branch-wide: bids in the user's branch(es), regardless of
+  // estimator assignment. Branch-level filter still applies via useBids.
+  const { bids, loading } = useBids({ skipEstimatorSelfFilter: true })
+
+  const { branch, status, setBranch, setStatus } = useFilters()
+  const [estimator, setEstimator] = useState<string>('All')
+  const { isAdmin, branches: userBranches } = useUserRole()
+  const { profiles } = useBidDetail()
+
+  // Apply the local Estimator filter on top of the branch- and status-filtered
+  // bids that useBids already returned.
+  const visibleBids = useMemo(() => {
+    if (estimator === 'All') return bids
+    return bids.filter((b) => b.estimator_id === estimator)
+  }, [bids, estimator])
+
+  const events = useMemo(() => transformBidsToEvents(visibleBids), [visibleBids])
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -110,39 +124,25 @@ export default function CalendarPage() {
     return {}
   }, [])
 
-  const { branch, status, setBranch, setStatus } = useFilters()
-  const [estimator, setEstimator] = useState<string>('All')
-  const { isAdmin, isBranchManager, isEstimator, branches: userBranches } = useUserRole()
-  const { profiles } = useBidDetail()
-
-  const branchOptions: { value: Branch; label: string }[] = (() => {
-    if (isAdmin) {
-      return [
+  // Branch filter: admin sees all 5; non-admin sees only their assigned branches.
+  const branchOptions: { value: Branch; label: string }[] = isAdmin
+    ? [
         { value: 'All', label: 'All Branches' },
-        ...ALL_BRANCHES.map((b) => ({ value: b, label: (BRANCH_LABELS as Record<string, string>)[b] ?? b })),
+        ...ALL_BRANCHES.map((b) => ({
+          value: b,
+          label: (BRANCH_LABELS as Record<string, string>)[b] ?? b,
+        })),
       ]
-    }
-    if (isBranchManager) {
-      return [
+    : [
         { value: 'All', label: 'All My Branches' },
-        ...userBranches.map((b) => ({ value: b as Branch, label: BRANCH_LABELS[b] ?? b })),
+        ...userBranches.map((b) => ({
+          value: b as Branch,
+          label: BRANCH_LABELS[b] ?? b,
+        })),
       ]
-    }
-    return []
-  })()
 
-  const estimatorOptions = (() => {
-    if (isAdmin) return profiles
-    if (isBranchManager) {
-      return profiles.filter((p) =>
-        (p.branches ?? []).some((b) => userBranches.includes(b as DBBranch))
-      )
-    }
-    return []
-  })()
-
-  const showBranchFilter = isAdmin || isBranchManager
-  const showEstimatorFilter = isAdmin || isBranchManager
+  // Estimator filter shows the full list of estimators regardless of viewer role.
+  const estimatorOptions = profiles
 
   return (
     <div className="flex flex-col h-full gap-4 p-4">
@@ -170,32 +170,28 @@ export default function CalendarPage() {
           Filters
         </span>
 
-        {showBranchFilter && (
-          <select
-            value={branch}
-            onChange={(e) => setBranch(e.target.value as Branch)}
-            style={selectStyle}
-            aria-label="Filter by branch"
-          >
-            {branchOptions.map((b) => (
-              <option key={b.value} value={b.value}>{b.label}</option>
-            ))}
-          </select>
-        )}
+        <select
+          value={branch}
+          onChange={(e) => setBranch(e.target.value as Branch)}
+          style={selectStyle}
+          aria-label="Filter by branch"
+        >
+          {branchOptions.map((b) => (
+            <option key={b.value} value={b.value}>{b.label}</option>
+          ))}
+        </select>
 
-        {showEstimatorFilter && (
-          <select
-            value={estimator}
-            onChange={(e) => setEstimator(e.target.value)}
-            style={selectStyle}
-            aria-label="Filter by estimator"
-          >
-            <option value="All">All Estimators</option>
-            {estimatorOptions.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-        )}
+        <select
+          value={estimator}
+          onChange={(e) => setEstimator(e.target.value)}
+          style={selectStyle}
+          aria-label="Filter by estimator"
+        >
+          <option value="All">All Estimators</option>
+          {estimatorOptions.map((p) => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
 
         <select
           value={status}
