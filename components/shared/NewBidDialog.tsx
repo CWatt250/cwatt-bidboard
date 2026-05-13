@@ -5,12 +5,14 @@ import { useForm, Controller, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
+import { AlertTriangleIcon, ChevronDownIcon, PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { ensureClientId } from '@/lib/clients'
 import { useUserRole } from '@/contexts/userRole'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { useDuplicateProjectCheck } from '@/hooks/useDuplicateProjectCheck'
+import { DuplicateProjectWarning } from '@/components/shared/DuplicateProjectWarning'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -192,6 +194,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
   const setOpen = externalOnOpenChange ?? setInternalOpen
   const [submitting, setSubmitting] = useState(false)
   const [createAsUnassigned, setCreateAsUnassigned] = useState(false)
+  const [dupWarningOpen, setDupWarningOpen] = useState(false)
+  const pendingValuesRef = useRef<NewBidForm | null>(null)
 
   const { profile } = useUserRole()
   const { profiles } = useBidDetail()
@@ -244,6 +248,9 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     })
   }, [open, defaultProjectName, profile?.id, reset, setValue])
 
+  const watchedProjectName = watch('project_name') ?? ''
+  const { matches: duplicateMatches } = useDuplicateProjectCheck(watchedProjectName)
+
   const watchedItems = watch('line_items')
   const totalPreview = (watchedItems ?? []).reduce((sum, item) => {
     return sum + (item.scope_prices ?? []).reduce((s, sp) => {
@@ -258,7 +265,28 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     })
   )
 
-  async function onSubmit(values: NewBidForm) {
+  function onSubmit(values: NewBidForm) {
+    if (duplicateMatches.length > 0) {
+      pendingValuesRef.current = values
+      setDupWarningOpen(true)
+      return
+    }
+    return performCreate(values)
+  }
+
+  function handleCreateAnyway() {
+    const values = pendingValuesRef.current
+    setDupWarningOpen(false)
+    pendingValuesRef.current = null
+    if (values) void performCreate(values)
+  }
+
+  function handleCancelDuplicate() {
+    pendingValuesRef.current = null
+    setDupWarningOpen(false)
+  }
+
+  async function performCreate(values: NewBidForm) {
     setSubmitting(true)
     const supabase = createClient()
 
@@ -402,6 +430,17 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
             />
             {errors.project_name && (
               <p className="text-xs text-destructive">{errors.project_name.message}</p>
+            )}
+            {duplicateMatches.length > 0 && !errors.project_name && (
+              <p
+                className="flex items-center gap-1 text-xs"
+                style={{ color: '#854F0B' }}
+              >
+                <AlertTriangleIcon className="size-3" />
+                {duplicateMatches.length === 1
+                  ? '1 existing bid with this name'
+                  : `${duplicateMatches.length} existing bids with this name`}
+              </p>
             )}
           </div>
 
@@ -655,6 +694,15 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
           </DialogFooter>
         </form>
       </DialogContent>
+
+      <DuplicateProjectWarning
+        open={dupWarningOpen}
+        onOpenChange={setDupWarningOpen}
+        attemptedName={watchedProjectName.trim()}
+        existingBids={duplicateMatches}
+        onCreateAnyway={handleCreateAnyway}
+        onCancel={handleCancelDuplicate}
+      />
     </Dialog>
   )
 }

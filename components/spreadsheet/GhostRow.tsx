@@ -1,13 +1,15 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { CheckIcon, XIcon } from 'lucide-react'
+import { AlertTriangleIcon, CheckIcon, XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { ensureClientId } from '@/lib/clients'
 import { logActivity } from '@/lib/activity'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
+import { useDuplicateProjectCheck } from '@/hooks/useDuplicateProjectCheck'
+import { DuplicateProjectWarning } from '@/components/shared/DuplicateProjectWarning'
 import type { BidBranch, BidScope, BidStatus } from '@/lib/supabase/types'
 import { parseLooseDate } from '@/lib/utils'
 import { TableCell, TableRow } from '@/components/ui/table'
@@ -82,7 +84,10 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
   const [dueDateText, setDueDateText] = useState('')
   const [saving, setSaving] = useState(false)
   const [allClientNames, setAllClientNames] = useState<string[]>([])
+  const [dupWarningOpen, setDupWarningOpen] = useState(false)
   const projectNameRef = useRef<HTMLInputElement>(null)
+
+  const { matches: duplicateMatches } = useDuplicateProjectCheck(ghost.project_name)
 
   useEffect(() => {
     const supabase = createClient()
@@ -134,8 +139,6 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
 
   async function commit() {
     if (saving) return
-    console.log('[GhostRow] commit() start', { ghost, dueDateText })
-
     if (!ghost.project_name.trim()) {
       toast.error('Project name is required.')
       projectNameRef.current?.focus()
@@ -150,6 +153,24 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       toast.error('Bid due date is required.')
       return
     }
+
+    if (duplicateMatches.length > 0) {
+      setDupWarningOpen(true)
+      return
+    }
+
+    await performCommit(isoDue)
+  }
+
+  function handleCreateAnyway() {
+    setDupWarningOpen(false)
+    const isoDue = ghost.bid_due_date || parseLooseDate(dueDateText)
+    if (!isoDue) return
+    void performCommit(isoDue)
+  }
+
+  async function performCommit(isoDue: string) {
+    console.log('[GhostRow] commit() start', { ghost, dueDateText })
 
     setSaving(true)
     const supabase = createClient()
@@ -242,16 +263,35 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
     switch (colId) {
       case 'project_name':
         return (
-          <input
-            ref={projectNameRef}
-            type="text"
-            value={ghost.project_name}
-            placeholder="Start typing a project name…"
-            onChange={(e) => setGhost((g) => ({ ...g, project_name: e.target.value }))}
-            onKeyDown={handleEnter}
-            className="ghost-cell-input"
-            style={cellInputStyle}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <input
+              ref={projectNameRef}
+              type="text"
+              value={ghost.project_name}
+              placeholder="Start typing a project name…"
+              onChange={(e) => setGhost((g) => ({ ...g, project_name: e.target.value }))}
+              onKeyDown={handleEnter}
+              className="ghost-cell-input"
+              style={cellInputStyle}
+            />
+            {duplicateMatches.length > 0 && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 3,
+                  fontSize: '0.7rem',
+                  color: '#854F0B',
+                  lineHeight: 1.2,
+                }}
+              >
+                <AlertTriangleIcon size={10} />
+                {duplicateMatches.length === 1
+                  ? '1 existing bid with this name'
+                  : `${duplicateMatches.length} existing bids with this name`}
+              </span>
+            )}
+          </div>
         )
 
       case 'project_location':
@@ -500,6 +540,14 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
           </TableCell>
         ))}
       </TableRow>
+      <DuplicateProjectWarning
+        open={dupWarningOpen}
+        onOpenChange={setDupWarningOpen}
+        attemptedName={ghost.project_name.trim()}
+        existingBids={duplicateMatches}
+        onCreateAnyway={handleCreateAnyway}
+        onCancel={() => setDupWarningOpen(false)}
+      />
     </>
   )
 }
