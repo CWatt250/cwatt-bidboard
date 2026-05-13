@@ -118,7 +118,9 @@ export function DataTable({
 }: DataTableProps) {
   const { openBid } = useBidDetail()
   const { profile } = useUserRole()
-  const [sorting, setSorting] = useState<SortingState>([])
+  const [sorting, setSorting] = useState<SortingState>([
+    { id: 'bid_due_date', desc: true },
+  ])
   const [globalFilter, setGlobalFilter] = useState('')
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({
     project_location: true,

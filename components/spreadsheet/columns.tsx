@@ -366,6 +366,15 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
       minSize: 80,
       maxSize: 140,
       header: ({ column }) => <SortableHeader label="Bid Due Date" column={column} />,
+      // Treat null as smallest so descending lands null due dates at the bottom.
+      sortingFn: (rowA, rowB) => {
+        const a = rowA.original.bid_due_date
+        const b = rowB.original.bid_due_date
+        if (a == null && b == null) return 0
+        if (a == null) return -1
+        if (b == null) return 1
+        return a < b ? -1 : a > b ? 1 : 0
+      },
       cell: ({ row }) => (
         <InlineDateCell
           bidId={row.original.id}
