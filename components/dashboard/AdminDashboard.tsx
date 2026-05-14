@@ -5,6 +5,10 @@ import { useRouter } from 'next/navigation'
 import {
   AreaChart,
   Area,
+  BarChart,
+  Bar,
+  Cell,
+  Tooltip,
   XAxis,
   YAxis,
   ResponsiveContainer,
@@ -470,242 +474,126 @@ function KpiCard({ label, accent, value, format, subtext, delta, sparkline }: Kp
   )
 }
 
-// ─── Glass pipeline column ─────────────────────────────────────────────────
+// ─── Pipeline bar chart ────────────────────────────────────────────────────
 
-const PIPELINE_STATUSES: BidStatus[] = ['In Progress', 'Sent', 'Awarded', 'Lost']
+const PIPELINE_BAR_STATUSES: BidStatus[] = ['Sent', 'Awarded', 'Lost', 'In Progress']
 
-interface PipelineSegment {
+interface PipelineBarDatum {
   status: BidStatus
+  value: number
   count: number
-  total: number
-  pct: number
   color: string
 }
 
-function GlassPipelineColumn({ bids }: { bids: Bid[] }) {
-  const { state: tipState, show: showTip, hide: hideTip } = useTooltip()
-  const [hovered, setHovered] = useState<BidStatus | null>(null)
-  const [progress, setProgress] = useState(0)
+interface PipelineBarTooltipProps {
+  active?: boolean
+  payload?: Array<{ payload: PipelineBarDatum }>
+}
 
-  // Drive 0→1 progress on mount and whenever the source bid set changes.
-  useEffect(() => {
-    if (typeof window === 'undefined') {
-      setProgress(1)
-      return
-    }
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      setProgress(1)
-      return
-    }
-    setProgress(0)
-    const start = performance.now()
-    let raf = 0
-    const step = (now: number) => {
-      const p = Math.min(1, (now - start) / 850)
-      const eased = 1 - Math.pow(1 - p, 3)
-      setProgress(eased)
-      if (p < 1) raf = requestAnimationFrame(step)
-    }
-    raf = requestAnimationFrame(step)
-    return () => cancelAnimationFrame(raf)
-  }, [bids])
+function PipelineBarTooltip({ active, payload }: PipelineBarTooltipProps) {
+  if (!active || !payload || payload.length === 0) return null
+  const { status, value, count, color } = payload[0].payload
+  return (
+    <div
+      style={{
+        background: 'rgba(15, 23, 42, 0.95)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: 8,
+        padding: '8px 12px',
+        fontSize: 12,
+        color: 'var(--dash-text)',
+        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.45)',
+      }}
+    >
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+        <span
+          aria-hidden="true"
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            background: color,
+            boxShadow: `0 0 6px ${color}`,
+          }}
+        />
+        <span style={{ fontWeight: 600 }}>{status}</span>
+      </div>
+      <div
+        style={{
+          fontFamily: '"IBM Plex Mono", monospace',
+          fontSize: 11,
+          color: 'var(--dash-text3)',
+        }}
+      >
+        {count} bid{count === 1 ? '' : 's'} · {formatCurrencyFull(value)}
+      </div>
+    </div>
+  )
+}
 
-  const segments = useMemo<PipelineSegment[]>(() => {
-    const totals = PIPELINE_STATUSES.map((status) => {
+function PipelineBarChart({ bids }: { bids: Bid[] }) {
+  const data = useMemo<PipelineBarDatum[]>(() => {
+    return PIPELINE_BAR_STATUSES.map((status) => {
       const matching = bids.filter((b) => b.status === status)
       return {
         status,
+        value: matching.reduce((sum, b) => sum + (b.total_price ?? 0), 0),
         count: matching.length,
-        total: matching.reduce((sum, b) => sum + (b.total_price ?? 0), 0),
         color: DARK_STATUS_COLORS[status],
-        pct: 0,
       }
     })
-    const grandTotal = totals.reduce((sum, t) => sum + t.total, 0)
-    return totals
-      .map((t) => ({ ...t, pct: grandTotal > 0 ? (t.total / grandTotal) * 100 : 0 }))
-      .filter((t) => t.total > 0)
-      .sort((a, b) => b.total - a.total)
   }, [bids])
 
-  const grandTotal = segments.reduce((sum, s) => sum + s.total, 0)
+  const total = data.reduce((sum, d) => sum + d.value, 0)
 
   return (
-    <div style={{ display: 'flex', gap: 22, alignItems: 'stretch' }}>
-      {/* Glass column */}
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-        <AnimNum
-          value={grandTotal}
-          format={formatCurrencyFull}
-          style={{
-            fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
-            fontSize: 13,
-            fontWeight: 500,
-            color: 'var(--dash-text)',
-            letterSpacing: '-0.2px',
-          }}
-        />
-        <div
-          style={{
-            position: 'relative',
-            width: 44,
-            height: 240,
-            borderRadius: 12,
-            background: 'rgba(255, 255, 255, 0.03)',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            overflow: 'hidden',
-          }}
-        >
-          {/* Grid lines at 25/50/75 */}
-          {[0.25, 0.5, 0.75].map((p) => (
-            <div
-              key={p}
-              aria-hidden="true"
-              style={{
-                position: 'absolute',
-                left: 0,
-                right: 0,
-                top: `${p * 100}%`,
-                height: 1,
-                background: 'rgba(255, 255, 255, 0.06)',
-              }}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <AnimNum
+        value={total}
+        format={formatCurrencyFull}
+        style={{
+          fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
+          fontSize: 22,
+          fontWeight: 500,
+          color: 'var(--dash-text)',
+          letterSpacing: '-0.4px',
+        }}
+      />
+      <div style={{ height: 220 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 8, right: 4, left: 0, bottom: 0 }}>
+            <XAxis
+              dataKey="status"
+              tick={{ fontSize: 10.5, fill: '#7d8aba', fontFamily: 'IBM Plex Mono, monospace' }}
+              axisLine={false}
+              tickLine={false}
             />
-          ))}
-          {/* Stacked segments (column-reverse + biggest-first sort = biggest at bottom) */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              display: 'flex',
-              flexDirection: 'column-reverse',
-            }}
-          >
-            {segments.map((seg) => {
-              const dimOther = hovered != null && hovered !== seg.status
-              return (
-                <div
-                  key={seg.status}
-                  onMouseEnter={(e) => {
-                    setHovered(seg.status)
-                    showTip(
-                      `${seg.status} · ${seg.count} bid${seg.count === 1 ? '' : 's'} · ${formatCurrencyFull(seg.total)} · ${seg.pct.toFixed(1)}%`,
-                      e.clientX,
-                      e.clientY,
-                    )
-                  }}
-                  onMouseMove={(e) =>
-                    showTip(
-                      `${seg.status} · ${seg.count} bid${seg.count === 1 ? '' : 's'} · ${formatCurrencyFull(seg.total)} · ${seg.pct.toFixed(1)}%`,
-                      e.clientX,
-                      e.clientY,
-                    )
-                  }
-                  onMouseLeave={() => {
-                    setHovered(null)
-                    hideTip()
-                  }}
-                  style={{
-                    height: `${seg.pct * progress}%`,
-                    background: `linear-gradient(180deg, ${seg.color}f2, ${seg.color}c0)`,
-                    boxShadow: `inset 0 1px 0 ${seg.color}66`,
-                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-                    opacity: dimOther ? 0.45 : 1,
-                    filter: hovered === seg.status ? `drop-shadow(0 0 8px ${seg.color})` : 'none',
-                    transition: 'opacity 200ms ease, filter 200ms ease',
-                    cursor: 'pointer',
-                  }}
-                />
-              )
-            })}
-          </div>
-          {/* Glass highlight overlay */}
-          <div
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              inset: 0,
-              background:
-                'linear-gradient(90deg, rgba(255,255,255,0.08), transparent 30%, transparent 70%, rgba(0,0,0,0.18))',
-              pointerEvents: 'none',
-            }}
-          />
-        </div>
-        <span
-          style={{
-            fontSize: 9.5,
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--dash-text3)',
-          }}
-        >
-          Pipeline
-        </span>
+            <YAxis
+              tickFormatter={(v: number) => formatCurrency(v)}
+              tick={{ fontSize: 10, fill: '#7d8aba', fontFamily: 'IBM Plex Mono, monospace' }}
+              axisLine={false}
+              tickLine={false}
+              width={48}
+              tickCount={5}
+            />
+            <Tooltip
+              cursor={{ fill: 'rgba(255, 255, 255, 0.04)' }}
+              content={<PipelineBarTooltip />}
+            />
+            <Bar
+              dataKey="value"
+              radius={[4, 4, 0, 0]}
+              maxBarSize={56}
+              isAnimationActive
+              animationDuration={600}
+            >
+              {data.map((d) => (
+                <Cell key={d.status} fill={d.color} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
-
-      {/* Legend */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
-        {segments.length === 0 ? (
-          <p style={{ fontSize: 12, color: 'var(--dash-text3)' }}>No active pipeline.</p>
-        ) : (
-          segments.map((seg) => {
-            const dim = hovered != null && hovered !== seg.status
-            return (
-              <div
-                key={seg.status}
-                onMouseEnter={() => setHovered(seg.status)}
-                onMouseLeave={() => setHovered(null)}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'auto 1fr auto',
-                  alignItems: 'center',
-                  gap: 12,
-                  opacity: dim ? 0.45 : 1,
-                  transition: 'opacity 200ms ease',
-                  cursor: 'pointer',
-                }}
-              >
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: seg.color,
-                      boxShadow: `0 0 6px ${seg.color}`,
-                    }}
-                  />
-                  <span style={{ fontSize: 12.5, color: 'var(--dash-text)', fontWeight: 500 }}>
-                    {seg.status}
-                  </span>
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"IBM Plex Mono", monospace',
-                    fontSize: 11,
-                    color: 'var(--dash-text3)',
-                  }}
-                >
-                  {seg.count} · {seg.pct.toFixed(0)}%
-                </span>
-                <span
-                  style={{
-                    fontFamily: '"IBM Plex Mono", monospace',
-                    fontSize: 13,
-                    color: 'var(--dash-text)',
-                    textAlign: 'right',
-                  }}
-                >
-                  {formatCurrency(seg.total)}
-                </span>
-              </div>
-            )
-          })
-        )}
-      </div>
-
-      <FloatingTooltip state={tipState} />
     </div>
   )
 }
@@ -1610,6 +1498,11 @@ export function AdminDashboard() {
     () => computeSecuredKpi(allBids, timeRange, now),
     [allBids, timeRange, now],
   )
+  // Pinned YTD card — always year-to-date, ignores the time-range filter.
+  const ytdSecuredKpi = useMemo(
+    () => computeSecuredKpi(allBids, 'this-year', now),
+    [allBids, now],
+  )
   const openKpi = useMemo(
     () => computeOpenKpi(allBids, timeRange, now),
     [allBids, timeRange, now],
@@ -1713,7 +1606,16 @@ export function AdminDashboard() {
         </header>
 
         {/* ── Row 1: KPI strip ─────────────────────────────────────── */}
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
+          <KpiCard
+            label="YTD Secured"
+            accent="#34d399"
+            value={ytdSecuredKpi.value}
+            format={formatCurrencyFull}
+            subtext={ytdSecuredKpi.subtext}
+            delta={ytdSecuredKpi.delta}
+            sparkline={ytdSecuredKpi.sparkline}
+          />
           <KpiCard
             label="Total Secured"
             accent="#34d399"
@@ -1788,7 +1690,7 @@ export function AdminDashboard() {
                 Bid value by stage
               </p>
             </header>
-            <GlassPipelineColumn bids={filteredBids} />
+            <PipelineBarChart bids={filteredBids} />
           </div>
           <PipelineTrend bids={filteredBids} now={now} />
         </section>
