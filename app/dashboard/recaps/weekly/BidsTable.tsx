@@ -9,8 +9,6 @@ interface BidsTableProps {
   title: string
   subtitle: string
   bids: Bid[]
-  /** Scales typography for Meeting Mode. 1 = normal, 1.4 = projector view. */
-  scale?: number
   emptyMessage?: string
 }
 
@@ -24,7 +22,6 @@ export function BidsTable({
   title,
   subtitle,
   bids,
-  scale = 1,
   emptyMessage = 'No bids in this range.',
 }: BidsTableProps) {
   const sorted = [...bids].sort((a, b) => {
@@ -47,13 +44,13 @@ export function BidsTable({
     >
       <header
         style={{
-          padding: `${10 * scale}px ${16 * scale}px`,
+          padding: '10px 16px',
           borderBottom: '0.5px solid var(--border)',
         }}
       >
         <h3
           style={{
-            fontSize: `${13 * scale}px`,
+            fontSize: '13px',
             fontWeight: 600,
             color: 'var(--text)',
             letterSpacing: '-0.2px',
@@ -63,7 +60,7 @@ export function BidsTable({
         </h3>
         <p
           style={{
-            fontSize: `${11 * scale}px`,
+            fontSize: '11px',
             color: 'var(--text3)',
             marginTop: 2,
           }}
@@ -75,9 +72,9 @@ export function BidsTable({
       {sorted.length === 0 ? (
         <p
           style={{
-            padding: `${24 * scale}px ${16 * scale}px`,
+            padding: '24px 16px',
             textAlign: 'center',
-            fontSize: `${12 * scale}px`,
+            fontSize: '12px',
             color: 'var(--text3)',
           }}
         >
@@ -89,7 +86,7 @@ export function BidsTable({
             style={{
               width: '100%',
               borderCollapse: 'collapse',
-              fontSize: `${12 * scale}px`,
+              fontSize: '12px',
             }}
           >
             <thead>
@@ -98,9 +95,9 @@ export function BidsTable({
                   <th
                     key={h}
                     style={{
-                      padding: `${8 * scale}px ${14 * scale}px`,
+                      padding: '8px 14px',
                       textAlign: h === 'Bid Price' ? 'right' : 'left',
-                      fontSize: `${10 * scale}px`,
+                      fontSize: '10px',
                       fontWeight: 700,
                       letterSpacing: '0.06em',
                       textTransform: 'uppercase',
@@ -145,32 +142,32 @@ export function BidsTable({
                   >
                     <td
                       style={{
-                        padding: `${10 * scale}px ${14 * scale}px`,
+                        padding: '10px 14px',
                         whiteSpace: 'nowrap',
                         fontWeight: 500,
                       }}
                     >
                       {due ? format(due, 'EEE, MMM d') : '—'}
                     </td>
-                    <td style={{ padding: `${10 * scale}px ${14 * scale}px` }}>
+                    <td style={{ padding: '10px 14px' }}>
                       <span
                         className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[bid.branch] ?? ''}`}
-                        style={{ fontSize: `${10 * scale}px` }}
+                        style={{ fontSize: '10px' }}
                       >
                         {bid.branch}
                       </span>
                     </td>
-                    <td style={{ padding: `${10 * scale}px ${14 * scale}px` }}>
+                    <td style={{ padding: '10px 14px' }}>
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium border ${STATUS_BADGE_CLASSES[bid.status]}`}
-                        style={{ fontSize: `${10 * scale}px` }}
+                        style={{ fontSize: '10px' }}
                       >
                         {bid.status}
                       </span>
                     </td>
                     <td
                       style={{
-                        padding: `${10 * scale}px ${14 * scale}px`,
+                        padding: '10px 14px',
                         fontWeight: 500,
                         maxWidth: 280,
                         overflow: 'hidden',
@@ -183,7 +180,7 @@ export function BidsTable({
                     </td>
                     <td
                       style={{
-                        padding: `${10 * scale}px ${14 * scale}px`,
+                        padding: '10px 14px',
                         color: 'var(--text3)',
                         maxWidth: 180,
                         overflow: 'hidden',
@@ -196,7 +193,7 @@ export function BidsTable({
                     </td>
                     <td
                       style={{
-                        padding: `${10 * scale}px ${14 * scale}px`,
+                        padding: '10px 14px',
                         color: 'var(--text3)',
                         maxWidth: 180,
                         overflow: 'hidden',
@@ -209,7 +206,7 @@ export function BidsTable({
                     </td>
                     <td
                       style={{
-                        padding: `${10 * scale}px ${14 * scale}px`,
+                        padding: '10px 14px',
                         textAlign: 'right',
                         fontFamily: '"IBM Plex Mono", monospace',
                         fontWeight: 500,

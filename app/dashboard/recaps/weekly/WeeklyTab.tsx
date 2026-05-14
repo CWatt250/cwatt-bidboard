@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react'
 import { format, subDays, isValid, startOfWeek } from 'date-fns'
-import { Maximize2 } from 'lucide-react'
 import { useRecapData } from '@/hooks/useRecapData'
 import {
   atRiskBids,
@@ -15,7 +14,6 @@ import {
 } from '@/lib/recap-aggregations'
 import { AtRiskCallout } from './AtRiskCallout'
 import { BidsTable } from './BidsTable'
-import { MeetingMode } from './MeetingMode'
 import { QuickTotalsRail } from './QuickTotalsRail'
 
 function formatCurrency(value: number): string {
@@ -42,7 +40,6 @@ export function WeeklyTab() {
   const [anchor, setAnchor] = useState<Date>(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   )
-  const [meetingOpen, setMeetingOpen] = useState(false)
 
   const thisWeek = useMemo(() => weekRange(anchor), [anchor])
   const lastWeek = useMemo(() => weekRange(subDays(anchor, 7)), [anchor])
@@ -202,33 +199,6 @@ export function WeeklyTab() {
               fontSize: '0.8rem',
             }}
           />
-          <button
-            type="button"
-            onClick={() => setMeetingOpen(true)}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 6,
-              height: 32,
-              padding: '0 12px',
-              borderRadius: 8,
-              border: '1px solid var(--border)',
-              background: 'var(--surface)',
-              color: 'var(--text)',
-              fontSize: '0.8rem',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-            onMouseEnter={(e) => {
-              (e.currentTarget as HTMLElement).style.background = 'var(--surface2)'
-            }}
-            onMouseLeave={(e) => {
-              (e.currentTarget as HTMLElement).style.background = 'var(--surface)'
-            }}
-          >
-            <Maximize2 size={14} aria-hidden="true" />
-            Meeting Mode
-          </button>
         </div>
       </div>
 
@@ -275,23 +245,6 @@ export function WeeklyTab() {
           }
         }
       `}</style>
-
-      <MeetingMode
-        open={meetingOpen}
-        onClose={() => setMeetingOpen(false)}
-        lastWeek={lastWeek}
-        thisWeek={thisWeek}
-        lastWeekBids={lastWeekBids}
-        thisWeekBids={thisWeekBids}
-        lastWeekTotals={lastWeekTotals}
-        thisWeekTotals={thisWeekTotals}
-        securedLastWeek={securedLastWeek}
-        verbalsLastWeek={verbalsLastWeek}
-        branchBreakdown={branchBreakdown}
-        atRisk={atRisk}
-        lastWeekSentCount={lastWeekSentCount}
-        thisWeekSentCount={thisWeekSentCount}
-      />
     </div>
   )
 }
