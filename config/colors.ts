@@ -68,3 +68,39 @@ export const BRANCH_BADGE_CLASSES: Record<string, string> = {
   PHX: 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300',
   SLC: 'bg-lime-100 text-lime-700 border-lime-200 dark:bg-lime-900/30 dark:text-lime-300',
 }
+
+// ─── Dark theme — Command Center admin dashboard only ──────────────────────
+// These coexist with the light exports above; only AdminDashboard.tsx reads
+// from them. Kanban / Bid Board / Calendar / Recaps continue to use the
+// light sets so the rest of the app's visual language is unchanged.
+
+/** Status accent colors for the dark command-center dashboard. */
+export const DARK_STATUS_COLORS: Record<BidStatus, string> = {
+  Unassigned: '#7d8aba',
+  Bidding: '#3b82f6',
+  'In Progress': '#f59e0b',
+  Sent: '#10b981',
+  Verbal: '#8b5cf6',
+  Awarded: '#34d399',
+  Lost: '#fb7185',
+}
+
+/** Branch accent colors for the dark command-center dashboard. */
+export const DARK_BRANCH_COLORS: Record<string, string> = {
+  PSC: '#38bdf8',
+  SEA: '#2dd4bf',
+  POR: '#a78bfa',
+  PHX: '#fb923c',
+  SLC: '#a3e635',
+}
+
+/** Scope accent colors (Recharts / donut segments). Shared by light and dark. */
+export const SCOPE_CHART_COLORS: Record<string, string> = {
+  'HVAC Piping':     '#378ADD',
+  'Refer Piping':    '#6366f1',
+  'HVAC Ductwork':   '#60a5fa',
+  'Plumbing Piping': '#639922',
+  'Fire Stopping':   '#f59e0b',
+  'Equipment':       '#a855f7',
+  'Other':           '#9ca3af',
+}

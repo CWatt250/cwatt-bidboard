@@ -1,41 +1,64 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { useDashboard } from '@/hooks/useDashboard'
 import {
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
-  Tooltip,
   ResponsiveContainer,
-  Area,
-  AreaChart,
-  PieChart,
-  Pie,
-  Cell,
 } from 'recharts'
 import {
-  STATUS_BADGE_CLASSES,
-  BRANCH_BADGE_CLASSES,
+  startOfMonth,
+  startOfQuarter,
+  startOfYear,
+  startOfWeek,
+  endOfWeek,
+  subMonths,
+  subQuarters,
+  subYears,
+  subWeeks,
+  isWithinInterval,
+  format,
+} from 'date-fns'
+import { useDashboard } from '@/hooks/useDashboard'
+import { useUserRole } from '@/contexts/userRole'
+import { AnimNum } from './AnimNum'
+import { useTooltip, FloatingTooltip } from '@/hooks/useTooltip'
+import {
+  DARK_STATUS_COLORS,
+  DARK_BRANCH_COLORS,
+  SCOPE_CHART_COLORS,
 } from '@/config/colors'
 import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
-import type { Bid, BidScope, Branch, BidStatus } from '@/lib/supabase/types'
-
-// ─── types ──────────────────────────────────────────────────────────────────
+import type { Bid, BidStatus, Branch } from '@/lib/supabase/types'
 
 export type TimeRange = 'this-month' | 'this-quarter' | 'this-year' | 'all-time'
 
 type TrendWeeks = 4 | 8 | 12
-type BranchMetric = 'Pipeline' | 'Awarded' | 'Verbal'
+type BranchMetric = 'Pipeline' | 'Awarded'
 
-// Bar gradient per metric — Verbal uses violet to match the Verbal status pill.
-const BRANCH_METRIC_BAR: Record<BranchMetric, string> = {
-  Pipeline: 'linear-gradient(90deg, #38bdf8, #0ea5e9)',
-  Awarded: 'linear-gradient(90deg, #34d399, #10b981)',
-  Verbal: 'linear-gradient(90deg, #a78bfa, #8b5cf6)',
+const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
+const BID_STATUSES: BidStatus[] = [
+  'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost',
+]
+
+const TIME_RANGE_OPTIONS: { label: string; value: TimeRange }[] = [
+  { label: 'Month', value: 'this-month' },
+  { label: 'Quarter', value: 'this-quarter' },
+  { label: 'Year', value: 'this-year' },
+  { label: 'All time', value: 'all-time' },
+]
+
+const TIME_RANGE_LABEL: Record<TimeRange, string> = {
+  'this-month': 'This Month',
+  'this-quarter': 'This Quarter',
+  'this-year': 'This Year',
+  'all-time': 'All Time',
 }
 
-// ─── helpers ───────────────────────────────────────────────────────────────
+// ─── helpers ────────────────────────────────────────────────────────────────
 
 function formatCurrency(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(1)}M`
@@ -49,71 +72,1470 @@ function formatCurrencyFull(value: number): string {
   return `$${value.toFixed(0)}`
 }
 
-// Effective "won" date for a bid as a YYYY-MM-DD string. Prefers the MAX
-// awarded_at among flagged line items (the bid was secured the day the last
-// scope was won); falls back to bid_due_date for status-only Awarded bids
-// where no scope checkbox was ever ticked.
-function bidAwardedYmd(b: Bid): string | null {
-  let maxAwardedAt: string | null = null
-  for (const li of b.line_items ?? []) {
-    if (!li.is_awarded || !li.awarded_at) continue
-    if (maxAwardedAt == null || li.awarded_at > maxAwardedAt) {
-      maxAwardedAt = li.awarded_at
-    }
-  }
-  if (maxAwardedAt) {
-    const d = new Date(maxAwardedAt)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
-  return b.bid_due_date || null
+function formatCount(value: number): string {
+  return Math.round(value).toLocaleString()
 }
 
-function getTimeRangeStart(range: TimeRange): string | null {
-  if (range === 'all-time') return null
-  const now = new Date()
+function formatPercent(value: number): string {
+  return `${Math.round(value)}%`
+}
+
+interface DateWindow {
+  start: Date | null
+  end: Date | null
+}
+
+/** [start, end] of the current time window. all-time returns null bounds. */
+function currentWindow(range: TimeRange, now: Date): DateWindow {
+  if (range === 'all-time') return { start: null, end: null }
+  if (range === 'this-month') return { start: startOfMonth(now), end: now }
+  if (range === 'this-quarter') return { start: startOfQuarter(now), end: now }
+  return { start: startOfYear(now), end: now }
+}
+
+/** Same-length window shifted back one period. all-time has no prior. */
+function priorWindow(range: TimeRange, now: Date): DateWindow {
+  if (range === 'all-time') return { start: null, end: null }
   if (range === 'this-month') {
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+    const priorNow = subMonths(now, 1)
+    return { start: startOfMonth(priorNow), end: priorNow }
   }
   if (range === 'this-quarter') {
-    const qMonth = Math.floor(now.getMonth() / 3) * 3
-    return `${now.getFullYear()}-${String(qMonth + 1).padStart(2, '0')}-01`
+    const priorNow = subQuarters(now, 1)
+    return { start: startOfQuarter(priorNow), end: priorNow }
   }
-  if (range === 'this-year') {
-    return `${now.getFullYear()}-01-01`
+  const priorNow = subYears(now, 1)
+  return { start: startOfYear(priorNow), end: priorNow }
+}
+
+function inWindow(date: Date | null | undefined, window: DateWindow): boolean {
+  if (!date) return false
+  if (!window.start || !window.end) return true
+  return date.getTime() >= window.start.getTime() && date.getTime() <= window.end.getTime()
+}
+
+function bidDueDate(b: Bid): Date | null {
+  if (!b.bid_due_date) return null
+  return new Date(b.bid_due_date + 'T00:00:00')
+}
+
+/** Effective awarded date — MAX flagged-line-item awarded_at, else bid_due_date. */
+function bidAwardedAt(b: Bid): Date | null {
+  let max: number | null = null
+  for (const li of b.line_items ?? []) {
+    if (!li.is_awarded || !li.awarded_at) continue
+    const t = new Date(li.awarded_at).getTime()
+    if (max == null || t > max) max = t
   }
-  return null
+  if (max != null) return new Date(max)
+  return bidDueDate(b)
 }
 
-const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
-
-// ─── card shell ────────────────────────────────────────────────────────────
-
-const cardStyle: React.CSSProperties = {
-  background: 'var(--surface)',
-  border: '0.5px solid var(--border)',
-  borderRadius: 'var(--radius-lg, var(--radius))',
-  boxShadow: 'var(--shadow-sm)',
-  overflow: 'hidden',
+/** Sum the bid's awarded line-item prices. Falls back to total_price if no flags. */
+function bidAwardedValue(b: Bid): number {
+  const flagged = (b.line_items ?? []).filter((li) => li.is_awarded)
+  if (flagged.length === 0) return b.total_price ?? 0
+  return flagged.reduce((sum, li) => sum + (li.price ?? 0), 0)
 }
 
-const cardHeaderStyle: React.CSSProperties = {
-  padding: '10px 16px',
-  borderBottom: '0.5px solid var(--border)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 12,
+function pctDelta(current: number, prior: number): number | null {
+  if (prior <= 0) return null
+  return ((current - prior) / prior) * 100
 }
 
-const cardTitleStyle: React.CSSProperties = {
-  fontSize: '13px',
-  fontWeight: 500,
-  color: 'var(--text)',
+// ─── KPI computations ──────────────────────────────────────────────────────
+
+interface KpiMetric {
+  value: number
+  prior: number
+  delta: number | null
+  subtext: string
+  sparkline: number[]
 }
 
-// ─── SegmentedControl ───────────────────────────────────────────────────────
+function lastNWeekRanges(n: number, now: Date): { start: Date; end: Date }[] {
+  const out: { start: Date; end: Date }[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const anchor = subWeeks(now, i)
+    out.push({
+      start: startOfWeek(anchor, { weekStartsOn: 1 }),
+      end: endOfWeek(anchor, { weekStartsOn: 1 }),
+    })
+  }
+  return out
+}
 
-function SegmentedControl<T extends string | number>({
+function computeSecuredKpi(bids: Bid[], range: TimeRange, now: Date): KpiMetric {
+  const current = currentWindow(range, now)
+  const prior = priorWindow(range, now)
+  let value = 0
+  let prevValue = 0
+  let count = 0
+  for (const b of bids) {
+    if (b.status !== 'Awarded') continue
+    const ymd = bidAwardedAt(b)
+    if (!ymd) continue
+    if (inWindow(ymd, current)) {
+      value += bidAwardedValue(b)
+      count++
+    } else if (inWindow(ymd, prior)) {
+      prevValue += bidAwardedValue(b)
+    }
+  }
+  const sparkline = lastNWeekRanges(8, now).map(({ start, end }) => {
+    let total = 0
+    for (const b of bids) {
+      if (b.status !== 'Awarded') continue
+      const ymd = bidAwardedAt(b)
+      if (!ymd) continue
+      if (isWithinInterval(ymd, { start, end })) {
+        total += bidAwardedValue(b)
+      }
+    }
+    return total
+  })
+  return {
+    value,
+    prior: prevValue,
+    delta: pctDelta(value, prevValue),
+    subtext: `${count} job${count === 1 ? '' : 's'} · ${TIME_RANGE_LABEL[range]}`,
+    sparkline,
+  }
+}
+
+function computeOpenKpi(bids: Bid[], range: TimeRange, now: Date): KpiMetric {
+  const current = currentWindow(range, now)
+  const prior = priorWindow(range, now)
+  const isOpen = (s: BidStatus) => s === 'Bidding' || s === 'In Progress'
+  let value = 0
+  let prevValue = 0
+  for (const b of bids) {
+    if (!isOpen(b.status)) continue
+    const due = bidDueDate(b)
+    if (inWindow(due, current)) value++
+    else if (inWindow(due, prior)) prevValue++
+  }
+  const sparkline = lastNWeekRanges(8, now).map(({ start, end }) => {
+    let n = 0
+    for (const b of bids) {
+      if (!isOpen(b.status)) continue
+      const due = bidDueDate(b)
+      if (due && isWithinInterval(due, { start, end })) n++
+    }
+    return n
+  })
+  return {
+    value,
+    prior: prevValue,
+    delta: pctDelta(value, prevValue),
+    subtext: 'Bidding + In Progress',
+    sparkline,
+  }
+}
+
+function computeSentKpi(bids: Bid[], range: TimeRange, now: Date): KpiMetric {
+  const current = currentWindow(range, now)
+  const prior = priorWindow(range, now)
+  let value = 0
+  let prevValue = 0
+  for (const b of bids) {
+    if (b.status !== 'Sent') continue
+    const updated = b.updated_at ? new Date(b.updated_at) : null
+    if (inWindow(updated, current)) value++
+    else if (inWindow(updated, prior)) prevValue++
+  }
+  const sparkline = lastNWeekRanges(8, now).map(({ start, end }) => {
+    let n = 0
+    for (const b of bids) {
+      if (b.status !== 'Sent') continue
+      const updated = b.updated_at ? new Date(b.updated_at) : null
+      if (updated && isWithinInterval(updated, { start, end })) n++
+    }
+    return n
+  })
+  return {
+    value,
+    prior: prevValue,
+    delta: pctDelta(value, prevValue),
+    subtext: TIME_RANGE_LABEL[range],
+    sparkline,
+  }
+}
+
+interface WinRateKpi extends KpiMetric {
+  wins: number
+  decided: number
+}
+
+function computeWinRateKpi(bids: Bid[], range: TimeRange, now: Date): WinRateKpi {
+  const current = currentWindow(range, now)
+  const prior = priorWindow(range, now)
+  let wins = 0
+  let losses = 0
+  let priorWins = 0
+  let priorLosses = 0
+  for (const b of bids) {
+    const updated = b.updated_at ? new Date(b.updated_at) : null
+    if (b.status === 'Awarded') {
+      if (inWindow(updated, current)) wins++
+      else if (inWindow(updated, prior)) priorWins++
+    } else if (b.status === 'Lost') {
+      if (inWindow(updated, current)) losses++
+      else if (inWindow(updated, prior)) priorLosses++
+    }
+  }
+  const decided = wins + losses
+  const priorDecided = priorWins + priorLosses
+  const value = decided > 0 ? (wins / decided) * 100 : 0
+  const prevValue = priorDecided > 0 ? (priorWins / priorDecided) * 100 : 0
+  const sparkline = lastNWeekRanges(8, now).map(({ start, end }) => {
+    let w = 0
+    let l = 0
+    for (const b of bids) {
+      const updated = b.updated_at ? new Date(b.updated_at) : null
+      if (!updated || !isWithinInterval(updated, { start, end })) continue
+      if (b.status === 'Awarded') w++
+      else if (b.status === 'Lost') l++
+    }
+    return w + l > 0 ? (w / (w + l)) * 100 : 0
+  })
+  return {
+    value,
+    prior: prevValue,
+    delta: pctDelta(value, prevValue),
+    subtext: `${wins}/${decided} decided`,
+    sparkline,
+    wins,
+    decided,
+  }
+}
+
+// ─── Sparkline ─────────────────────────────────────────────────────────────
+
+function Sparkline({ values, color }: { values: number[]; color: string }) {
+  const W = 80
+  const H = 28
+  const padding = 2
+  const max = Math.max(...values, 1)
+  const min = Math.min(...values, 0)
+  const span = Math.max(max - min, 1)
+  const n = values.length
+  const stepX = (W - padding * 2) / Math.max(n - 1, 1)
+  const points = values.map((v, i) => {
+    const x = padding + i * stepX
+    const y = padding + (1 - (v - min) / span) * (H - padding * 2)
+    return { x, y }
+  })
+  if (points.length === 0) return null
+  const last = points[points.length - 1]
+  const lineD = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')
+  const areaD =
+    `M${points[0].x.toFixed(2)},${H - padding} ` +
+    points.map((p) => `L${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ') +
+    ` L${last.x.toFixed(2)},${H - padding} Z`
+  const gradId = `spark-${color.replace('#', '')}`
+  return (
+    <svg width={W} height={H} aria-hidden="true">
+      <defs>
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity={0.5} />
+          <stop offset="100%" stopColor={color} stopOpacity={0} />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#${gradId})`} />
+      <path d={lineD} stroke={color} strokeWidth={1.2} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx={last.x} cy={last.y} r={2} fill={color} />
+    </svg>
+  )
+}
+
+// ─── KPI card ──────────────────────────────────────────────────────────────
+
+interface KpiCardProps {
+  label: string
+  accent: string
+  value: number
+  format: (n: number) => string
+  subtext: string
+  delta: number | null
+  sparkline: number[]
+}
+
+function KpiCard({ label, accent, value, format, subtext, delta, sparkline }: KpiCardProps) {
+  const positive = delta != null && delta > 0
+  const negative = delta != null && delta < 0
+  return (
+    <div
+      style={{
+        position: 'relative',
+        background: 'var(--dash-card)',
+        border: '1px solid var(--dash-border)',
+        borderRadius: 14,
+        padding: 18,
+        overflow: 'hidden',
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: `linear-gradient(90deg, ${accent}, ${accent}00)`,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: -40,
+          right: -40,
+          width: 140,
+          height: 140,
+          background: `radial-gradient(circle, ${accent}26 0%, ${accent}00 70%)`,
+          pointerEvents: 'none',
+        }}
+      />
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: 8,
+          marginBottom: 8,
+        }}
+      >
+        <p
+          style={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            letterSpacing: '0.09em',
+            textTransform: 'uppercase',
+            color: 'var(--dash-text3)',
+          }}
+        >
+          {label}
+        </p>
+        <Sparkline values={sparkline} color={accent} />
+      </div>
+      <AnimNum
+        value={value}
+        format={format}
+        style={{
+          display: 'block',
+          fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
+          fontSize: 30,
+          fontWeight: 500,
+          letterSpacing: '-0.7px',
+          color: 'var(--dash-text)',
+          lineHeight: 1,
+        }}
+      />
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+          marginTop: 10,
+          fontSize: 11,
+          color: 'var(--dash-text3)',
+        }}
+      >
+        <span>{subtext}</span>
+        {delta != null && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              fontWeight: 600,
+              padding: '2px 7px',
+              borderRadius: 999,
+              background: positive
+                ? 'rgba(52, 211, 153, 0.14)'
+                : negative
+                  ? 'rgba(251, 113, 133, 0.14)'
+                  : 'rgba(125, 138, 186, 0.14)',
+              color: positive ? '#34d399' : negative ? '#fb7185' : 'var(--dash-text3)',
+            }}
+          >
+            <span aria-hidden="true">{positive ? '▲' : negative ? '▼' : '—'}</span>
+            {Math.abs(Math.round(delta))}%
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Glass pipeline column ─────────────────────────────────────────────────
+
+const PIPELINE_STATUSES: BidStatus[] = ['In Progress', 'Sent', 'Awarded', 'Lost']
+
+interface PipelineSegment {
+  status: BidStatus
+  count: number
+  total: number
+  pct: number
+  color: string
+}
+
+function GlassPipelineColumn({ bids }: { bids: Bid[] }) {
+  const { state: tipState, show: showTip, hide: hideTip } = useTooltip()
+  const [hovered, setHovered] = useState<BidStatus | null>(null)
+  const [progress, setProgress] = useState(0)
+
+  // Drive 0→1 progress on mount and whenever the source bid set changes.
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setProgress(1)
+      return
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setProgress(1)
+      return
+    }
+    setProgress(0)
+    const start = performance.now()
+    let raf = 0
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / 850)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setProgress(eased)
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [bids])
+
+  const segments = useMemo<PipelineSegment[]>(() => {
+    const totals = PIPELINE_STATUSES.map((status) => {
+      const matching = bids.filter((b) => b.status === status)
+      return {
+        status,
+        count: matching.length,
+        total: matching.reduce((sum, b) => sum + (b.total_price ?? 0), 0),
+        color: DARK_STATUS_COLORS[status],
+        pct: 0,
+      }
+    })
+    const grandTotal = totals.reduce((sum, t) => sum + t.total, 0)
+    return totals
+      .map((t) => ({ ...t, pct: grandTotal > 0 ? (t.total / grandTotal) * 100 : 0 }))
+      .filter((t) => t.total > 0)
+      .sort((a, b) => b.total - a.total)
+  }, [bids])
+
+  const grandTotal = segments.reduce((sum, s) => sum + s.total, 0)
+
+  return (
+    <div style={{ display: 'flex', gap: 22, alignItems: 'stretch' }}>
+      {/* Glass column */}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+        <AnimNum
+          value={grandTotal}
+          format={formatCurrencyFull}
+          style={{
+            fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
+            fontSize: 13,
+            fontWeight: 500,
+            color: 'var(--dash-text)',
+            letterSpacing: '-0.2px',
+          }}
+        />
+        <div
+          style={{
+            position: 'relative',
+            width: 44,
+            height: 240,
+            borderRadius: 12,
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.06)',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Grid lines at 25/50/75 */}
+          {[0.25, 0.5, 0.75].map((p) => (
+            <div
+              key={p}
+              aria-hidden="true"
+              style={{
+                position: 'absolute',
+                left: 0,
+                right: 0,
+                top: `${p * 100}%`,
+                height: 1,
+                background: 'rgba(255, 255, 255, 0.06)',
+              }}
+            />
+          ))}
+          {/* Stacked segments (column-reverse + biggest-first sort = biggest at bottom) */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              display: 'flex',
+              flexDirection: 'column-reverse',
+            }}
+          >
+            {segments.map((seg) => {
+              const dimOther = hovered != null && hovered !== seg.status
+              return (
+                <div
+                  key={seg.status}
+                  onMouseEnter={(e) => {
+                    setHovered(seg.status)
+                    showTip(
+                      `${seg.status} · ${seg.count} bid${seg.count === 1 ? '' : 's'} · ${formatCurrencyFull(seg.total)} · ${seg.pct.toFixed(1)}%`,
+                      e.clientX,
+                      e.clientY,
+                    )
+                  }}
+                  onMouseMove={(e) =>
+                    showTip(
+                      `${seg.status} · ${seg.count} bid${seg.count === 1 ? '' : 's'} · ${formatCurrencyFull(seg.total)} · ${seg.pct.toFixed(1)}%`,
+                      e.clientX,
+                      e.clientY,
+                    )
+                  }
+                  onMouseLeave={() => {
+                    setHovered(null)
+                    hideTip()
+                  }}
+                  style={{
+                    height: `${seg.pct * progress}%`,
+                    background: `linear-gradient(180deg, ${seg.color}f2, ${seg.color}c0)`,
+                    boxShadow: `inset 0 1px 0 ${seg.color}66`,
+                    borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                    opacity: dimOther ? 0.45 : 1,
+                    filter: hovered === seg.status ? `drop-shadow(0 0 8px ${seg.color})` : 'none',
+                    transition: 'opacity 200ms ease, filter 200ms ease',
+                    cursor: 'pointer',
+                  }}
+                />
+              )
+            })}
+          </div>
+          {/* Glass highlight overlay */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background:
+                'linear-gradient(90deg, rgba(255,255,255,0.08), transparent 30%, transparent 70%, rgba(0,0,0,0.18))',
+              pointerEvents: 'none',
+            }}
+          />
+        </div>
+        <span
+          style={{
+            fontSize: 9.5,
+            fontWeight: 700,
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+            color: 'var(--dash-text3)',
+          }}
+        >
+          Pipeline
+        </span>
+      </div>
+
+      {/* Legend */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, minWidth: 0 }}>
+        {segments.length === 0 ? (
+          <p style={{ fontSize: 12, color: 'var(--dash-text3)' }}>No active pipeline.</p>
+        ) : (
+          segments.map((seg) => {
+            const dim = hovered != null && hovered !== seg.status
+            return (
+              <div
+                key={seg.status}
+                onMouseEnter={() => setHovered(seg.status)}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1fr auto',
+                  alignItems: 'center',
+                  gap: 12,
+                  opacity: dim ? 0.45 : 1,
+                  transition: 'opacity 200ms ease',
+                  cursor: 'pointer',
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 8,
+                      height: 8,
+                      borderRadius: '50%',
+                      background: seg.color,
+                      boxShadow: `0 0 6px ${seg.color}`,
+                    }}
+                  />
+                  <span style={{ fontSize: 12.5, color: 'var(--dash-text)', fontWeight: 500 }}>
+                    {seg.status}
+                  </span>
+                </span>
+                <span
+                  style={{
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontSize: 11,
+                    color: 'var(--dash-text3)',
+                  }}
+                >
+                  {seg.count} · {seg.pct.toFixed(0)}%
+                </span>
+                <span
+                  style={{
+                    fontFamily: '"IBM Plex Mono", monospace',
+                    fontSize: 13,
+                    color: 'var(--dash-text)',
+                    textAlign: 'right',
+                  }}
+                >
+                  {formatCurrency(seg.total)}
+                </span>
+              </div>
+            )
+          })
+        )}
+      </div>
+
+      <FloatingTooltip state={tipState} />
+    </div>
+  )
+}
+
+// ─── Pipeline Trend ─────────────────────────────────────────────────────────
+
+function buildTrendBuckets(bids: Bid[], weeks: TrendWeeks, now: Date) {
+  const ranges = lastNWeekRanges(weeks, now)
+  return ranges.map(({ start, end }) => {
+    const matching = bids.filter((b) => {
+      if (b.status === 'Lost' || b.status === 'Awarded') return false
+      const due = bidDueDate(b)
+      if (!due) return false
+      return isWithinInterval(due, { start, end })
+    })
+    const value = matching.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+    return {
+      label: format(end, 'MMM d'),
+      value,
+      count: matching.length,
+      end,
+    }
+  })
+}
+
+function PipelineTrend({ bids, now }: { bids: Bid[]; now: Date }) {
+  const [weeks, setWeeks] = useState<TrendWeeks>(8)
+  const data = useMemo(() => buildTrendBuckets(bids, weeks, now), [bids, weeks, now])
+  const tickCount = data.length
+  const tickInterval = tickCount > 1 ? Math.floor((tickCount - 1) / 2) : 0
+  const ticks = tickCount > 0 ? [data[0].label, data[tickInterval]?.label, data[tickCount - 1].label].filter(Boolean) : []
+  const currentValue = data.length > 0 ? data[data.length - 1].value : 0
+  const priorValue = data.length > 1 ? data[data.length - 2].value : 0
+  const delta = pctDelta(currentValue, priorValue)
+  const positive = delta != null && delta > 0
+  const negative = delta != null && delta < 0
+
+  return (
+    <div
+      style={{
+        background: 'var(--dash-card)',
+        border: '1px solid var(--dash-border)',
+        borderRadius: 14,
+        padding: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 12,
+      }}
+    >
+      <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <p
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: '0.09em',
+              textTransform: 'uppercase',
+              color: 'var(--dash-text3)',
+            }}
+          >
+            Pipeline Trend
+          </p>
+          <p style={{ fontSize: 11, color: 'var(--dash-text3)', marginTop: 2 }}>
+            Active bid value · last {weeks} weeks
+          </p>
+        </div>
+        <DarkSegmented<TrendWeeks>
+          value={weeks}
+          options={[
+            { label: '4W', value: 4 },
+            { label: '8W', value: 8 },
+            { label: '12W', value: 12 },
+          ]}
+          onChange={setWeeks}
+        />
+      </header>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
+        <AnimNum
+          value={currentValue}
+          format={formatCurrencyFull}
+          style={{
+            fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
+            fontSize: 22,
+            fontWeight: 500,
+            color: 'var(--dash-text)',
+            letterSpacing: '-0.4px',
+          }}
+        />
+        {delta != null && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              fontSize: 10.5,
+              fontWeight: 600,
+              padding: '2px 7px',
+              borderRadius: 999,
+              background: positive
+                ? 'rgba(52, 211, 153, 0.14)'
+                : negative
+                  ? 'rgba(251, 113, 133, 0.14)'
+                  : 'rgba(125, 138, 186, 0.14)',
+              color: positive ? '#34d399' : negative ? '#fb7185' : 'var(--dash-text3)',
+            }}
+          >
+            <span aria-hidden="true">{positive ? '▲' : negative ? '▼' : '—'}</span>
+            {Math.abs(Math.round(delta))}% vs prior
+          </span>
+        )}
+      </div>
+      <div style={{ height: 200 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart data={data} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
+            <defs>
+              <linearGradient id="dash-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#38bdf8" stopOpacity={0.5} />
+                <stop offset="100%" stopColor="#38bdf8" stopOpacity={0} />
+              </linearGradient>
+              <filter id="dash-glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="0.6" />
+              </filter>
+            </defs>
+            <XAxis
+              dataKey="label"
+              ticks={ticks}
+              tick={{ fontSize: 10, fill: '#7d8aba', fontFamily: 'IBM Plex Mono, monospace' }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
+              tickFormatter={(v: number) => formatCurrency(v)}
+              tick={{ fontSize: 10, fill: '#7d8aba', fontFamily: 'IBM Plex Mono, monospace' }}
+              axisLine={false}
+              tickLine={false}
+              width={48}
+              tickCount={5}
+            />
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="#38bdf8"
+              strokeWidth={0.9}
+              fill="url(#dash-area)"
+              dot={{ r: 0.7, fill: '#38bdf8', stroke: 'none' }}
+              activeDot={{ r: 1.2, fill: '#38bdf8', stroke: 'none' }}
+              style={{ filter: 'url(#dash-glow)' }}
+              isAnimationActive
+              animationDuration={500}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+// ─── Branch Performance ─────────────────────────────────────────────────────
+
+function BranchPerformance({ bids }: { bids: Bid[] }) {
+  const [metric, setMetric] = useState<BranchMetric>('Pipeline')
+  const [progress, setProgress] = useState(0)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setProgress(1)
+      return
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setProgress(1)
+      return
+    }
+    setProgress(0)
+    const start = performance.now()
+    let raf = 0
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / 700)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setProgress(eased)
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [bids, metric])
+
+  const rows = useMemo(() => {
+    const isPipeline = (s: BidStatus) =>
+      s === 'Bidding' || s === 'In Progress' || s === 'Sent'
+    return ALL_BRANCHES.map((branch) => {
+      const branchBids = bids.filter((b) => b.branch === branch)
+      const pipelineBids = branchBids.filter((b) => isPipeline(b.status))
+      const awardedBids = branchBids.filter((b) => b.status === 'Awarded')
+      const value =
+        metric === 'Pipeline'
+          ? pipelineBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
+          : awardedBids.reduce((s, b) => s + bidAwardedValue(b), 0)
+      const activeCount = branchBids.filter(
+        (b) => b.status === 'Bidding' || b.status === 'In Progress',
+      ).length
+      return { branch, value, activeCount, color: DARK_BRANCH_COLORS[branch] ?? '#38bdf8' }
+    }).sort((a, b) => b.value - a.value)
+  }, [bids, metric])
+
+  const maxValue = Math.max(...rows.map((r) => r.value), 1)
+
+  return (
+    <div
+      style={{
+        background: 'var(--dash-card)',
+        border: '1px solid var(--dash-border)',
+        borderRadius: 14,
+        padding: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+      }}
+    >
+      <header style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <p
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: '0.09em',
+              textTransform: 'uppercase',
+              color: 'var(--dash-text3)',
+            }}
+          >
+            Branch Performance
+          </p>
+          <p style={{ fontSize: 11, color: 'var(--dash-text3)', marginTop: 2 }}>
+            {metric === 'Pipeline' ? 'Pipeline value' : 'Awarded value'} by branch
+          </p>
+        </div>
+        <DarkSegmented<BranchMetric>
+          value={metric}
+          options={[
+            { label: 'Pipeline', value: 'Pipeline' },
+            { label: 'Awarded', value: 'Awarded' },
+          ]}
+          onChange={setMetric}
+        />
+      </header>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {rows.map((row, idx) => {
+          const target = Math.round((row.value / maxValue) * 100)
+          const stagger = Math.min(1, Math.max(0, progress - idx * 0.1) / 0.9)
+          const pct = Math.round(target * stagger)
+          return (
+            <div key={row.branch}>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 5,
+                }}
+              >
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span
+                    style={{
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      padding: '2px 7px',
+                      borderRadius: 4,
+                      background: `${row.color}22`,
+                      color: row.color,
+                      border: `1px solid ${row.color}44`,
+                    }}
+                  >
+                    {row.branch}
+                  </span>
+                  <span style={{ fontSize: 11, color: 'var(--dash-text3)' }}>
+                    {BRANCH_LABELS[row.branch]}
+                  </span>
+                </span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 10.5, color: 'var(--dash-text3)' }}>
+                    {row.activeCount} active
+                  </span>
+                  <span
+                    style={{
+                      fontSize: 13,
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      color: 'var(--dash-text)',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {formatCurrency(row.value)}
+                  </span>
+                </span>
+              </div>
+              <div
+                style={{
+                  width: '100%',
+                  height: 8,
+                  borderRadius: 4,
+                  background: 'rgba(255, 255, 255, 0.04)',
+                  overflow: 'hidden',
+                }}
+              >
+                <div
+                  style={{
+                    height: '100%',
+                    width: `${pct}%`,
+                    background: `linear-gradient(90deg, ${row.color}, ${row.color}aa)`,
+                    boxShadow: `0 0 10px ${row.color}55`,
+                    borderRadius: 4,
+                  }}
+                />
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// ─── Revenue by Scope donut ─────────────────────────────────────────────────
+
+interface ScopeSlice {
+  scope: string
+  value: number
+  color: string
+}
+
+function RevenueByScope({ bids }: { bids: Bid[] }) {
+  const [hovered, setHovered] = useState<string | null>(null)
+  const [progress, setProgress] = useState(0)
+  const { state: tipState, show: showTip, hide: hideTip } = useTooltip()
+
+  const slices = useMemo<ScopeSlice[]>(() => {
+    const map = new Map<string, number>()
+    for (const b of bids) {
+      if (b.status !== 'Awarded') continue
+      for (const li of b.line_items ?? []) {
+        if (!li.is_awarded) continue
+        const prev = map.get(li.scope) ?? 0
+        map.set(li.scope, prev + (li.price ?? 0))
+      }
+    }
+    return Array.from(map.entries())
+      .map(([scope, value]) => ({ scope, value, color: SCOPE_CHART_COLORS[scope] ?? '#9ca3af' }))
+      .filter((s) => s.value > 0)
+      .sort((a, b) => b.value - a.value)
+  }, [bids])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setProgress(slices.length)
+      return
+    }
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setProgress(slices.length)
+      return
+    }
+    setProgress(0)
+    const start = performance.now()
+    let raf = 0
+    const step = (now: number) => {
+      const elapsed = now - start
+      const target = Math.min(slices.length, elapsed / 80)
+      setProgress(target)
+      if (target < slices.length) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [slices])
+
+  const total = slices.reduce((sum, s) => sum + s.value, 0)
+
+  // Donut arc geometry
+  const cx = 80
+  const cy = 80
+  const outerR = 64
+  const innerR = 42
+
+  function describeSlice(startAngle: number, endAngle: number): string {
+    const x1 = cx + outerR * Math.cos(startAngle)
+    const y1 = cy + outerR * Math.sin(startAngle)
+    const x2 = cx + outerR * Math.cos(endAngle)
+    const y2 = cy + outerR * Math.sin(endAngle)
+    const x3 = cx + innerR * Math.cos(endAngle)
+    const y3 = cy + innerR * Math.sin(endAngle)
+    const x4 = cx + innerR * Math.cos(startAngle)
+    const y4 = cy + innerR * Math.sin(startAngle)
+    const largeArc = endAngle - startAngle > Math.PI ? 1 : 0
+    return [
+      `M ${x1.toFixed(2)} ${y1.toFixed(2)}`,
+      `A ${outerR} ${outerR} 0 ${largeArc} 1 ${x2.toFixed(2)} ${y2.toFixed(2)}`,
+      `L ${x3.toFixed(2)} ${y3.toFixed(2)}`,
+      `A ${innerR} ${innerR} 0 ${largeArc} 0 ${x4.toFixed(2)} ${y4.toFixed(2)}`,
+      'Z',
+    ].join(' ')
+  }
+
+  let acc = -Math.PI / 2
+
+  return (
+    <div
+      style={{
+        background: 'var(--dash-card)',
+        border: '1px solid var(--dash-border)',
+        borderRadius: 14,
+        padding: 18,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 14,
+      }}
+    >
+      <header>
+        <p
+          style={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            letterSpacing: '0.09em',
+            textTransform: 'uppercase',
+            color: 'var(--dash-text3)',
+          }}
+        >
+          Revenue by Scope
+        </p>
+        <p style={{ fontSize: 11, color: 'var(--dash-text3)', marginTop: 2 }}>
+          Awarded line-item value grouped by scope
+        </p>
+      </header>
+      {slices.length === 0 ? (
+        <p style={{ fontSize: 12, color: 'var(--dash-text3)', padding: '24px 0' }}>
+          No awarded scopes yet.
+        </p>
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+          <div style={{ position: 'relative', width: 160, height: 160, flexShrink: 0 }}>
+            <svg width={160} height={160}>
+              {slices.map((slice, idx) => {
+                const angle = (slice.value / total) * Math.PI * 2
+                const startA = acc
+                const endA = acc + angle
+                acc = endA
+                const dim = hovered != null && hovered !== slice.scope
+                const reveal = Math.min(1, Math.max(0, progress - idx))
+                if (reveal <= 0) return null
+                return (
+                  <path
+                    key={slice.scope}
+                    d={describeSlice(startA, endA)}
+                    fill={slice.color}
+                    style={{
+                      opacity: dim ? 0.35 : reveal,
+                      transform: hovered === slice.scope ? 'scale(1.04)' : 'scale(1)',
+                      transformOrigin: `${cx}px ${cy}px`,
+                      filter: hovered === slice.scope ? `drop-shadow(0 0 8px ${slice.color})` : 'none',
+                      transition: 'opacity 200ms ease, transform 200ms ease, filter 200ms ease',
+                      cursor: 'pointer',
+                    }}
+                    onMouseEnter={(e) => {
+                      setHovered(slice.scope)
+                      showTip(
+                        `${slice.scope} · ${formatCurrencyFull(slice.value)} · ${((slice.value / total) * 100).toFixed(1)}%`,
+                        e.clientX,
+                        e.clientY,
+                      )
+                    }}
+                    onMouseMove={(e) =>
+                      showTip(
+                        `${slice.scope} · ${formatCurrencyFull(slice.value)} · ${((slice.value / total) * 100).toFixed(1)}%`,
+                        e.clientX,
+                        e.clientY,
+                      )
+                    }
+                    onMouseLeave={() => {
+                      setHovered(null)
+                      hideTip()
+                    }}
+                  />
+                )
+              })}
+            </svg>
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                pointerEvents: 'none',
+              }}
+            >
+              <span
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                  color: 'var(--dash-text3)',
+                }}
+              >
+                Awarded
+              </span>
+              <span
+                style={{
+                  fontFamily: '"IBM Plex Mono", monospace',
+                  fontSize: 17,
+                  fontWeight: 500,
+                  color: 'var(--dash-text)',
+                  marginTop: 2,
+                }}
+              >
+                {formatCurrency(total)}
+              </span>
+            </div>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, minWidth: 0 }}>
+            {slices.map((slice) => (
+              <div
+                key={slice.scope}
+                onMouseEnter={() => setHovered(slice.scope)}
+                onMouseLeave={() => setHovered(null)}
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'auto 1fr auto',
+                  alignItems: 'center',
+                  gap: 8,
+                  cursor: 'pointer',
+                  opacity: hovered != null && hovered !== slice.scope ? 0.45 : 1,
+                  transition: 'opacity 200ms ease',
+                }}
+              >
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 9,
+                    height: 9,
+                    borderRadius: 2,
+                    background: slice.color,
+                  }}
+                />
+                <span style={{ fontSize: 12, color: 'var(--dash-text2)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {slice.scope}
+                </span>
+                <span style={{ fontFamily: '"IBM Plex Mono", monospace', fontSize: 12, color: 'var(--dash-text)' }}>
+                  {formatCurrency(slice.value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <FloatingTooltip state={tipState} />
+    </div>
+  )
+}
+
+// ─── Recent Bids ────────────────────────────────────────────────────────────
+
+function dueChip(dueDateStr: string | null | undefined, now: Date): { label: string; bg: string; color: string } | null {
+  if (!dueDateStr) return null
+  const today = new Date(now)
+  today.setHours(0, 0, 0, 0)
+  const due = new Date(dueDateStr + 'T00:00:00')
+  const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  if (diff < 0) return null
+  const label = `${diff}d`
+  if (diff <= 2) return { label, bg: 'rgba(239, 68, 68, 0.18)', color: '#fb7185' }
+  if (diff <= 5) return { label, bg: 'rgba(245, 158, 11, 0.18)', color: '#fbbf24' }
+  return { label, bg: 'rgba(16, 185, 129, 0.18)', color: '#34d399' }
+}
+
+function RecentBids({ bids, now }: { bids: Bid[]; now: Date }) {
+  const router = useRouter()
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [branchFilter, setBranchFilter] = useState<string>('all')
+
+  const filtered = useMemo(() => {
+    let result = bids
+    if (statusFilter !== 'all') result = result.filter((b) => b.status === statusFilter)
+    if (branchFilter !== 'all') result = result.filter((b) => b.branch === branchFilter)
+    return result.slice(0, 8)
+  }, [bids, statusFilter, branchFilter])
+
+  const selectStyle: React.CSSProperties = {
+    background: 'rgba(255, 255, 255, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    color: 'var(--dash-text)',
+    fontSize: 12,
+    fontFamily: 'inherit',
+    padding: '5px 22px 5px 10px',
+    borderRadius: 6,
+    cursor: 'pointer',
+    appearance: 'none',
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%237d8aba' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
+    backgroundRepeat: 'no-repeat',
+    backgroundPosition: 'right 8px center',
+  }
+
+  return (
+    <div
+      style={{
+        background: 'var(--dash-card)',
+        border: '1px solid var(--dash-border)',
+        borderRadius: 14,
+        overflow: 'hidden',
+      }}
+    >
+      <header
+        style={{
+          padding: 18,
+          borderBottom: '1px solid var(--dash-border)',
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap',
+        }}
+      >
+        <div>
+          <p
+            style={{
+              fontSize: 10.5,
+              fontWeight: 700,
+              letterSpacing: '0.09em',
+              textTransform: 'uppercase',
+              color: 'var(--dash-text3)',
+            }}
+          >
+            Recent Bids
+          </p>
+          <p style={{ fontSize: 11, color: 'var(--dash-text3)', marginTop: 2 }}>
+            Up to 8 bids · sorted by last updated
+          </p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            style={selectStyle}
+            aria-label="Filter by status"
+          >
+            <option value="all">All Statuses</option>
+            {BID_STATUSES.map((s) => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <select
+            value={branchFilter}
+            onChange={(e) => setBranchFilter(e.target.value)}
+            style={selectStyle}
+            aria-label="Filter by branch"
+          >
+            <option value="all">All Branches</option>
+            {ALL_BRANCHES.map((b) => (
+              <option key={b} value={b}>{b}</option>
+            ))}
+          </select>
+        </div>
+      </header>
+      {filtered.length === 0 ? (
+        <p style={{ padding: 24, fontSize: 12, color: 'var(--dash-text3)', textAlign: 'center' }}>
+          No bids match the current filters.
+        </p>
+      ) : (
+        <div style={{ overflowX: 'auto' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid var(--dash-border)' }}>
+                {['Project', 'Branch', 'Client', 'Bid Value', 'Status', 'Due'].map((h) => (
+                  <th
+                    key={h}
+                    style={{
+                      padding: '10px 16px',
+                      textAlign: h === 'Bid Value' ? 'right' : 'left',
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: '0.06em',
+                      textTransform: 'uppercase',
+                      color: 'var(--dash-text3)',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((bid) => {
+                const clientNames = (bid.clients ?? []).map(getBidClientName).filter(Boolean)
+                const clientDisplay =
+                  clientNames.length === 0
+                    ? '—'
+                    : clientNames.length === 1
+                      ? clientNames[0]
+                      : `${clientNames[0]} +${clientNames.length - 1}`
+                const due = dueChip(bid.bid_due_date, now)
+                const statusColor = DARK_STATUS_COLORS[bid.status]
+                const branchColor = DARK_BRANCH_COLORS[bid.branch] ?? '#38bdf8'
+                return (
+                  <tr
+                    key={bid.id}
+                    onClick={() => router.push(`/dashboard/bids/${bid.id}`)}
+                    style={{
+                      borderBottom: '1px solid var(--dash-border)',
+                      cursor: 'pointer',
+                      transition: 'background 150ms ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      ;(e.currentTarget as HTMLElement).style.background = 'rgba(255, 255, 255, 0.02)'
+                    }}
+                    onMouseLeave={(e) => {
+                      ;(e.currentTarget as HTMLElement).style.background = ''
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        color: 'var(--dash-text)',
+                        fontWeight: 500,
+                        maxWidth: 260,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={bid.project_name}
+                    >
+                      {bid.project_name}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span
+                        style={{
+                          fontFamily: '"IBM Plex Mono", monospace',
+                          fontSize: 10.5,
+                          fontWeight: 700,
+                          padding: '2px 7px',
+                          borderRadius: 4,
+                          background: `${branchColor}22`,
+                          color: branchColor,
+                          border: `1px solid ${branchColor}44`,
+                        }}
+                      >
+                        {bid.branch}
+                      </span>
+                    </td>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        color: 'var(--dash-text2)',
+                        maxWidth: 180,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={clientNames.join(', ') || undefined}
+                    >
+                      {clientDisplay}
+                    </td>
+                    <td
+                      style={{
+                        padding: '12px 16px',
+                        textAlign: 'right',
+                        fontFamily: '"IBM Plex Mono", monospace',
+                        fontWeight: 500,
+                        color: 'var(--dash-text)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {bid.total_price ? formatCurrency(bid.total_price) : '—'}
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 6,
+                          padding: '3px 10px',
+                          borderRadius: 999,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          background: `${statusColor}26`,
+                          color: statusColor,
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            width: 5,
+                            height: 5,
+                            borderRadius: '50%',
+                            background: statusColor,
+                            boxShadow: `0 0 6px ${statusColor}`,
+                          }}
+                        />
+                        {bid.status}
+                      </span>
+                    </td>
+                    <td style={{ padding: '12px 16px' }}>
+                      {due ? (
+                        <span
+                          style={{
+                            display: 'inline-block',
+                            padding: '3px 10px',
+                            borderRadius: 999,
+                            fontSize: 11,
+                            fontWeight: 700,
+                            background: due.bg,
+                            color: due.color,
+                          }}
+                        >
+                          {due.label}
+                        </span>
+                      ) : (
+                        <span style={{ color: 'var(--dash-text3)' }}>—</span>
+                      )}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Segmented control (dark) ───────────────────────────────────────────────
+
+function DarkSegmented<T extends string | number>({
   options,
   value,
   onChange,
@@ -124,971 +1546,261 @@ function SegmentedControl<T extends string | number>({
 }) {
   return (
     <div
+      role="tablist"
       style={{
         display: 'inline-flex',
-        background: 'white',
-        border: '0.5px solid var(--border)',
-        borderRadius: '8px',
-        padding: '2px',
-        gap: '2px',
-        flexShrink: 0,
+        background: 'rgba(255, 255, 255, 0.04)',
+        border: '1px solid rgba(255, 255, 255, 0.06)',
+        borderRadius: 999,
+        padding: 3,
+        gap: 2,
       }}
     >
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          style={{
-            fontSize: '13px',
-            fontWeight: 500,
-            padding: '3px 10px',
-            borderRadius: '6px',
-            border:
-              value === opt.value
-                ? '0.5px solid var(--border)'
-                : '0.5px solid transparent',
-            background: value === opt.value ? 'var(--surface2)' : 'transparent',
-            color: value === opt.value ? 'var(--text)' : 'var(--text3)',
-            cursor: 'pointer',
-            transition: 'all 0.1s ease',
-            lineHeight: 1.5,
-          }}
-        >
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-// ─── KPI card ──────────────────────────────────────────────────────────────
-
-function KpiCard({
-  label,
-  value,
-  subtext,
-}: {
-  label: string
-  value: string | number
-  subtext?: string
-}) {
-  return (
-    <div style={cardStyle}>
-      <div style={{ padding: '16px' }}>
-        <p
-          style={{
-            fontSize: '0.7rem',
-            fontWeight: 700,
-            letterSpacing: '0.07em',
-            textTransform: 'uppercase',
-            color: 'var(--text3)',
-          }}
-        >
-          {label}
-        </p>
-        <p
-          style={{
-            fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
-            fontSize: '1.6rem',
-            fontWeight: 500,
-            marginTop: '6px',
-            color: 'var(--text)',
-            letterSpacing: '-0.5px',
-            lineHeight: 1,
-          }}
-        >
-          {value}
-        </p>
-        {subtext && (
-          <p
-            style={{
-              color: 'var(--text3)',
-              fontSize: '0.72rem',
-              marginTop: '5px',
-            }}
-          >
-            {subtext}
-          </p>
-        )}
-      </div>
-    </div>
-  )
-}
-
-// ─── Active Pipeline bar chart (CSS bars) ──────────────────────────────────
-
-const PIPELINE_STAGES: { status: string; color: string }[] = [
-  { status: 'In Progress', color: '#378ADD' },
-  { status: 'Sent',        color: '#185FA5' },
-  { status: 'Awarded',     color: '#639922' },
-  { status: 'Lost',        color: '#E24B4A' },
-]
-
-function ActivePipelineChart({ bids }: { bids: Bid[] }) {
-  const stageTotals = PIPELINE_STAGES.map(({ status, color }) => {
-    const total = bids
-      .filter((b) => b.status === status)
-      .reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-    return { status, color, total }
-  })
-
-  const maxVal = Math.max(...stageTotals.map((s) => s.total), 1)
-
-  return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {stageTotals.map(({ status, color, total }) => {
-        const pct = Math.round((total / maxVal) * 100)
+      {options.map((opt) => {
+        const active = value === opt.value
         return (
-          <div key={status}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'baseline',
-                marginBottom: '5px',
-              }}
-            >
-              <span style={{ fontSize: '0.75rem', color: 'var(--text2)', fontWeight: 500 }}>
-                {status}
-              </span>
-              <span
-                style={{
-                  fontSize: '0.75rem',
-                  fontWeight: 500,
-                  color: 'var(--text)',
-                  fontFamily: '"IBM Plex Mono", monospace',
-                }}
-              >
-                {formatCurrency(total)}
-              </span>
-            </div>
-            <div
-              style={{
-                width: '100%',
-                height: '10px',
-                borderRadius: '5px',
-                background: 'var(--surface2)',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: `${pct}%`,
-                  borderRadius: '5px',
-                  background: color,
-                  transition: 'width 0.5s ease',
-                }}
-              />
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ─── Pipeline Trend line chart ──────────────────────────────────────────────
-
-function getPipelineTrendData(bids: Bid[], weeks: TrendWeeks) {
-  const now = new Date()
-  const buckets: { label: string; weekStart: Date; weekEnd: Date }[] = []
-
-  for (let i = weeks - 1; i >= 0; i--) {
-    const weekStart = new Date(now)
-    weekStart.setDate(now.getDate() - i * 7)
-    weekStart.setHours(0, 0, 0, 0)
-    const weekEnd = new Date(weekStart)
-    weekEnd.setDate(weekStart.getDate() + 6)
-    weekEnd.setHours(23, 59, 59, 999)
-
-    const month = weekStart.toLocaleString('default', { month: 'short' })
-    const day = weekStart.getDate()
-    buckets.push({ label: `${month} ${day}`, weekStart, weekEnd })
-  }
-
-  return buckets.map(({ label, weekStart, weekEnd }) => {
-    const activeBids = bids.filter((b) => {
-      if (b.status === 'Lost') return false
-      if (!b.bid_due_date) return false
-      const dueAt = new Date(b.bid_due_date + 'T00:00:00')
-      return dueAt >= weekStart && dueAt <= weekEnd
-    })
-    const value = activeBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-    return { label, value }
-  })
-}
-
-function PipelineTrendChart({ bids, weeks }: { bids: Bid[]; weeks: TrendWeeks }) {
-  const data = useMemo(() => getPipelineTrendData(bids, weeks), [bids, weeks])
-
-  return (
-    <div style={{ padding: '8px 16px 16px' }}>
-      <ResponsiveContainer width="100%" height={180}>
-        <AreaChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
-          <defs>
-            <linearGradient id="trendGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#38bdf8" stopOpacity={0.18} />
-              <stop offset="95%" stopColor="#38bdf8" stopOpacity={0} />
-            </linearGradient>
-          </defs>
-          <XAxis
-            dataKey="label"
-            tick={{ fontSize: 10, fill: 'var(--text3)' }}
-            axisLine={false}
-            tickLine={false}
-          />
-          <YAxis
-            tickFormatter={(v: number) => formatCurrency(v)}
-            tick={{ fontSize: 10, fill: 'var(--text3)' }}
-            axisLine={false}
-            tickLine={false}
-            width={52}
-          />
-          <Tooltip
-            formatter={(v) => [formatCurrencyFull(Number(v)), 'Pipeline']}
-            contentStyle={{
-              fontSize: '11px',
-              background: 'var(--surface)',
-              border: '1px solid var(--border)',
-              borderRadius: '6px',
-            }}
-          />
-          <Area
-            type="monotone"
-            dataKey="value"
-            stroke="#38bdf8"
-            strokeWidth={2}
-            fill="url(#trendGradient)"
-            dot={false}
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </div>
-  )
-}
-
-// ─── Branch Performance ─────────────────────────────────────────────────────
-
-function BranchPerformanceChart({
-  bids,
-  metric,
-}: {
-  bids: Bid[]
-  metric: BranchMetric
-}) {
-  const breakdown = useMemo(() => {
-    return ALL_BRANCHES.map((branch) => {
-      const branchBids = bids.filter((b) => b.branch === branch)
-      const pipelineBids = branchBids.filter(
-        (b) => b.status === 'Bidding' || b.status === 'In Progress' || b.status === 'Sent'
-      )
-      const awardedBids = branchBids.filter((b) => b.status === 'Awarded')
-      const verbalBids = branchBids.filter((b) => b.status === 'Verbal')
-      const value =
-        metric === 'Pipeline'
-          ? pipelineBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-          : metric === 'Awarded'
-          ? awardedBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-          : verbalBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-      const activeCount = branchBids.filter(
-        (b) => b.status === 'Bidding' || b.status === 'In Progress'
-      ).length
-      return { branch, value, activeCount }
-    })
-  }, [bids, metric])
-
-  const maxValue = Math.max(...breakdown.map((b) => b.value), 1)
-  const barBackground = BRANCH_METRIC_BAR[metric]
-
-  return (
-    <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
-      {breakdown.map((item) => {
-        const pct = Math.round((item.value / maxValue) * 100)
-        return (
-          <div key={item.branch}>
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '5px',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span
-                  className={`inline-flex items-center px-1.5 py-0 rounded text-xs border ${BRANCH_BADGE_CLASSES[item.branch] ?? ''}`}
-                >
-                  {item.branch}
-                </span>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
-                  {BRANCH_LABELS[item.branch]}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <span style={{ fontSize: '0.72rem', color: 'var(--text3)' }}>
-                  {item.activeCount} active
-                </span>
-                <span
-                  style={{
-                    fontSize: '0.75rem',
-                    fontWeight: 500,
-                    fontFamily: '"IBM Plex Mono", monospace',
-                  }}
-                >
-                  {formatCurrency(item.value)}
-                </span>
-              </div>
-            </div>
-            <div
-              style={{
-                width: '100%',
-                height: '10px',
-                borderRadius: '5px',
-                background: 'var(--surface2)',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  height: '100%',
-                  width: `${pct}%`,
-                  borderRadius: '5px',
-                  background: barBackground,
-                  transition: 'width 300ms ease',
-                }}
-              />
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// ─── Revenue by Scope donut chart ───────────────────────────────────────────
-
-const SCOPE_CHART_COLORS: Record<string, string> = {
-  'HVAC Piping':     '#378ADD',
-  'Refer Piping':    '#6366f1',
-  'HVAC Ductwork':   '#60a5fa',
-  'Plumbing Piping': '#639922',
-  'Fire Stopping':   '#f59e0b',
-  'Equipment':       '#a855f7',
-  'Other':           '#9ca3af',
-}
-
-function RevenueByScope({ bids }: { bids: Bid[] }) {
-  const awardedBids = bids.filter((b) => b.status === 'Awarded')
-
-  const scopeMap = new Map<string, number>()
-  for (const bid of awardedBids) {
-    for (const li of bid.line_items ?? []) {
-      const prev = scopeMap.get(li.scope) ?? 0
-      scopeMap.set(li.scope, prev + (li.price ?? 0))
-    }
-  }
-
-  const data = Array.from(scopeMap.entries())
-    .map(([scope, value]) => ({ scope, value }))
-    .filter((d) => d.value > 0)
-    .sort((a, b) => b.value - a.value)
-
-  if (data.length === 0) {
-    return (
-      <div style={{ padding: '16px' }}>
-        <p style={{ fontSize: '0.75rem', color: 'var(--text3)', textAlign: 'center', paddingTop: 24 }}>
-          No awarded bids yet.
-        </p>
-      </div>
-    )
-  }
-
-  const total = data.reduce((sum, d) => sum + d.value, 0)
-
-  const CustomLegend = () => (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', paddingLeft: '8px' }}>
-      {data.map((d) => (
-        <div key={d.scope} style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
-          <span
+          <button
+            key={String(opt.value)}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange(opt.value)}
             style={{
-              width: 10,
-              height: 10,
-              borderRadius: 2,
-              background: SCOPE_CHART_COLORS[d.scope] ?? '#9ca3af',
-              flexShrink: 0,
-            }}
-          />
-          <span style={{ fontSize: '0.72rem', color: 'var(--text3)', flex: 1 }}>{d.scope}</span>
-          <span
-            style={{
-              fontSize: '0.72rem',
+              fontSize: 12,
               fontWeight: 500,
-              fontFamily: '"IBM Plex Mono", monospace',
-              color: 'var(--text)',
+              padding: '4px 12px',
+              borderRadius: 999,
+              border: 'none',
+              background: active ? 'rgba(56, 189, 248, 0.16)' : 'transparent',
+              color: active ? '#38bdf8' : 'var(--dash-text3)',
+              cursor: 'pointer',
+              transition: 'background 150ms ease, color 150ms ease',
+              fontFamily: 'inherit',
             }}
           >
-            {formatCurrency(d.value)}
-          </span>
-        </div>
-      ))}
+            {opt.label}
+          </button>
+        )
+      })}
     </div>
   )
+}
 
-  return (
-    <div style={{ padding: '8px 16px 16px', display: 'flex', alignItems: 'center', gap: '12px' }}>
-      <div style={{ flexShrink: 0, width: 160 }}>
-        <ResponsiveContainer width={160} height={160}>
-          <PieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="scope"
-              cx="50%"
-              cy="50%"
-              outerRadius={72}
-              innerRadius={44}
-              strokeWidth={0}
-            >
-              {data.map((entry) => (
-                <Cell
-                  key={entry.scope}
-                  fill={SCOPE_CHART_COLORS[entry.scope] ?? '#9ca3af'}
-                />
-              ))}
-            </Pie>
-            <Tooltip
-              formatter={(v) => [formatCurrencyFull(Number(v))]}
-              contentStyle={{
-                fontSize: '11px',
-                background: 'var(--surface)',
-                border: '1px solid var(--border)',
-                borderRadius: '6px',
-              }}
-            />
-          </PieChart>
-        </ResponsiveContainer>
-        <p
+// ─── AdminDashboard root ────────────────────────────────────────────────────
+
+export function AdminDashboard() {
+  const { allBids, orgBids, loading, error } = useDashboard()
+  const { profile } = useUserRole()
+  const [timeRange, setTimeRange] = useState<TimeRange>('this-month')
+
+  const now = useMemo(() => new Date(), [])
+
+  // Filter personal allBids by the global time range. The window applies to
+  // bid_due_date — when a bid is "happening" — to match the existing pattern.
+  const filteredBids = useMemo(() => {
+    const window = currentWindow(timeRange, now)
+    if (!window.start) return allBids
+    const startMs = window.start.getTime()
+    return allBids.filter((b) => {
+      const due = bidDueDate(b)
+      return due != null && due.getTime() >= startMs
+    })
+  }, [allBids, timeRange, now])
+
+  const securedKpi = useMemo(
+    () => computeSecuredKpi(allBids, timeRange, now),
+    [allBids, timeRange, now],
+  )
+  const openKpi = useMemo(
+    () => computeOpenKpi(allBids, timeRange, now),
+    [allBids, timeRange, now],
+  )
+  const sentKpi = useMemo(
+    () => computeSentKpi(allBids, timeRange, now),
+    [allBids, timeRange, now],
+  )
+  const winKpi = useMemo(
+    () => computeWinRateKpi(allBids, timeRange, now),
+    [allBids, timeRange, now],
+  )
+
+  const firstName = useMemo(() => {
+    const n = profile?.name ?? ''
+    return n.split(/\s+/)[0] || 'Admin'
+  }, [profile])
+
+  if (error) {
+    return (
+      <div className="dash-shell">
+        <div
           style={{
-            textAlign: 'center',
-            fontSize: '0.7rem',
-            color: 'var(--text3)',
-            marginTop: '-8px',
+            padding: 16,
+            background: 'rgba(239, 68, 68, 0.12)',
+            border: '1px solid rgba(239, 68, 68, 0.3)',
+            borderRadius: 8,
+            color: '#fb7185',
           }}
         >
-          Total: {formatCurrency(total)}
-        </p>
+          Failed to load dashboard: {error}
+        </div>
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <CustomLegend />
-      </div>
-    </div>
-  )
-}
-
-// ─── Recent Bids table (full width) ─────────────────────────────────────────
-
-function getDueDateBadge(
-  dueDateStr: string | null | undefined
-): { label: string; bg: string; color: string } | null {
-  if (!dueDateStr) return null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const due = new Date(dueDateStr + 'T00:00:00')
-  const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-  if (diff < 0) return null
-  const label = `${diff}d`
-  if (diff <= 2) return { label, bg: '#FCEBEB', color: '#A32D2D' }
-  if (diff <= 5) return { label, bg: '#FAEEDA', color: '#854F0B' }
-  return { label, bg: '#EAF3DE', color: '#3B6D11' }
-}
-
-const BID_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
-
-function RecentBidsTable({
-  bids,
-  statusFilter,
-  branchFilter,
-}: {
-  bids: Bid[]
-  statusFilter: string
-  branchFilter: string
-}) {
-  const router = useRouter()
-
-  const filtered = useMemo(() => {
-    let result = bids
-    if (statusFilter !== 'all') result = result.filter((b) => b.status === statusFilter)
-    if (branchFilter !== 'all') result = result.filter((b) => b.branch === branchFilter)
-    return result.slice(0, 8)
-  }, [bids, statusFilter, branchFilter])
-
-  if (filtered.length === 0) {
-    return (
-      <p style={{ padding: '24px 16px', textAlign: 'center', fontSize: '0.8rem', color: 'var(--text3)' }}>
-        No bids found.
-      </p>
     )
   }
-
-  return (
-    <div style={{ overflowX: 'auto' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.82rem' }}>
-        <thead>
-          <tr style={{ borderBottom: '0.5px solid var(--border)', background: 'var(--surface2)' }}>
-            {['Project Name', 'Client', 'Bid Value', 'Status', 'Due'].map((h) => (
-              <th
-                key={h}
-                style={{
-                  padding: '8px 14px',
-                  textAlign: 'left',
-                  fontSize: '0.68rem',
-                  fontWeight: 700,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--text3)',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {h}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((bid) => {
-            const clientNames = (bid.clients ?? [])
-              .map(getBidClientName)
-              .filter(Boolean)
-            const clientDisplay =
-              clientNames.length === 0
-                ? '—'
-                : clientNames.length === 1
-                  ? clientNames[0]
-                  : `${clientNames[0]} +${clientNames.length - 1}`
-            const dueBadge = getDueDateBadge(bid.bid_due_date)
-            return (
-              <tr
-                key={bid.id}
-                onClick={() => router.push(`/dashboard/bids/${bid.id}`)}
-                style={{
-                  borderBottom: '0.5px solid var(--border)',
-                  cursor: 'pointer',
-                  transition: 'background 0.1s',
-                }}
-                onMouseEnter={(e) => {
-                  ;(e.currentTarget as HTMLElement).style.background = 'var(--surface2)'
-                }}
-                onMouseLeave={(e) => {
-                  ;(e.currentTarget as HTMLElement).style.background = ''
-                }}
-              >
-                <td style={{ padding: '10px 14px', fontWeight: 500, maxWidth: 260 }}>
-                  <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {bid.project_name}
-                  </span>
-                </td>
-                <td
-                  style={{
-                    padding: '10px 14px',
-                    color: 'var(--text3)',
-                    maxWidth: 160,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {clientDisplay}
-                </td>
-                <td
-                  style={{
-                    padding: '10px 14px',
-                    fontFamily: '"IBM Plex Mono", monospace',
-                    fontWeight: 500,
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {bid.total_price ? formatCurrency(bid.total_price) : '—'}
-                </td>
-                <td style={{ padding: '10px 14px' }}>
-                  <span
-                    className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${STATUS_BADGE_CLASSES[bid.status]}`}
-                  >
-                    {bid.status}
-                  </span>
-                </td>
-                <td style={{ padding: '10px 14px' }}>
-                  {dueBadge ? (
-                    <span
-                      style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        borderRadius: '999px',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        background: dueBadge.bg,
-                        color: dueBadge.color,
-                      }}
-                    >
-                      {dueBadge.label}
-                    </span>
-                  ) : (
-                    <span style={{ color: 'var(--text3)' }}>—</span>
-                  )}
-                </td>
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )
-}
-
-// ─── AdminDashboard ─────────────────────────────────────────────────────────
-
-const selectStyle: React.CSSProperties = {
-  fontSize: '13px',
-  fontWeight: 500,
-  padding: '3px 8px',
-  borderRadius: '6px',
-  border: '0.5px solid var(--border)',
-  background: 'white',
-  color: 'var(--text)',
-  cursor: 'pointer',
-  outline: 'none',
-  appearance: 'auto',
-}
-
-export function AdminDashboard({ timeRange = 'this-month' }: { timeRange?: TimeRange }) {
-  const { allBids, orgBids, loading, error } = useDashboard()
-
-  // Step 2: Pipeline trend range
-  const [trendWeeks, setTrendWeeks] = useState<TrendWeeks>(8)
-
-  // Step 3: Branch metric toggle
-  const [branchMetric, setBranchMetric] = useState<BranchMetric>('Pipeline')
-
-  // Step 4: Recent bids filters
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [branchFilter, setBranchFilter] = useState<string>('all')
-
-  // Filter allBids by global timeRange (for personal KPIs + charts). The window
-  // is applied to bid_due_date — when a bid is "happening" — not to created_at
-  // or updated_at, both of which are dominated by import/edit churn.
-  const filteredBids = useMemo(() => {
-    const start = getTimeRangeStart(timeRange)
-    if (!start) return allBids
-    return allBids.filter((b) => b.bid_due_date >= start)
-  }, [allBids, timeRange])
-
-  // Filter orgBids by global timeRange (for org-wide breakdown charts)
-  const filteredOrgBids = useMemo(() => {
-    const start = getTimeRangeStart(timeRange)
-    if (!start) return orgBids
-    return orgBids.filter((b) => b.bid_due_date >= start)
-  }, [orgBids, timeRange])
 
   if (loading) {
     return (
-      <div className="space-y-3">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="animate-pulse"
-              style={{ height: 96, ...cardStyle }}
-            />
-          ))}
+      <div className="dash-shell">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div className="animate-pulse" style={{ height: 60, borderRadius: 12, background: 'var(--dash-card)' }} />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="animate-pulse" style={{ height: 130, borderRadius: 14, background: 'var(--dash-card)' }} />
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: 16 }}>
+            <div className="animate-pulse" style={{ height: 320, borderRadius: 14, background: 'var(--dash-card)' }} />
+            <div className="animate-pulse" style={{ height: 320, borderRadius: 14, background: 'var(--dash-card)' }} />
+          </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
-          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
-          <div className="animate-pulse" style={{ height: 220, ...cardStyle }} />
-        </div>
-        <div className="animate-pulse" style={{ height: 280, ...cardStyle }} />
       </div>
     )
   }
 
-  if (error) {
-    return <div className="error-card">Failed to load dashboard: {error}</div>
-  }
-
-  // ── Pinned "Total Secured This Year" — org-wide, always YTD, ignores the
-  // active time-window filter. Supports both flagging paths:
-  //   • Status-only: bid.status = 'Awarded' (or 'Verbal') with no scope checkboxes
-  //     ticked → count every line item on the bid.
-  //   • Per-scope:  any line_item.is_awarded = true → count only those.
-  // Each surviving line item's "won year" is line_item.awarded_at (when set) or
-  // the parent bid's bid_due_date as a fallback. Lost/active-status bids are
-  // excluded outright so stale is_awarded flags can't leak in.
-  const ytdYear = new Date().getFullYear()
-  const ytdYearStr = String(ytdYear)
-  const ytdBidIds = new Set<string>()
-  let ytdSecuredValue = 0
-  for (const b of orgBids) {
-    if (b.status !== 'Awarded' && b.status !== 'Verbal') continue
-    const lineItems = b.line_items ?? []
-    const anyFlagged = lineItems.some((li) => li.is_awarded)
-    const surviving = anyFlagged ? lineItems.filter((li) => li.is_awarded) : lineItems
-    for (const li of surviving) {
-      let inYear = false
-      if (li.awarded_at) {
-        inYear = new Date(li.awarded_at).getFullYear() === ytdYear
-      } else if (b.bid_due_date) {
-        inYear = b.bid_due_date.startsWith(ytdYearStr)
-      }
-      if (!inYear) continue
-      ytdSecuredValue += li.price ?? 0
-      ytdBidIds.add(b.id)
-    }
-  }
-  const ytdJobCount = ytdBidIds.size
-
-  // ── KPI calculations (from filteredBids) ────────────────────────────────
-  // "Total Secured" small card filters Awarded bids by the bid's effective won
-  // date (MAX flagged-line-item awarded_at, falling back to bid_due_date) — not
-  // by bid_due_date alone, so a bid won in Jan with a Dec due date still lands
-  // in "This Year."
-  const securedWindowStart = getTimeRangeStart(timeRange)
-  const securedBids = allBids.filter((b) => {
-    if (b.status !== 'Awarded') return false
-    if (!securedWindowStart) return true
-    const ymd = bidAwardedYmd(b)
-    return ymd != null && ymd >= securedWindowStart
-  })
-  const totalSecuredValue = securedBids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
-  const totalSecuredJobs = securedBids.length
-
-  const openBidsCount = filteredBids.filter(
-    (b) => b.status === 'Bidding' || b.status === 'In Progress'
-  ).length
-
-  const sentCount = filteredBids.filter((b) => b.status === 'Sent').length
-
-  const awardedCount = filteredBids.filter((b) => b.status === 'Awarded').length
-  const winRate =
-    sentCount > 0
-      ? Math.round((awardedCount / sentCount) * 100)
-      : null
-
-  const timeRangeLabel =
-    timeRange === 'this-month' ? 'This Month'
-    : timeRange === 'this-quarter' ? 'This Quarter'
-    : timeRange === 'this-year' ? 'This Year'
-    : 'All Time'
-
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* ── Row 0: Pinned headline — TOTAL SECURED THIS YEAR (org-wide, YTD) ── */}
-      <div
-        style={{
-          ...cardStyle,
-          background:
-            'linear-gradient(135deg, rgba(16,185,129,0.08) 0%, var(--surface) 65%)',
-          borderColor: 'rgba(16,185,129,0.35)',
-          padding: '20px 24px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 16,
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <p
-            style={{
-              fontSize: '0.78rem',
-              fontWeight: 800,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: 'var(--green, #10b981)',
-            }}
-          >
-            Total Secured This Year
-          </p>
-          <p
-            style={{
-              fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
-              fontSize: '2.4rem',
-              fontWeight: 600,
-              marginTop: 6,
-              color: 'var(--text)',
-              letterSpacing: '-0.8px',
-              lineHeight: 1,
-            }}
-          >
-            {formatCurrencyFull(ytdSecuredValue)}
-          </p>
-          <p
-            style={{
-              color: 'var(--text3)',
-              fontSize: '0.78rem',
-              marginTop: 8,
-            }}
-          >
-            {ytdJobCount} job{ytdJobCount === 1 ? '' : 's'} · year-to-date
-          </p>
-        </div>
-        <span
+    <div className="dash-shell">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+        {/* ── Page header ─────────────────────────────────────────── */}
+        <header
           style={{
-            fontSize: '0.7rem',
-            fontWeight: 700,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'var(--green, #10b981)',
-            padding: '4px 10px',
-            borderRadius: 999,
-            border: '0.5px solid rgba(16,185,129,0.4)',
-            background: 'rgba(16,185,129,0.08)',
-            whiteSpace: 'nowrap',
-            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'space-between',
+            gap: 16,
+            flexWrap: 'wrap',
           }}
         >
-          {ytdYear}
-        </span>
-      </div>
-
-      {/* ── Row 1: KPI cards ─────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12 }}>
-        <KpiCard
-          label="Total Secured"
-          value={formatCurrency(totalSecuredValue)}
-          subtext={`${totalSecuredJobs} jobs · ${timeRangeLabel}`}
-        />
-        <KpiCard
-          label="Open Bids"
-          value={openBidsCount}
-          subtext="Bidding + In Progress"
-        />
-        <KpiCard
-          label="Bids Sent"
-          value={sentCount}
-          subtext={timeRangeLabel}
-        />
-        <KpiCard
-          label="Win Rate"
-          value={winRate !== null ? `${winRate}%` : '—'}
-          subtext={`Wins / Bids Sent`}
-        />
-      </div>
-
-      {/* ── Row 2: Active Pipeline + Pipeline Trend ───────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div>
-              <p style={cardTitleStyle}>Active Pipeline</p>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-                Total bid value by stage
-              </p>
-            </div>
-          </div>
-          <ActivePipelineChart bids={filteredBids} />
-        </div>
-
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div>
-              <p style={cardTitleStyle}>Pipeline Trend</p>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-                Active bid value — last {trendWeeks} weeks
-              </p>
-            </div>
-            <SegmentedControl<TrendWeeks>
-              options={[
-                { label: '4W', value: 4 },
-                { label: '8W', value: 8 },
-                { label: '12W', value: 12 },
-              ]}
-              value={trendWeeks}
-              onChange={setTrendWeeks}
-            />
-          </div>
-          <PipelineTrendChart bids={filteredBids} weeks={trendWeeks} />
-        </div>
-      </div>
-
-      {/* ── Row 3: Branch Performance + Revenue by Scope ─────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div>
-              <p style={cardTitleStyle}>Branch Performance</p>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-                {branchMetric === 'Pipeline'
-                  ? 'Pipeline value'
-                  : branchMetric === 'Awarded'
-                  ? 'Awarded value'
-                  : 'Verbal value'} by branch
-              </p>
-            </div>
-            <SegmentedControl<BranchMetric>
-              options={[
-                { label: 'Pipeline', value: 'Pipeline' },
-                { label: 'Awarded', value: 'Awarded' },
-                { label: 'Verbal', value: 'Verbal' },
-              ]}
-              value={branchMetric}
-              onChange={setBranchMetric}
-            />
-          </div>
-          <BranchPerformanceChart bids={filteredOrgBids} metric={branchMetric} />
-        </div>
-
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div>
-              <p style={cardTitleStyle}>Revenue by Scope</p>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-                Awarded bids grouped by scope
-              </p>
-            </div>
-          </div>
-          <RevenueByScope bids={filteredOrgBids} />
-        </div>
-      </div>
-
-      {/* ── Row 4: Recent Bids ───────────────────────────────────────── */}
-      <div style={cardStyle}>
-        <div style={cardHeaderStyle}>
           <div>
-            <p style={cardTitleStyle}>Recent Bids</p>
-            <p style={{ fontSize: '0.7rem', color: 'var(--text3)', marginTop: 2 }}>
-              Up to 8 bids, sorted by last updated
+            <p
+              style={{
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                color: '#38bdf8',
+                textTransform: 'uppercase',
+              }}
+            >
+              BidWatt · Command Center
+            </p>
+            <h1
+              style={{
+                fontSize: 28,
+                fontWeight: 700,
+                color: 'var(--dash-text)',
+                letterSpacing: '-0.6px',
+                marginTop: 6,
+              }}
+            >
+              Welcome back, {firstName}
+            </h1>
+            <p style={{ fontSize: 13, color: 'var(--dash-text3)', marginTop: 4 }}>
+              {TIME_RANGE_LABEL[timeRange]} · 5 branches · {format(now, 'MMM d, yyyy')}
             </p>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            <select
-              style={selectStyle}
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="all">All Statuses</option>
-              {BID_STATUSES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-            <select
-              style={selectStyle}
-              value={branchFilter}
-              onChange={(e) => setBranchFilter(e.target.value)}
-            >
-              <option value="all">All Branches</option>
-              {ALL_BRANCHES.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
+          <DarkSegmented<TimeRange>
+            value={timeRange}
+            options={TIME_RANGE_OPTIONS}
+            onChange={setTimeRange}
+          />
+        </header>
+
+        {/* ── Row 1: KPI strip ─────────────────────────────────────── */}
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+          <KpiCard
+            label="Total Secured"
+            accent="#34d399"
+            value={securedKpi.value}
+            format={formatCurrencyFull}
+            subtext={securedKpi.subtext}
+            delta={securedKpi.delta}
+            sparkline={securedKpi.sparkline}
+          />
+          <KpiCard
+            label="Open Bids"
+            accent="#38bdf8"
+            value={openKpi.value}
+            format={formatCount}
+            subtext={openKpi.subtext}
+            delta={openKpi.delta}
+            sparkline={openKpi.sparkline}
+          />
+          <KpiCard
+            label="Bids Sent"
+            accent="#a78bfa"
+            value={sentKpi.value}
+            format={formatCount}
+            subtext={sentKpi.subtext}
+            delta={sentKpi.delta}
+            sparkline={sentKpi.sparkline}
+          />
+          <KpiCard
+            label="Win Rate"
+            accent="#fbbf24"
+            value={winKpi.value}
+            format={formatPercent}
+            subtext={winKpi.subtext}
+            delta={winKpi.delta}
+            sparkline={winKpi.sparkline}
+          />
+        </section>
+
+        {/* ── Row 2: Active Pipeline + Pipeline Trend ─────────────── */}
+        <section
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1.2fr',
+            gap: 16,
+            alignItems: 'stretch',
+          }}
+        >
+          <div
+            style={{
+              background: 'var(--dash-card)',
+              border: '1px solid var(--dash-border)',
+              borderRadius: 14,
+              padding: 18,
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 14,
+            }}
+          >
+            <header>
+              <p
+                style={{
+                  fontSize: 10.5,
+                  fontWeight: 700,
+                  letterSpacing: '0.09em',
+                  textTransform: 'uppercase',
+                  color: 'var(--dash-text3)',
+                }}
+              >
+                Active Pipeline
+              </p>
+              <p style={{ fontSize: 11, color: 'var(--dash-text3)', marginTop: 2 }}>
+                Bid value by stage
+              </p>
+            </header>
+            <GlassPipelineColumn bids={filteredBids} />
           </div>
-        </div>
-        <RecentBidsTable
-          bids={allBids}
-          statusFilter={statusFilter}
-          branchFilter={branchFilter}
-        />
+          <PipelineTrend bids={filteredBids} now={now} />
+        </section>
+
+        {/* ── Row 3: Branch Performance + Revenue by Scope ────────── */}
+        <section style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
+          <BranchPerformance bids={orgBids} />
+          <RevenueByScope bids={orgBids} />
+        </section>
+
+        {/* ── Row 4: Recent Bids ──────────────────────────────────── */}
+        <RecentBids bids={allBids} now={now} />
       </div>
     </div>
   )

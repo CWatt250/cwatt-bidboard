@@ -437,3 +437,57 @@ input[type=number] {
     color: black !important;
   }
 }
+
+/* ── Command Center: dark dashboard shell ─────────────────────────────────
+   Scoped to the .dash-shell wrapper so only the admin dashboard surface
+   adopts the dark palette. Sidebar, topbar, and every other route keep
+   their existing light theme. */
+.dash-shell {
+  --dash-bg:        #0a0e22;
+  --dash-card:      #131a35;
+  --dash-card2:     #1a234a;
+  --dash-border:    rgba(255, 255, 255, 0.06);
+  --dash-text:      #e6ecff;
+  --dash-text2:     #b8c4e6;
+  --dash-text3:     #7d8aba;
+  --dash-grid:      rgba(255, 255, 255, 0.06);
+
+  --st-bidding:     #3b82f6;
+  --st-inprogress:  #f59e0b;
+  --st-sent:        #10b981;
+  --st-verbal:      #8b5cf6;
+  --st-awarded:     #34d399;
+  --st-lost:        #fb7185;
+
+  --kpi-secured:    #34d399;
+  --kpi-open:       #38bdf8;
+  --kpi-sent:       #a78bfa;
+  --kpi-winrate:    #fbbf24;
+
+  background: var(--dash-bg);
+  color: var(--dash-text);
+  border-radius: var(--radius-lg);
+  padding: 28px;
+  font-family: var(--font-sans), 'Plus Jakarta Sans', 'Inter', system-ui, sans-serif;
+  animation: dash-fade-in 220ms ease-out;
+  overflow: hidden;
+}
+
+.dash-shell select,
+.dash-shell select option {
+  color: var(--dash-text);
+  background-color: var(--dash-card);
+}
+
+@keyframes dash-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dash-shell { animation: none !important; }
+  .dash-shell * {
+    animation-duration: 0ms !important;
+    transition-duration: 0ms !important;
+  }
+}

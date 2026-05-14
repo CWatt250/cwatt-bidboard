@@ -34,6 +34,10 @@ export default function DashboardPage() {
     )
   }
 
+  // Admin: render the self-contained dark command center (it owns its own
+  // header + time-range control). Other roles keep the existing light wrapper.
+  if (isAdmin) return <AdminDashboard />
+
   return (
     <div className="space-y-4">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -77,9 +81,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {isAdmin ? (
-        <AdminDashboard timeRange={timeRange} />
-      ) : isBranchManager ? (
+      {isBranchManager ? (
         <BranchManagerDashboard />
       ) : (
         <EstimatorDashboard />
