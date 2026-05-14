@@ -266,6 +266,74 @@ function computeSentKpi(bids: Bid[], range: TimeRange, now: Date): KpiMetric {
   }
 }
 
+// Pinned YTD Secured — always current calendar year, line-item-level.
+// Mirrors the logic shipped in commit aaec501:
+//   • Only Awarded or Verbal parent bids contribute (guards against stale
+//     is_awarded flags on Lost/active rows).
+//   • If any line_item is flagged is_awarded, count only the flagged ones;
+//     otherwise count every line item on the bid (status-only flagging path).
+//   • A line item lands in YTD when its awarded_at year matches the current
+//     calendar year, falling back to the parent bid_due_date year when
+//     awarded_at is null (pre-feature rows).
+//   • Subtitle count is distinct bids that contributed at least one line item.
+interface YtdSecuredResult {
+  value: number
+  jobCount: number
+  year: number
+  sparkline: number[]
+}
+
+function computeYtdSecured(orgBids: Bid[], now: Date): YtdSecuredResult {
+  const ytdYear = now.getFullYear()
+  const ytdYearStr = String(ytdYear)
+  const ytdBidIds = new Set<string>()
+  const monthlyBuckets = new Array(12).fill(0)
+  let ytdSecuredValue = 0
+
+  for (const b of orgBids) {
+    if (b.status !== 'Awarded' && b.status !== 'Verbal') continue
+    const lineItems = b.line_items ?? []
+    const anyFlagged = lineItems.some((li) => li.is_awarded)
+    const surviving = anyFlagged ? lineItems.filter((li) => li.is_awarded) : lineItems
+    for (const li of surviving) {
+      let inYear = false
+      let monthIdx = -1
+      if (li.awarded_at) {
+        const d = new Date(li.awarded_at)
+        inYear = d.getFullYear() === ytdYear
+        monthIdx = d.getMonth()
+      } else if (b.bid_due_date) {
+        inYear = b.bid_due_date.startsWith(ytdYearStr)
+        monthIdx = parseInt(b.bid_due_date.slice(5, 7), 10) - 1
+      }
+      if (!inYear) continue
+      const price = li.price ?? 0
+      ytdSecuredValue += price
+      ytdBidIds.add(b.id)
+      if (monthIdx >= 0 && monthIdx < 12) monthlyBuckets[monthIdx] += price
+    }
+  }
+
+  // Cumulative running total from January through the current month — shows
+  // growth over the year so far. Capped at 8 points to match the small cards.
+  const currentMonth = now.getMonth()
+  const startMonth = Math.max(0, currentMonth - 7)
+  const sparkline: number[] = []
+  let running = 0
+  for (let m = 0; m < startMonth; m++) running += monthlyBuckets[m]
+  for (let m = startMonth; m <= currentMonth; m++) {
+    running += monthlyBuckets[m]
+    sparkline.push(running)
+  }
+
+  return {
+    value: ytdSecuredValue,
+    jobCount: ytdBidIds.size,
+    year: ytdYear,
+    sparkline,
+  }
+}
+
 interface WinRateKpi extends KpiMetric {
   wins: number
   decided: number
@@ -316,9 +384,19 @@ function computeWinRateKpi(bids: Bid[], range: TimeRange, now: Date): WinRateKpi
 
 // ─── Sparkline ─────────────────────────────────────────────────────────────
 
-function Sparkline({ values, color }: { values: number[]; color: string }) {
-  const W = 80
-  const H = 28
+function Sparkline({
+  values,
+  color,
+  width = 80,
+  height = 28,
+}: {
+  values: number[]
+  color: string
+  width?: number
+  height?: number
+}) {
+  const W = width
+  const H = height
   const padding = 2
   const max = Math.max(...values, 1)
   const min = Math.min(...values, 0)
@@ -1473,6 +1551,110 @@ function DarkSegmented<T extends string | number>({
   )
 }
 
+// ─── Pinned YTD Secured row ─────────────────────────────────────────────────
+
+function PinnedYtdRow({ data }: { data: YtdSecuredResult }) {
+  const accent = 'var(--kpi-secured)'
+  const accentHex = '#34d399'
+  return (
+    <div
+      style={{
+        position: 'relative',
+        background: 'var(--dash-card)',
+        border: '1px solid var(--dash-border)',
+        borderRadius: 14,
+        padding: '22px 24px',
+        overflow: 'hidden',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 24,
+      }}
+    >
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 2,
+          background: `linear-gradient(90deg, ${accentHex}, ${accentHex}00)`,
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          top: -60,
+          right: -60,
+          width: 240,
+          height: 240,
+          background: `radial-gradient(circle, ${accentHex}26 0%, ${accentHex}00 70%)`,
+          pointerEvents: 'none',
+        }}
+      />
+      <div style={{ flex: 1, minWidth: 0, position: 'relative' }}>
+        <p
+          style={{
+            fontSize: 10.5,
+            fontWeight: 700,
+            letterSpacing: '0.09em',
+            textTransform: 'uppercase',
+            color: 'var(--dash-text3)',
+            marginBottom: 10,
+          }}
+        >
+          Total Secured This Year
+        </p>
+        <AnimNum
+          value={data.value}
+          format={formatCurrencyFull}
+          style={{
+            display: 'block',
+            fontFamily: '"IBM Plex Mono", var(--font-mono), monospace',
+            fontSize: 38,
+            fontWeight: 500,
+            letterSpacing: '-0.9px',
+            color: 'var(--dash-text)',
+            lineHeight: 1,
+          }}
+        />
+        <p style={{ fontSize: 12, color: 'var(--dash-text3)', marginTop: 12 }}>
+          {data.jobCount} job{data.jobCount === 1 ? '' : 's'} · year to date
+        </p>
+      </div>
+      <div
+        style={{
+          position: 'relative',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-end',
+          gap: 12,
+        }}
+      >
+        <span
+          style={{
+            fontFamily: '"IBM Plex Mono", monospace',
+            fontSize: 11,
+            fontWeight: 700,
+            padding: '4px 10px',
+            borderRadius: 999,
+            background: `${accentHex}22`,
+            color: accent,
+            border: `1px solid ${accentHex}44`,
+            letterSpacing: '0.08em',
+          }}
+        >
+          {data.year}
+        </span>
+        {data.sparkline.length >= 2 && (
+          <Sparkline values={data.sparkline} color={accentHex} width={160} height={40} />
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ─── AdminDashboard root ────────────────────────────────────────────────────
 
 export function AdminDashboard() {
@@ -1498,11 +1680,9 @@ export function AdminDashboard() {
     () => computeSecuredKpi(allBids, timeRange, now),
     [allBids, timeRange, now],
   )
-  // Pinned YTD card — always year-to-date, ignores the time-range filter.
-  const ytdSecuredKpi = useMemo(
-    () => computeSecuredKpi(allBids, 'this-year', now),
-    [allBids, now],
-  )
+  // Pinned YTD Secured row — always current calendar year, line-item-level,
+  // org-wide. Ignores the active time-range filter.
+  const ytdSecured = useMemo(() => computeYtdSecured(orgBids, now), [orgBids, now])
   const openKpi = useMemo(
     () => computeOpenKpi(allBids, timeRange, now),
     [allBids, timeRange, now],
@@ -1605,17 +1785,11 @@ export function AdminDashboard() {
           />
         </header>
 
-        {/* ── Row 1: KPI strip ─────────────────────────────────────── */}
-        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 16 }}>
-          <KpiCard
-            label="YTD Secured"
-            accent="#34d399"
-            value={ytdSecuredKpi.value}
-            format={formatCurrencyFull}
-            subtext={ytdSecuredKpi.subtext}
-            delta={ytdSecuredKpi.delta}
-            sparkline={ytdSecuredKpi.sparkline}
-          />
+        {/* ── Row 1: Pinned YTD Secured (always current calendar year) ── */}
+        <PinnedYtdRow data={ytdSecured} />
+
+        {/* ── Row 2: KPI strip (respects the time-range filter) ────── */}
+        <section style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
           <KpiCard
             label="Total Secured"
             accent="#34d399"
