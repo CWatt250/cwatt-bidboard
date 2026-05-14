@@ -25,6 +25,7 @@ const UNASSIGNED_COLORS = {
 const SCOPE_COLORS: Record<string, string> = {
   'Plumbing Piping': '#0ea5e9',
   'HVAC Piping':     '#06b6d4',
+  'Refer Piping':    '#6366f1',
   'HVAC Ductwork':   '#f97316',
   'Fire Stopping':   '#ef4444',
   'Equipment':       '#8b5cf6',

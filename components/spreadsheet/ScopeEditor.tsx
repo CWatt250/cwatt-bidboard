@@ -18,6 +18,7 @@ import {
 const ALL_SCOPES: BidScope[] = [
   'Plumbing Piping',
   'HVAC Piping',
+  'Refer Piping',
   'HVAC Ductwork',
   'Fire Stopping',
   'Equipment',

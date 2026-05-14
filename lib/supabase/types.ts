@@ -37,7 +37,7 @@ export interface WorkspaceTodo {
 }
 
 export type BidStatus = 'Unassigned' | 'Bidding' | 'In Progress' | 'Sent' | 'Verbal' | 'Awarded' | 'Lost'
-export type BidScope = 'Plumbing Piping' | 'HVAC Piping' | 'HVAC Ductwork' | 'Fire Stopping' | 'Equipment' | 'Other'
+export type BidScope = 'Plumbing Piping' | 'HVAC Piping' | 'Refer Piping' | 'HVAC Ductwork' | 'Fire Stopping' | 'Equipment' | 'Other'
 export type BidBranch = Branch
 
 export interface BidLineItem {

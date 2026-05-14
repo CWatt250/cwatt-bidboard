@@ -57,6 +57,7 @@ const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const ALL_SCOPES: BidScope[] = [
   'Plumbing Piping',
   'HVAC Piping',
+  'Refer Piping',
   'HVAC Ductwork',
   'Fire Stopping',
   'Equipment',

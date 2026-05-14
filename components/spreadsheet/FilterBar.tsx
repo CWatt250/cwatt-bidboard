@@ -20,7 +20,7 @@ const ALL_STATUSES: BidStatus[] = [
 ]
 const ALL_BRANCHES = ['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const
 const ALL_SCOPES: BidScope[] = [
-  'Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other',
+  'Plumbing Piping', 'HVAC Piping', 'Refer Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other',
 ]
 const DUE_DATE_OPTIONS: { label: string; value: DueDateFilter }[] = [
   { label: 'All', value: 'all' },

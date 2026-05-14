@@ -31,6 +31,7 @@ const ALL_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent
 const ALL_SCOPES: BidScope[] = [
   'Plumbing Piping',
   'HVAC Piping',
+  'Refer Piping',
   'HVAC Ductwork',
   'Fire Stopping',
   'Equipment',

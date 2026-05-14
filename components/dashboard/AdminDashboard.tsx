@@ -470,6 +470,7 @@ function BranchPerformanceChart({
 
 const SCOPE_CHART_COLORS: Record<string, string> = {
   'HVAC Piping':     '#378ADD',
+  'Refer Piping':    '#6366f1',
   'HVAC Ductwork':   '#60a5fa',
   'Plumbing Piping': '#639922',
   'Fire Stopping':   '#f59e0b',

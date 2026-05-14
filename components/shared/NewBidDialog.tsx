@@ -33,7 +33,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 
-const SCOPES = ['Plumbing Piping', 'HVAC Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other'] as const
+const SCOPES = ['Plumbing Piping', 'HVAC Piping', 'Refer Piping', 'HVAC Ductwork', 'Fire Stopping', 'Equipment', 'Other'] as const
 const BRANCHES = ['PSC', 'SEA', 'POR', 'PHX', 'SLC'] as const
 
 const BRANCH_LABELS: Record<string, string> = {

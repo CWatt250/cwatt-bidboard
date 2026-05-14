@@ -4,6 +4,7 @@ import type { BidScope, BidStatus } from '@/hooks/useBids'
 export const SCOPE_BADGE_CLASSES: Record<BidScope, string> = {
   'Plumbing Piping': 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300',
   'HVAC Piping':     'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300',
+  'Refer Piping':    'bg-indigo-100 text-indigo-700 border-indigo-200 dark:bg-indigo-900/30 dark:text-indigo-300',
   'HVAC Ductwork':   'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300',
   'Fire Stopping':   'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300',
   'Equipment':       'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300',

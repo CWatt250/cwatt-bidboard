@@ -13,6 +13,7 @@ import type { Bid } from '@/hooks/useBids'
 const SCOPE_COLORS: Record<string, { bg: string; text: string }> = {
   'Plumbing Piping': { bg: 'rgba(56,189,248,0.12)', text: '#0ea5e9' },
   'HVAC Piping':     { bg: 'rgba(6,182,212,0.12)',  text: '#06b6d4' },
+  'Refer Piping':    { bg: 'rgba(99,102,241,0.12)', text: '#6366f1' },
   'HVAC Ductwork':   { bg: 'rgba(249,115,22,0.12)', text: '#f97316' },
   'Fire Stopping':   { bg: 'rgba(239,68,68,0.12)',  text: '#ef4444' },
   'Equipment':       { bg: 'rgba(139,92,246,0.12)', text: '#8b5cf6' },
