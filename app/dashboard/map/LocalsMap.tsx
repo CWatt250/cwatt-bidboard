@@ -6,6 +6,7 @@ import 'mapbox-gl/dist/mapbox-gl.css'
 import * as turf from '@turf/turf'
 import type { Feature, Geometry, Polygon, MultiPolygon } from 'geojson'
 import { LOCALS, type LocalNumber } from '@/config/locals'
+import { IREX_BRANCHES } from '@/config/irex-branches'
 import type { MapBid } from './MapPageClient'
 
 mapboxgl.accessToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN ?? ''
@@ -28,23 +29,10 @@ interface GeoFeatureCollection {
 
 interface LocalsMapProps {
   bids: MapBid[]
-}
-
-function formatCurrency(value: number | null): string {
-  if (value == null) return 'TBD'
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
-    maximumFractionDigits: 0,
-  }).format(value)
-}
-
-function escHtml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+  selectedBidId: string | null
+  hoveredBidId: string | null
+  onBidHover: (id: string | null) => void
+  onBidClick: (id: string) => void
 }
 
 function getBidColor(
@@ -62,16 +50,20 @@ function getBidColor(
       // skip malformed features
     }
   }
-  return '#9ca3af' // no local — gray pin
+  return '#9ca3af'
 }
 
-export default function LocalsMap({ bids }: LocalsMapProps) {
+const BUILDING_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>`
+
+export default function LocalsMap({ bids, selectedBidId, hoveredBidId, onBidHover, onBidClick }: LocalsMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
   const markersRef = useRef<mapboxgl.Marker[]>([])
+  const branchMarkersRef = useRef<mapboxgl.Marker[]>([])
+  const markerElsRef = useRef<Map<string, HTMLElement>>(new Map())
+  const popupRef = useRef<mapboxgl.Popup | null>(null)
   const [territories, setTerritories] = useState<GeoFeatureCollection | null>(null)
 
-  // Fetch the territory GeoJSON once so we can do point-in-polygon for marker colors
   useEffect(() => {
     fetch('/locals-territories.geojson')
       .then((r) => r.json() as Promise<GeoFeatureCollection>)
@@ -94,7 +86,6 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
     map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
     map.on('load', () => {
-      // ── County territory fills ─────────────────────────────────────────────
       map.addSource('locals', {
         type: 'geojson',
         data: '/locals-territories.geojson',
@@ -121,7 +112,6 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
         },
       })
 
-      // ── Local number labels — one label per local at its center ────────────
       const localNumbers: LocalNumber[] = [7, 16, 28, 36, 69, 73, 76, 82, 135]
       localNumbers.forEach((num) => {
         const local = LOCALS[num]
@@ -159,67 +149,106 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
           },
         })
       })
+
+      // Irex branch markers — add after map layers so they sit above territories
+      IREX_BRANCHES.forEach((branch) => {
+        const el = document.createElement('div')
+        el.style.cssText = `
+          width: 28px;
+          height: 28px;
+          border-radius: 6px;
+          background: #fff;
+          border: 1.5px solid #374151;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #374151;
+          cursor: default;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+        `
+        el.innerHTML = BUILDING_SVG
+
+        const marker = new mapboxgl.Marker({ element: el })
+          .setLngLat([branch.lng, branch.lat])
+          .addTo(map)
+
+        branchMarkersRef.current.push(marker)
+      })
     })
 
     return () => {
       markersRef.current.forEach((m) => m.remove())
       markersRef.current = []
+      branchMarkersRef.current.forEach((m) => m.remove())
+      branchMarkersRef.current = []
+      markerElsRef.current.clear()
       map.remove()
       mapRef.current = null
     }
   }, [])
 
-  // Add/refresh markers whenever bids or territories change
+  // Add/refresh bid markers whenever bids or territories change
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
     markersRef.current.forEach((m) => m.remove())
     markersRef.current = []
+    markerElsRef.current.clear()
 
     function placeMarkers() {
       for (const bid of bids) {
         const color = getBidColor(bid, territories)
-        const noLocal = color === '#9ca3af'
 
         const el = document.createElement('div')
         el.style.cssText = `
-          width: 14px;
-          height: 14px;
+          width: 12px;
+          height: 12px;
           border-radius: 50%;
           background: ${color};
           border: 2px solid #fff;
-          box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
           cursor: pointer;
         `
 
-        const localLabel = noLocal ? 'No local' : getLocalName(color)
-
-        const popup = new mapboxgl.Popup({
-          closeOnClick: false,
-          closeOnMove: false,
-          offset: 10,
-          maxWidth: '280px',
-        }).setHTML(`
-          <div style="font-family: system-ui, sans-serif; padding: 4px 2px;">
-            <p style="margin: 0 0 4px; font-weight: 600; font-size: 0.875rem; color: #111;">${escHtml(bid.project_name)}</p>
-            <p style="margin: 0 0 2px; font-size: 0.75rem; color: #555;">Branch: ${escHtml(bid.branch)}</p>
-            <p style="margin: 0 0 2px; font-size: 0.75rem; color: #555;">Status: ${escHtml(bid.status)}</p>
-            <p style="margin: 0 0 2px; font-size: 0.75rem; color: #555;">Bid Value: ${formatCurrency(bid.total_price)}</p>
-            ${noLocal ? `<p style="margin: 0 0 8px; font-size: 0.75rem; color: #999;">No local</p>` : `<p style="margin: 0 0 8px; font-size: 0.75rem; color: #555;">${escHtml(localLabel)}</p>`}
-            <a href="/dashboard/bids/${bid.id}" style="display: inline-block; font-size: 0.75rem; font-weight: 600; color: #2563eb; text-decoration: none;">Open bid →</a>
-          </div>
-        `)
-
         const marker = new mapboxgl.Marker({ element: el })
           .setLngLat([bid.longitude, bid.latitude])
-          .setPopup(popup)
           .addTo(map!)
 
-        el.addEventListener('click', () => {
+        el.addEventListener('mouseenter', () => {
+          // Remove previous popup
+          if (popupRef.current) {
+            popupRef.current.remove()
+            popupRef.current = null
+          }
+
+          const popup = new mapboxgl.Popup({
+            closeButton: false,
+            closeOnClick: false,
+            offset: 10,
+          }).setHTML(
+            `<div style="font-family: system-ui, sans-serif; font-size: 0.8125rem; font-weight: 600; color: #111; padding: 2px 4px; white-space: nowrap;">${bid.project_name}</div>`
+          )
+
+          marker.setPopup(popup)
           marker.togglePopup()
+          popupRef.current = popup
+          onBidHover(bid.id)
         })
 
+        el.addEventListener('mouseleave', () => {
+          if (popupRef.current) {
+            popupRef.current.remove()
+            popupRef.current = null
+          }
+          onBidHover(null)
+        })
+
+        el.addEventListener('click', () => {
+          onBidClick(bid.id)
+        })
+
+        markerElsRef.current.set(bid.id, el)
         markersRef.current.push(marker)
       }
     }
@@ -229,7 +258,37 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
     } else {
       map.once('load', placeMarkers)
     }
-  }, [bids, territories])
+  }, [bids, territories, onBidHover, onBidClick])
+
+  // Update marker sizes when selectedBidId or hoveredBidId changes
+  useEffect(() => {
+    markerElsRef.current.forEach((el, id) => {
+      const isActive = id === selectedBidId || id === hoveredBidId
+      if (isActive) {
+        const color = el.style.background
+        el.style.cssText = `
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: ${color};
+          border: 2px solid #fff;
+          box-shadow: 0 0 0 4px ${color}66;
+          cursor: pointer;
+        `
+      } else {
+        const color = el.style.background
+        el.style.cssText = `
+          width: 12px;
+          height: 12px;
+          border-radius: 50%;
+          background: ${color};
+          border: 2px solid #fff;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+          cursor: pointer;
+        `
+      }
+    })
+  }, [selectedBidId, hoveredBidId])
 
   return (
     <div
@@ -242,12 +301,4 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
       }}
     />
   )
-}
-
-function getLocalName(color: string): string {
-  const localNumbers: LocalNumber[] = [7, 16, 28, 36, 69, 73, 76, 82, 135]
-  for (const num of localNumbers) {
-    if (LOCALS[num].color === color) return LOCALS[num].name
-  }
-  return ''
 }
