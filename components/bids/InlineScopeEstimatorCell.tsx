@@ -28,6 +28,7 @@ interface InlineScopeEstimatorCellProps {
   initialEstimatorId: string | null
   /** Bid-level lead estimator — shown as "(default) Lead Name" when scope is null. */
   leadEstimatorName: string | null
+  onChange?: (lineItemId: string, estimatorId: string | null) => void
 }
 
 export function InlineScopeEstimatorCell({
@@ -37,6 +38,7 @@ export function InlineScopeEstimatorCell({
   scope,
   initialEstimatorId,
   leadEstimatorName,
+  onChange,
 }: InlineScopeEstimatorCellProps) {
   const [optimistic, setOptimistic] = useState<string | null>(initialEstimatorId)
   const [saving, setSaving] = useState(false)
@@ -76,6 +78,7 @@ export function InlineScopeEstimatorCell({
 
     setOptimistic(next)
     setSaving(true)
+    onChange?.(lineItemId, next)
 
     const supabase = createClient()
     const { error } = await supabase
@@ -86,6 +89,7 @@ export function InlineScopeEstimatorCell({
     if (error) {
       setOptimistic(prev)
       setSaving(false)
+      onChange?.(lineItemId, prev)
       toast.error('Failed to update scope estimator.')
       return
     }
