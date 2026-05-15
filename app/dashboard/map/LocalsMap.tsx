@@ -86,7 +86,7 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: 'mapbox://styles/mapbox/light-v11',
-      center: [-120, 46],
+      center: [-115, 40],
       zoom: 5.5,
     })
     mapRef.current = map
@@ -121,8 +121,8 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
         },
       })
 
-      // ── Local number labels ────────────────────────────────────────────────
-      const localNumbers: LocalNumber[] = [7, 36, 82]
+      // ── Local number labels — one label per local at its center ────────────
+      const localNumbers: LocalNumber[] = [7, 16, 28, 36, 69, 73, 76, 82, 135]
       localNumbers.forEach((num) => {
         const local = LOCALS[num]
         const [lat, lng] = local.center
@@ -245,7 +245,7 @@ export default function LocalsMap({ bids }: LocalsMapProps) {
 }
 
 function getLocalName(color: string): string {
-  const localNumbers: LocalNumber[] = [7, 36, 82]
+  const localNumbers: LocalNumber[] = [7, 16, 28, 36, 69, 73, 76, 82, 135]
   for (const num of localNumbers) {
     if (LOCALS[num].color === color) return LOCALS[num].name
   }
