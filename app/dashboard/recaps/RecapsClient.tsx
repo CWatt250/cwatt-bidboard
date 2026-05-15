@@ -2,13 +2,15 @@
 
 import { useState } from 'react'
 import { WeeklyTab } from './weekly/WeeklyTab'
+import { MonthlyTab } from './monthly/MonthlyTab'
 import { CustomTab } from './custom/CustomTab'
 import { InsightsTab } from './insights/InsightsTab'
 
-type RecapTab = 'weekly' | 'custom' | 'insights'
+type RecapTab = 'weekly' | 'monthly' | 'custom' | 'insights'
 
 const TABS: { id: RecapTab; label: string }[] = [
   { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
   { id: 'custom', label: 'Custom' },
   { id: 'insights', label: 'Insights' },
 ]
@@ -79,6 +81,7 @@ export function RecapsClient() {
 
       <div role="tabpanel">
         {tab === 'weekly' && <WeeklyTab />}
+        {tab === 'monthly' && <MonthlyTab />}
         {tab === 'custom' && <CustomTab />}
         {tab === 'insights' && <InsightsTab />}
       </div>

@@ -145,3 +145,82 @@ export function completedTasksInWeek(
     return tMs >= startMs && tMs <= endMs
   })
 }
+
+// ─── Monthly recap ─────────────────────────────────────────────────────────
+
+export interface MonthRange {
+  start: Date
+  end: Date
+}
+
+export interface BranchMonthlyStats {
+  branch: Branch
+  submitted: number
+  totalValue: number
+  secured: number
+}
+
+export interface BundledStats {
+  submitted: number
+  totalValue: number
+  secured: number
+}
+
+export function monthRange(year: number, month: number): MonthRange {
+  const start = new Date(year, month - 1, 1)
+  const end = new Date(year, month, 0)
+  return { start, end }
+}
+
+export function bidsInMonth(bids: Bid[], year: number, month: number): Bid[] {
+  const { start, end } = monthRange(year, month)
+  const startMs = start.getTime()
+  const endMs = end.getTime()
+  return bids.filter((b) => {
+    const due = bidDueDate(b)
+    if (!due) return false
+    const t = due.getTime()
+    return t >= startMs && t <= endMs
+  })
+}
+
+function securedFromBid(b: Bid): number {
+  const isWon = b.status === 'Awarded' || b.status === 'Verbal'
+  if (isWon) {
+    return (b.line_items ?? [])
+      .filter((li) => li.is_awarded)
+      .reduce((sum, li) => sum + (li.price ?? 0), 0)
+  }
+  return (b.line_items ?? []).reduce((sum, li) => sum + (li.price ?? 0), 0)
+}
+
+export function monthlyBranchStats(
+  bids: Bid[],
+  branches: Branch[],
+  year: number,
+  month: number,
+): BranchMonthlyStats[] {
+  const inMonth = bidsInMonth(bids, year, month)
+  return branches.map((branch) => {
+    const branchBids = inMonth.filter((b) => b.branch === branch)
+    return {
+      branch,
+      submitted: branchBids.length,
+      totalValue: branchBids.reduce((sum, b) => sum + lineItemTotal(b), 0),
+      secured: branchBids.reduce((sum, b) => sum + securedFromBid(b), 0),
+    }
+  })
+}
+
+export function bundledStats(
+  bids: Bid[],
+  year: number,
+  month: number,
+): BundledStats {
+  const inMonth = bidsInMonth(bids, year, month)
+  return {
+    submitted: inMonth.length,
+    totalValue: inMonth.reduce((sum, b) => sum + lineItemTotal(b), 0),
+    secured: inMonth.reduce((sum, b) => sum + securedFromBid(b), 0),
+  }
+}
