@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -39,6 +39,7 @@ interface InlinePriceCellProps {
   scope: BidScope
   initialPrice: number | null
   className?: string
+  onChange?: (lineItemId: string, price: number | null) => void
 }
 
 export function InlinePriceCell({
@@ -48,6 +49,7 @@ export function InlinePriceCell({
   scope,
   initialPrice,
   className,
+  onChange,
 }: InlinePriceCellProps) {
   const [editing, setEditing] = useState(false)
   const [optimistic, setOptimistic] = useState<number | null>(initialPrice)
@@ -55,10 +57,13 @@ export function InlinePriceCell({
   const inputRef = useRef<HTMLInputElement | null>(null)
   const submittedRef = useRef(false)
 
-  // Reconcile optimistic value with server data when not editing
-  useEffect(() => {
-    if (!editing) setOptimistic(initialPrice)
-  }, [initialPrice, editing])
+  // Reseed only when the upstream prop actually changes (same race-condition
+  // fix as InlineStatusCell / InlineAwardedCell).
+  const [prevInitial, setPrevInitial] = useState<number | null>(initialPrice)
+  if (prevInitial !== initialPrice) {
+    setPrevInitial(initialPrice)
+    setOptimistic(initialPrice)
+  }
 
   const {
     register,
@@ -94,6 +99,7 @@ export function InlinePriceCell({
     setOptimistic(newPrice)
     setEditing(false)
     setSaving(true)
+    onChange?.(lineItemId, newPrice)
 
     const supabase = createClient()
     const { error } = await supabase
@@ -104,6 +110,7 @@ export function InlinePriceCell({
     if (error) {
       setOptimistic(prevPrice)
       setSaving(false)
+      onChange?.(lineItemId, prevPrice)
       toast.error('Failed to update scope price.')
       return
     }

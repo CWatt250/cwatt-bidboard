@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm, Controller } from 'react-hook-form'
@@ -108,9 +108,68 @@ function daysUntilDue(dateStr: string): number {
 
 export default function BidDetailClient({ bidId }: { bidId: string }) {
   const router = useRouter()
-  const { bid, activity, loading, notFound, refetch } = useBid(bidId)
+  const { bid: serverBid, activity, loading, notFound, refetch } = useBid(bidId)
+  const [bid, setBid] = useState<typeof serverBid>(null)
+  const lastServerBidRef = useRef<typeof serverBid>(null)
+
+  // Sync local bid from server when data actually changes (e.g. realtime refetch).
+  // Using a ref to detect reference changes prevents clobbering optimistic updates
+  // that were just written to the DB and haven't come back via realtime yet.
+  useEffect(() => {
+    if (serverBid && serverBid !== lastServerBidRef.current) {
+      lastServerBidRef.current = serverBid
+      setBid(serverBid)
+    }
+  }, [serverBid])
   const { profiles } = useBidDetail()
   const { isAdmin, isBranchManager, isEstimator, branches: userBranches, profile } = useUserRole()
+
+  // ─── Field-level optimistic mutation helpers ──────────────────────────────
+
+  function updateLineItemPrice(lineItemId: string, price: number | null) {
+    setBid((prev) => {
+      if (!prev?.line_items) return prev
+      return {
+        ...prev,
+        line_items: prev.line_items.map((li) =>
+          li.id === lineItemId ? { ...li, price } : li,
+        ),
+      }
+    })
+  }
+
+  function updateLineItemAwarded(lineItemId: string, isAwarded: boolean) {
+    setBid((prev) => {
+      if (!prev?.line_items) return prev
+      return {
+        ...prev,
+        line_items: prev.line_items.map((li) =>
+          li.id === lineItemId
+            ? { ...li, is_awarded: isAwarded, awarded_at: isAwarded ? new Date().toISOString() : null }
+            : li,
+        ),
+      }
+    })
+  }
+
+  function updateLineItemEstimator(lineItemId: string, estimatorId: string | null) {
+    setBid((prev) => {
+      if (!prev?.line_items) return prev
+      return {
+        ...prev,
+        line_items: prev.line_items.map((li) =>
+          li.id === lineItemId ? { ...li, estimator_id: estimatorId } : li,
+        ),
+      }
+    })
+  }
+
+  function updateBidStatus(status: BidStatus) {
+    setBid((prev) => {
+      if (!prev) return prev
+      return { ...prev, status }
+    })
+  }
 
   const [saving, setSaving] = useState(false)
   // Client rows mirror bid.bid_clients (id, name, selected scopes). Each row's
@@ -150,19 +209,19 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   }, [loading, notFound, router])
 
   useEffect(() => {
-    if (!bid) return
+    if (!serverBid) return
 
     reset({
-      project_name: bid.project_name,
-      project_location: bid.project_location ?? '',
-      mike_estimate_number: bid.mike_estimate_number ?? '',
-      branch: bid.branch,
-      estimator_id: bid.estimator_id ?? profile?.id ?? undefined,
-      bid_due_date: bid.bid_due_date,
+      project_name: serverBid.project_name,
+      project_location: serverBid.project_location ?? '',
+      mike_estimate_number: serverBid.mike_estimate_number ?? '',
+      branch: serverBid.branch,
+      estimator_id: serverBid.estimator_id ?? profile?.id ?? undefined,
+      bid_due_date: serverBid.bid_due_date,
     })
 
     setClientRows(
-      (bid.clients ?? [])
+      (serverBid.clients ?? [])
         .map((c) => ({
           id: c.id,
           name: getBidClientName(c),
@@ -170,7 +229,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         }))
         .filter((r) => r.name),
     )
-  }, [bid, reset])
+  }, [serverBid, reset])
 
   // Fetch master clients list once for the Add Client dropdown.
   useEffect(() => {
@@ -189,11 +248,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   // When a scope is removed from the bid entirely (Scope Pricing card), purge
   // it from every client's scopes array. Detected after each bid refetch.
   useEffect(() => {
-    if (!bid?.clients) return
+    if (!serverBid?.clients) return
     const currentScopes = new Set(
-      (bid.line_items ?? []).filter((li) => !li.client).map((li) => li.scope as string),
+      (serverBid.line_items ?? []).filter((li) => !li.client).map((li) => li.scope as string),
     )
-    const stale = bid.clients.filter(
+    const stale = serverBid.clients.filter(
       (c) => (c.scopes ?? []).some((s) => !currentScopes.has(s)),
     )
     if (stale.length === 0) return
@@ -208,7 +267,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           .eq('id', c.id),
       ),
     ).then(() => refetch())
-  }, [bid, refetch])
+  }, [serverBid, refetch])
 
   // Distinct scopes available on this bid (sourced from scope-only line items).
   function getBidScopes(): BidScope[] {
@@ -600,6 +659,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                         userId={profile?.id ?? null}
                         scope={li.scope}
                         initialIsAwarded={li.is_awarded}
+                        onChange={updateLineItemAwarded}
                       />
                       <span className="flex items-center gap-1.5 min-w-0">
                         <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs w-fit ${SCOPE_BADGE_CLASSES[li.scope]}`}>
@@ -626,6 +686,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                         scope={li.scope}
                         initialEstimatorId={li.estimator_id}
                         leadEstimatorName={bid.estimator_name}
+                        onChange={updateLineItemEstimator}
                       />
                       <InlinePriceCell
                         lineItemId={li.id}
@@ -633,6 +694,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                         userId={profile?.id ?? null}
                         scope={li.scope}
                         initialPrice={li.price}
+                        onChange={updateLineItemPrice}
                       />
                     </div>
                   ))
