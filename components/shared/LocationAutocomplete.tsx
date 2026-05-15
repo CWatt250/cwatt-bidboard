@@ -22,6 +22,7 @@ interface LocationAutocompleteProps {
   id?: string
   value: string
   onChange: (value: string) => void
+  onCoordinatesChange?: (coords: { latitude: number; longitude: number } | null) => void
   placeholder?: string
 }
 
@@ -40,7 +41,10 @@ export function LocationAutocomplete(props: LocationAutocompleteProps) {
       <Input
         id={props.id}
         value={props.value}
-        onChange={(e) => props.onChange(e.target.value)}
+        onChange={(e) => {
+          props.onChange(e.target.value)
+          props.onCoordinatesChange?.(null)
+        }}
         placeholder={props.placeholder}
       />
     )
@@ -51,6 +55,7 @@ export function LocationAutocomplete(props: LocationAutocompleteProps) {
 interface Suggestion {
   id: string
   placeName: string
+  center: [number, number] // [lng, lat]
 }
 
 function MapboxLocationField({
@@ -58,6 +63,7 @@ function MapboxLocationField({
   id,
   value,
   onChange,
+  onCoordinatesChange,
   placeholder,
 }: LocationAutocompleteProps & { token: string }) {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])
@@ -90,13 +96,14 @@ function MapboxLocationField({
         .then((res) => {
           if (!res.ok) throw new Error(`Mapbox geocoding failed (${res.status})`)
           return res.json() as Promise<{
-            features?: { id: string; place_name: string }[]
+            features?: { id: string; place_name: string; center: [number, number] }[]
           }>
         })
         .then((data) => {
           const next = (data.features ?? []).map((f) => ({
             id: f.id,
             placeName: f.place_name,
+            center: f.center,
           }))
           setSuggestions(next)
           setActiveIndex(-1)
@@ -127,9 +134,12 @@ function MapboxLocationField({
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [])
 
-  function pick(placeName: string) {
+  function pick(s: Suggestion) {
     skipNextLookup.current = true
-    onChange(placeName)
+    onChange(s.placeName)
+    if (s.center) {
+      onCoordinatesChange?.({ latitude: s.center[1], longitude: s.center[0] })
+    }
     setSuggestions([])
     setOpen(false)
     setActiveIndex(-1)
@@ -145,7 +155,7 @@ function MapboxLocationField({
       setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1))
     } else if (e.key === 'Enter' && activeIndex >= 0) {
       e.preventDefault()
-      pick(suggestions[activeIndex].placeName)
+      pick(suggestions[activeIndex])
     } else if (e.key === 'Escape') {
       setOpen(false)
     }
@@ -156,7 +166,10 @@ function MapboxLocationField({
       <Input
         id={id}
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => {
+            onChange(e.target.value)
+            onCoordinatesChange?.(null)
+          }}
         onFocus={() => suggestions.length > 0 && setOpen(true)}
         onKeyDown={onKeyDown}
         placeholder={placeholder}
@@ -182,7 +195,7 @@ function MapboxLocationField({
                 // mousedown + preventDefault so the pick wins the race
                 // against the input losing focus.
                 e.preventDefault()
-                pick(s.placeName)
+                pick(s)
               }}
               className={cn(
                 'flex cursor-pointer items-center gap-2 px-3 py-1.5 text-sm',

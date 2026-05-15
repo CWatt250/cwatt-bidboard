@@ -195,6 +195,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
   const open = externalOpen !== undefined ? externalOpen : internalOpen
   const setOpen = externalOnOpenChange ?? setInternalOpen
   const [submitting, setSubmitting] = useState(false)
+  const [bidCoords, setBidCoords] = useState<{ latitude: number; longitude: number } | null>(null)
   const [createAsUnassigned, setCreateAsUnassigned] = useState(false)
   const [dupWarningOpen, setDupWarningOpen] = useState(false)
   const [allClients, setAllClients] = useState<string[]>([])
@@ -231,6 +232,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
   useEffect(() => {
     if (!open) return
     setCreateAsUnassigned(false)
+    setBidCoords(null)
     reset({
       project_name: defaultProjectName ?? '',
       project_location: '',
@@ -324,6 +326,8 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
         notes: values.notes || null,
         status,
         estimator_id,
+        latitude: bidCoords?.latitude ?? null,
+        longitude: bidCoords?.longitude ?? null,
       })
       .select('id')
       .single()
@@ -399,6 +403,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     toast.success('Bid created successfully.')
     window.dispatchEvent(new CustomEvent('bidwatt:bid-created'))
     setCreateAsUnassigned(false)
+    setBidCoords(null)
     reset({
       project_name: '',
       project_location: '',
@@ -476,6 +481,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
                     id="project_location"
                     value={field.value ?? ''}
                     onChange={field.onChange}
+                    onCoordinatesChange={setBidCoords}
                     placeholder="City, State or full address"
                   />
                 )}
