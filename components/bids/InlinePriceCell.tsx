@@ -5,6 +5,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
+import { PencilIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import type { BidScope } from '@/lib/supabase/types'
@@ -162,8 +163,35 @@ export function InlinePriceCell({
     )
   }
 
-  const display =
-    optimistic != null && optimistic > 0 ? formatCurrency(optimistic) : '—'
+  const hasPrice = optimistic != null && optimistic > 0
+
+  const buttonClasses =
+    className ??
+    'w-full text-right text-sm font-semibold tabular-nums rounded px-1 py-0.5 hover:bg-muted/60 transition-colors cursor-text'
+  const monoStyle = { fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }
+
+  if (!hasPrice) {
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          startEdit()
+        }}
+        disabled={saving}
+        title="Click to add price"
+        aria-label={`Add ${scope} price`}
+        className="w-full flex justify-end"
+      >
+        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded border border-dashed border-[var(--border)] bg-[var(--surface2)] hover:bg-[var(--surface)] cursor-pointer transition-colors">
+          <PencilIcon className="size-3 text-muted-foreground/40 group-hover:text-muted-foreground/70" />
+          <span className="text-muted-foreground/60 text-xs">Add price</span>
+        </span>
+      </button>
+    )
+  }
+
+  const display = formatCurrency(optimistic!)
 
   return (
     <button
@@ -175,13 +203,17 @@ export function InlinePriceCell({
       disabled={saving}
       title="Click to edit price"
       aria-label={`Edit ${scope} price`}
-      className={
-        className ??
-        'w-full text-right text-sm font-semibold tabular-nums rounded px-1 py-0.5 hover:bg-muted/60 transition-colors cursor-text'
-      }
-      style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
+      className={`${buttonClasses} group`}
+      style={monoStyle}
     >
-      {saving ? <span className="opacity-60">{display}</span> : display}
+      {saving ? (
+        <span className="opacity-60">{display}</span>
+      ) : (
+        <span className="inline-flex items-center gap-1 justify-end">
+          <span>{display}</span>
+          <PencilIcon className="size-3 text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity" />
+        </span>
+      )}
     </button>
   )
 }

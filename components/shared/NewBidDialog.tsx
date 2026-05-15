@@ -166,7 +166,7 @@ const scopePriceSchema = z.object({
 
 const lineItemSchema = z.object({
   client: z.string().optional(),
-  scope_prices: z.array(scopePriceSchema).min(1, 'At least one scope required'),
+  scope_prices: z.array(scopePriceSchema).optional(),
 })
 
 const newBidSchema = z.object({
@@ -346,7 +346,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
     // multi-client tracking now lives in bid_clients.
     const scopePrices = new Map<string, number | null>()
     for (const li of values.line_items) {
-      for (const sp of li.scope_prices) {
+      for (const sp of li.scope_prices ?? []) {
         if (scopePrices.has(sp.scope)) continue
         const trimmed = sp.price?.trim()
         const parsed = trimmed ? parseFloat(trimmed) : null
@@ -640,16 +640,10 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
                                     nextScopes.map((s) => ({ scope: s, price: existing.get(s) ?? '' }))
                                   )
                                 }}
-                                error={!!errors.line_items?.[index]?.scope_prices}
                               />
                             )
                           }}
                         />
-                        {errors.line_items?.[index]?.scope_prices && (
-                          <p className="text-xs text-destructive mt-0.5">
-                            At least one scope required
-                          </p>
-                        )}
                       </div>
 
                       <Button
