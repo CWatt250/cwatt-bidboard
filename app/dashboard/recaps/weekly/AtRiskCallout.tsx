@@ -6,6 +6,7 @@ import type { AtRiskSummary } from '@/lib/recap-aggregations'
 
 interface AtRiskCalloutProps {
   summary: AtRiskSummary
+  onReviewClick: () => void
   scale?: number
 }
 
@@ -15,7 +16,7 @@ function formatCurrency(value: number): string {
   return `$${value.toFixed(0)}`
 }
 
-export function AtRiskCallout({ summary, scale = 1 }: AtRiskCalloutProps) {
+export function AtRiskCallout({ summary, onReviewClick, scale = 1 }: AtRiskCalloutProps) {
   if (summary.count <= 0) return null
 
   return (
@@ -60,20 +61,25 @@ export function AtRiskCallout({ summary, scale = 1 }: AtRiskCalloutProps) {
           )}
         </p>
       </div>
-      <a
-        href="#"
-        onClick={(e) => e.preventDefault()}
+      <button
+        onClick={(e) => {
+          e.preventDefault()
+          onReviewClick()
+        }}
         style={{
           fontSize: `${12 * scale}px`,
           fontWeight: 600,
           color: '#d97706',
-          textDecoration: 'none',
+          background: 'none',
+          border: 'none',
+          cursor: 'pointer',
           whiteSpace: 'nowrap',
           flexShrink: 0,
+          padding: 0,
         }}
       >
         Review →
-      </a>
+      </button>
     </div>
   )
 }

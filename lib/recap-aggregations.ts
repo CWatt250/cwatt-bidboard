@@ -1,5 +1,5 @@
 import { startOfWeek, endOfWeek } from 'date-fns'
-import type { Bid, Branch } from '@/lib/supabase/types'
+import type { Bid, Branch, WorkspaceTodo } from '@/lib/supabase/types'
 
 export interface WeekRange {
   start: Date
@@ -129,5 +129,19 @@ export function branchBreakdownThisWeek(
       count: branchBids.length,
       total: bidTotalValue(branchBids),
     }
+  })
+}
+
+export function completedTasksInWeek(
+  tasks: WorkspaceTodo[],
+  weekStart: Date,
+  weekEnd: Date,
+): WorkspaceTodo[] {
+  const startMs = weekStart.getTime()
+  const endMs = weekEnd.getTime()
+  return tasks.filter((t) => {
+    if (!t.is_completed || !t.completed_at) return false
+    const tMs = new Date(t.completed_at).getTime()
+    return tMs >= startMs && tMs <= endMs
   })
 }

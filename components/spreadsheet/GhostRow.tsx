@@ -315,6 +315,7 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
             placeholder="MIKE #"
             onChange={(e) => setGhost((g) => ({ ...g, mike_estimate_number: e.target.value }))}
             onKeyDown={handleEnter}
+            autoComplete="new-password"
             className="ghost-cell-input"
             style={{ ...cellInputStyle, fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
           />

@@ -493,6 +493,7 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
                 id="mike_estimate_number"
                 {...register('mike_estimate_number')}
                 placeholder="e.g. 181656"
+                autoComplete="new-password"
               />
             </div>
           </div>

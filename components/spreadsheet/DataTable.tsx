@@ -228,9 +228,23 @@ export function DataTable({
       >
       {topBar}
       {/* Merged filter pills + search row.
-          Left: filter pills + Columns button. Right: search input.
+          Left: search input. Right: filter pills + Columns button.
           flex-wrap lets the search drop below the pills on narrow viewports. */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="relative" style={{ width: 300, maxWidth: '100%' }}>
+          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search bids…"
+            value={globalFilter}
+            onChange={(e) => {
+              setGlobalFilter(e.target.value)
+              table.setPageIndex(0)
+            }}
+            className="pl-8"
+            style={{ borderRadius: '8px', borderColor: 'var(--border)' }}
+          />
+        </div>
+
         <div className="flex items-center gap-2 flex-wrap">
           <FilterBar
             filters={activeFilters}
@@ -267,20 +281,6 @@ export function DataTable({
                 ))}
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-
-        <div className="relative" style={{ width: 300, maxWidth: '100%' }}>
-          <SearchIcon className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground" />
-          <Input
-            placeholder="Search bids…"
-            value={globalFilter}
-            onChange={(e) => {
-              setGlobalFilter(e.target.value)
-              table.setPageIndex(0)
-            }}
-            className="pl-8"
-            style={{ borderRadius: '8px', borderColor: 'var(--border)' }}
-          />
         </div>
       </div>
       </div>

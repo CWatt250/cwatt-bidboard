@@ -312,13 +312,11 @@ export function BidDetailDrawer() {
                   Open Full Page
                 </Button>
               )}
-              <SheetClose
-                render={
-                  <Button variant="ghost" size="icon-sm" aria-label="Close" />
-                }
-              >
-                <XIcon />
-                <span className="sr-only">Close</span>
+              <SheetClose asChild>
+                <Button variant="ghost" size="icon-sm" aria-label="Close">
+                  <XIcon />
+                  <span className="sr-only">Close</span>
+                </Button>
               </SheetClose>
             </div>
           </SheetHeader>
@@ -591,8 +589,8 @@ export function BidDetailDrawer() {
               </Button>
             )}
             <div className="flex-1" />
-            <SheetClose render={<Button variant="outline" type="button" />}>
-              Cancel
+            <SheetClose asChild>
+              <Button variant="outline" type="button">Cancel</Button>
             </SheetClose>
             <Button type="submit" form="bid-detail-form" disabled={saving}>
               {saving ? 'Saving…' : 'Save Changes'}

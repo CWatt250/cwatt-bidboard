@@ -32,6 +32,7 @@ export interface WorkspaceTodo {
   user_id: string
   text: string
   is_completed: boolean
+  completed_at?: string
   created_at: string
   updated_at: string
 }

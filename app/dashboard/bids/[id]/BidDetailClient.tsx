@@ -171,6 +171,28 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     })
   }
 
+  async function removeLineItem(lineItemId: string) {
+    const prevBid = bid
+    // Optimistic remove
+    setBid((prev) => {
+      if (!prev?.line_items) return prev
+      return {
+        ...prev,
+        line_items: prev.line_items.filter((li) => li.id !== lineItemId),
+      }
+    })
+    const supabase = createClient()
+    const { error } = await supabase
+      .from('bid_line_items')
+      .delete()
+      .eq('id', lineItemId)
+    if (error) {
+      // Revert
+      setBid(prevBid)
+      toast.error('Failed to delete scope line item.')
+    }
+  }
+
   const [saving, setSaving] = useState(false)
   // Client rows mirror bid.bid_clients (id, name, selected scopes). Each row's
   // scope toggles persist to bid_clients.scopes immediately — they don't wait
@@ -646,7 +668,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                   scopeOnlyItems.map((li) => (
                     <div
                       key={li.id}
-                      className="grid grid-cols-[32px_1fr_150px_110px] gap-2 px-3 py-2 items-center border-b"
+                      className="grid grid-cols-[32px_1fr_150px_110px_32px] gap-2 px-3 py-2 items-center border-b"
                       style={{
                         borderLeft: li.is_awarded ? '3px solid var(--green, #16a34a)' : '3px solid transparent',
                         background: li.is_awarded ? 'rgba(22,163,74,0.04)' : undefined,
@@ -696,6 +718,29 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                         initialPrice={li.price}
                         onChange={updateLineItemPrice}
                       />
+                      <button
+                        type="button"
+                        onClick={() => removeLineItem(li.id)}
+                        aria-label={`Delete scope ${li.scope}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 24,
+                          height: 24,
+                          borderRadius: 6,
+                          border: 'none',
+                          background: 'transparent',
+                          color: 'var(--red, #dc2626)',
+                          cursor: 'pointer',
+                          opacity: 0.6,
+                          transition: 'opacity 0.15s',
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; e.currentTarget.style.background = 'rgba(220,38,38,0.08)' }}
+                        onMouseLeave={(e) => { e.currentTarget.style.opacity = '0.6'; e.currentTarget.style.background = 'transparent' }}
+                      >
+                        <XIcon className="size-3.5" />
+                      </button>
                     </div>
                   ))
                 )}
@@ -1017,6 +1062,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                       id="bd-mike_estimate_number"
                       {...register('mike_estimate_number')}
                       placeholder="e.g. 181656"
+                      autoComplete="new-password"
                       className="border-[var(--border)]"
                     />
                   </div>

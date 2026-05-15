@@ -1,18 +1,23 @@
 'use client'
 
-import { useMemo, useState } from 'react'
-import { format, subDays, isValid, startOfWeek } from 'date-fns'
+import { useMemo, useState, useEffect } from 'react'
+import { format, subDays, addDays, startOfWeek, isValid } from 'date-fns'
+import { ChevronLeft, ChevronRight, CalendarIcon } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { useRecapData } from '@/hooks/useRecapData'
 import {
   atRiskBids,
   bidTotalValue,
   bidsInWeek,
   branchBreakdownThisWeek,
+  completedTasksInWeek,
   securedInWeek,
   verbalsInWeek,
   weekRange,
 } from '@/lib/recap-aggregations'
+import type { WorkspaceTodo } from '@/lib/supabase/types'
 import { AtRiskCallout } from './AtRiskCallout'
+import { AtRiskDrawer } from './AtRiskDrawer'
 import { BidsTable } from './BidsTable'
 import { QuickTotalsRail } from './QuickTotalsRail'
 
@@ -32,14 +37,62 @@ function parseYmd(s: string): Date | null {
   return isValid(d) ? d : null
 }
 
+function isSameWeek(date1: Date, date2: Date): boolean {
+  const s1 = startOfWeek(date1, { weekStartsOn: 1 })
+  const s2 = startOfWeek(date2, { weekStartsOn: 1 })
+  return s1.getTime() === s2.getTime()
+}
+
+function formatWeekRange(start: Date, end: Date): string {
+  const fmt = 'MMM d, yyyy'
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return `${format(start, 'MMM d')} – ${format(end, fmt)}`
+  }
+  return `${format(start, fmt)} – ${format(end, fmt)}`
+}
+
+function formatCompletedTime(dateStr: string): string {
+  const d = new Date(dateStr)
+  return format(d, "'Completed' E MMM d 'at' h:mma")
+}
+
 export function WeeklyTab() {
   const { bids, loading, error } = useRecapData()
+
+  const [userId, setUserId] = useState<string | null>(null)
+  const [tasks, setTasks] = useState<WorkspaceTodo[]>([])
+  const [tasksLoading, setTasksLoading] = useState(true)
+
+  useEffect(() => {
+    const supabase = createClient()
+    supabase.auth.getUser().then(({ data }) => {
+      setUserId(data.user?.id ?? null)
+    })
+  }, [])
+
+  // Fetch tasks for completed-tasks-this-week section
+  useEffect(() => {
+    if (!userId) return
+    setTasksLoading(true)
+    const supabase = createClient()
+    supabase
+      .from('workspace_todos')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true })
+      .then(({ data }) => {
+        setTasks(data ?? [])
+        setTasksLoading(false)
+      })
+  }, [userId])
 
   // The week the user is reviewing. Defaults to "this week" (the Monday-Sunday
   // containing today). All downstream ranges hang off this anchor.
   const [anchor, setAnchor] = useState<Date>(() =>
     startOfWeek(new Date(), { weekStartsOn: 1 }),
   )
+  const [atRiskOpen, setAtRiskOpen] = useState(false)
+  const [showPicker, setShowPicker] = useState(false)
 
   const thisWeek = useMemo(() => weekRange(anchor), [anchor])
   const lastWeek = useMemo(() => weekRange(subDays(anchor, 7)), [anchor])
@@ -75,11 +128,30 @@ export function WeeklyTab() {
     [bids, thisWeek],
   )
   const atRisk = useMemo(() => atRiskBids(bids, new Date()), [bids])
+  const atRiskBidList = useMemo(
+    () =>
+      bids.filter((b) => {
+        const preSentStatuses = new Set(['Unassigned', 'Bidding', 'In Progress'])
+        if (!preSentStatuses.has(b.status)) return false
+        if (!b.bid_due_date) return false
+        const due = new Date(b.bid_due_date + 'T00:00:00')
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        return due.getTime() < today.getTime()
+      }),
+    [bids],
+  )
 
   const lastWeekSentCount = lastWeekBids.filter((b) => b.status === 'Sent').length
   const thisWeekSentCount = thisWeekBids.filter((b) => b.status === 'Sent').length
 
-  const headerRange = `${format(lastWeek.start, 'MMM d')} – ${format(lastWeek.end, 'MMM d')} vs ${format(thisWeek.start, 'MMM d')} – ${format(thisWeek.end, 'MMM d')}`
+  const thisWeekCompletedTasks = useMemo(
+    () => completedTasksInWeek(tasks, thisWeek.start, thisWeek.end),
+    [tasks, thisWeek],
+  )
+
+  const isCurrentWeek = isSameWeek(anchor, new Date())
+
   const lastRangeLabel = `${format(lastWeek.start, 'MMM d')} – ${format(lastWeek.end, 'MMM d')}`
   const thisRangeLabel = `${format(thisWeek.start, 'MMM d')} – ${format(thisWeek.end, 'MMM d')}`
 
@@ -137,11 +209,19 @@ export function WeeklyTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Header */}
+      {/* At-risk drawer */}
+      <AtRiskDrawer
+        open={atRiskOpen}
+        onOpenChange={setAtRiskOpen}
+        bids={atRiskBidList}
+        userId={userId}
+      />
+
+      {/* Header with week navigation */}
       <div
         style={{
           display: 'flex',
-          alignItems: 'flex-end',
+          alignItems: 'center',
           justifyContent: 'space-between',
           gap: 16,
           flexWrap: 'wrap',
@@ -158,52 +238,175 @@ export function WeeklyTab() {
           >
             Weekly Recap
           </h2>
-          <p
-            style={{
-              fontSize: '0.78rem',
-              color: 'var(--text3)',
-              marginTop: 2,
-            }}
-          >
-            {headerRange}
-          </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <label
+
+        {/* Week navigator */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+          }}
+        >
+          <button
+            onClick={() => setAnchor((prev) => subDays(prev, 7))}
             style={{
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              color: 'var(--text3)',
-              textTransform: 'uppercase',
-              letterSpacing: '0.07em',
-            }}
-          >
-            Week of
-          </label>
-          <input
-            type="date"
-            value={toYmd(thisWeek.start)}
-            onChange={(e) => {
-              const parsed = parseYmd(e.target.value)
-              if (parsed) {
-                setAnchor(startOfWeek(parsed, { weekStartsOn: 1 }))
-              }
-            }}
-            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
               height: 32,
-              padding: '0 8px',
               borderRadius: 8,
               border: '1px solid var(--border)',
               background: 'var(--surface)',
               color: 'var(--text)',
-              fontSize: '0.8rem',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              transition: 'background 0.15s, border-color 0.15s',
             }}
-          />
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--surface2)'
+              e.currentTarget.style.borderColor = 'var(--accent)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--surface)'
+              e.currentTarget.style.borderColor = 'var(--border)'
+            }}
+            aria-label="Previous week"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setShowPicker((prev) => !prev)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                height: 32,
+                padding: '0 10px',
+                borderRadius: 8,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--text)',
+                cursor: 'pointer',
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                transition: 'background 0.15s, border-color 0.15s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--surface2)'
+                e.currentTarget.style.borderColor = 'var(--accent)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--surface)'
+                e.currentTarget.style.borderColor = 'var(--border)'
+              }}
+            >
+              <CalendarIcon size={14} />
+              <span>{formatWeekRange(thisWeek.start, thisWeek.end)}</span>
+              {isCurrentWeek && (
+                <span
+                  style={{
+                    fontSize: '0.6rem',
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                    color: '#d97706',
+                    background: 'rgba(217, 119, 6, 0.12)',
+                    padding: '1px 5px',
+                    borderRadius: 4,
+                  }}
+                >
+                  This week
+                </span>
+              )}
+            </button>
+
+            {showPicker && (
+              <>
+                <div
+                  style={{
+                    position: 'fixed',
+                    inset: 0,
+                    zIndex: 49,
+                  }}
+                  onClick={() => setShowPicker(false)}
+                />
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '100%',
+                    right: 0,
+                    marginTop: 4,
+                    zIndex: 50,
+                    background: 'var(--surface)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 8,
+                    padding: 8,
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                  }}
+                >
+                  <input
+                    type="date"
+                    value={toYmd(thisWeek.start)}
+                    onChange={(e) => {
+                      const parsed = parseYmd(e.target.value)
+                      if (parsed) {
+                        setAnchor(startOfWeek(parsed, { weekStartsOn: 1 }))
+                        setShowPicker(false)
+                      }
+                    }}
+                    style={{
+                      height: 32,
+                      padding: '0 8px',
+                      borderRadius: 6,
+                      border: '1px solid var(--border)',
+                      background: 'var(--surface)',
+                      color: 'var(--text)',
+                      fontSize: '0.8rem',
+                    }}
+                    autoFocus
+                  />
+                </div>
+              </>
+            )}
+          </div>
+
+          <button
+            onClick={() => setAnchor((prev) => addDays(prev, 7))}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 32,
+              height: 32,
+              borderRadius: 8,
+              border: '1px solid var(--border)',
+              background: 'var(--surface)',
+              color: 'var(--text)',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              transition: 'background 0.15s, border-color 0.15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--surface2)'
+              e.currentTarget.style.borderColor = 'var(--accent)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'var(--surface)'
+              e.currentTarget.style.borderColor = 'var(--border)'
+            }}
+            aria-label="Next week"
+          >
+            <ChevronRight size={16} />
+          </button>
         </div>
       </div>
 
       {/* At-risk callout */}
-      <AtRiskCallout summary={atRisk} />
+      <AtRiskCallout summary={atRisk} onReviewClick={() => setAtRiskOpen(true)} />
 
       {/* Main grid */}
       <div
@@ -228,6 +431,95 @@ export function WeeklyTab() {
             bids={thisWeekBids}
             emptyMessage="No bids are due this week."
           />
+
+          {/* Completed tasks this week */}
+          {thisWeekCompletedTasks.length > 0 && (
+            <div
+              style={{
+                padding: '12px 16px',
+                borderRadius: 12,
+                border: '1px solid var(--border)',
+                background: 'var(--card)',
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <svg
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  style={{ width: 14, height: 14, flexShrink: 0 }}
+                >
+                  <circle cx="8" cy="8" r="7" stroke="#16a34a" strokeWidth="1.5" />
+                  <path
+                    d="M5 8l2 2 4-4"
+                    stroke="#16a34a"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                <p
+                  style={{
+                    fontSize: '0.8rem',
+                    fontWeight: 600,
+                    color: 'var(--text)',
+                  }}
+                >
+                  Completed tasks this week ({thisWeekCompletedTasks.length})
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                {thisWeekCompletedTasks.map((task) => (
+                  <div
+                    key={task.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '4px 0',
+                    }}
+                  >
+                    <svg
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      style={{ width: 10, height: 10, flexShrink: 0 }}
+                    >
+                      <circle cx="6" cy="6" r="5" stroke="#16a34a" strokeWidth="1" />
+                      <path
+                        d="M4 6l1.5 1.5L8 4"
+                        stroke="#16a34a"
+                        strokeWidth="1"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      />
+                    </svg>
+                    <span
+                      className="truncate"
+                      style={{
+                        fontSize: '0.78rem',
+                        color: 'var(--text)',
+                        flex: 1,
+                        minWidth: 0,
+                        textDecoration: 'line-through',
+                        opacity: 0.7,
+                      }}
+                    >
+                      {task.text}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        color: 'var(--text3)',
+                        whiteSpace: 'nowrap',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {formatCompletedTime(task.completed_at!)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
         <QuickTotalsRail
           lastWeek={lastWeekTotals}

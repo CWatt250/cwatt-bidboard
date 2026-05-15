@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, KeyboardEvent } from 'react'
+import { Check, Trash2 } from 'lucide-react'
 import { useTodos } from '@/hooks/useTodos'
 import type { WorkspaceTodo } from '@/lib/supabase/types'
 
@@ -16,35 +17,15 @@ function Skeleton() {
 
 function TodoItem({
   todo,
-  onToggle,
+  onComplete,
+  onDelete,
 }: {
   todo: WorkspaceTodo
-  onToggle: (id: string) => void
+  onComplete: (id: string) => void
+  onDelete: (id: string) => void
 }) {
   return (
     <div className="flex items-center gap-2 px-3 py-2 hover:bg-muted/40 rounded-md transition-colors group">
-      <button
-        onClick={() => onToggle(todo.id)}
-        className={`flex-shrink-0 w-4 h-4 rounded border transition-colors ${
-          todo.is_completed
-            ? 'bg-primary border-primary'
-            : 'border-muted-foreground/40 hover:border-primary'
-        }`}
-        aria-label={todo.is_completed ? 'Mark incomplete' : 'Mark complete'}
-      >
-        {todo.is_completed && (
-          <svg viewBox="0 0 12 12" fill="none" className="w-full h-full p-0.5">
-            <path
-              d="M2 6l3 3 5-5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-primary-foreground"
-            />
-          </svg>
-        )}
-      </button>
       <span
         className={`text-sm flex-1 min-w-0 truncate transition-colors ${
           todo.is_completed ? 'line-through text-muted-foreground' : 'text-foreground'
@@ -52,18 +33,37 @@ function TodoItem({
       >
         {todo.text}
       </span>
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        {!todo.is_completed && (
+          <button
+            onClick={() => onComplete(todo.id)}
+            className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-green-600 hover:bg-green-50 transition-colors"
+            aria-label="Mark complete"
+            title="Complete"
+          >
+            <Check size={14} />
+          </button>
+        )}
+        <button
+          onClick={() => onDelete(todo.id)}
+          className="flex-shrink-0 w-6 h-6 rounded flex items-center justify-center text-red-500 hover:bg-red-50 transition-colors"
+          aria-label="Delete task"
+          title="Delete"
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
     </div>
   )
 }
 
 export function TodoList() {
-  const { todos, loading, addTodo, toggleTodo, clearCompleted } = useTodos()
+  const { todos, loading, addTodo, completeTodo, deleteTodo, clearCompleted } = useTodos()
   const [inputValue, setInputValue] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
 
   const incomplete = todos.filter((t) => !t.is_completed)
   const completed = todos.filter((t) => t.is_completed)
-  const sorted = [...incomplete, ...completed]
 
   function handleAdd() {
     const trimmed = inputValue.trim()
@@ -121,15 +121,38 @@ export function TodoList() {
       <div className="flex-1 overflow-y-auto min-h-0">
         {loading ? (
           <Skeleton />
-        ) : sorted.length === 0 ? (
+        ) : todos.length === 0 ? (
           <p className="text-xs text-muted-foreground text-center px-4 py-6">
             No tasks yet. Add one above.
           </p>
         ) : (
           <div className="p-2 space-y-0.5">
-            {sorted.map((todo) => (
-              <TodoItem key={todo.id} todo={todo} onToggle={toggleTodo} />
-            ))}
+            {/* Incomplete tasks */}
+            {incomplete.length > 0 && (
+              <div className="space-y-0.5">
+                {incomplete.map((todo) => (
+                  <TodoItem key={todo.id} todo={todo} onComplete={completeTodo} onDelete={deleteTodo} />
+                ))}
+              </div>
+            )}
+
+            {/* Completed section */}
+            {completed.length > 0 && (
+              <>
+                <div className="flex items-center gap-2 px-3 py-1">
+                  <div className="flex-1 h-px bg-muted" />
+                  <span className="text-xs text-muted-foreground shrink-0">
+                    Completed ({completed.length})
+                  </span>
+                  <div className="flex-1 h-px bg-muted" />
+                </div>
+                <div className="space-y-0.5">
+                  {completed.map((todo) => (
+                    <TodoItem key={todo.id} todo={todo} onComplete={completeTodo} onDelete={deleteTodo} />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -149,19 +172,6 @@ export function TodoList() {
                 Clear
               </button>
             )}
-            <button
-              style={{
-                fontSize: '0.7rem',
-                color: 'var(--accent)',
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: 0,
-                fontWeight: 500,
-              }}
-            >
-              View all tasks →
-            </button>
           </div>
         </div>
       )}
