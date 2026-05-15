@@ -13,6 +13,8 @@ import { useUserRole } from '@/contexts/userRole'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useDuplicateProjectCheck } from '@/hooks/useDuplicateProjectCheck'
 import { DuplicateProjectWarning } from '@/components/shared/DuplicateProjectWarning'
+import { LocationAutocomplete } from '@/components/shared/LocationAutocomplete'
+import { ClientCombobox } from '@/components/shared/ClientCombobox'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -466,10 +468,17 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
               <Label htmlFor="project_location">Project Location</Label>
-              <Input
-                id="project_location"
-                {...register('project_location')}
-                placeholder="City, State or full address"
+              <Controller
+                name="project_location"
+                control={control}
+                render={({ field }) => (
+                  <LocationAutocomplete
+                    id="project_location"
+                    value={field.value ?? ''}
+                    onChange={field.onChange}
+                    placeholder="City, State or full address"
+                  />
+                )}
               />
             </div>
             <div className="space-y-1">
@@ -598,35 +607,13 @@ export function NewBidDialog({ defaultProjectName, open: externalOpen, onOpenCha
                         <Controller
                           name={`line_items.${index}.client`}
                           control={control}
-                          render={({ field }) => {
-                            const current = field.value ?? ''
-                            const selectValue = allClients.includes(current) ? current : ''
-                            return (
-                              <>
-                                <Select
-                                  value={selectValue}
-                                  onValueChange={(v) => field.onChange(v)}
-                                >
-                                  <SelectTrigger className="w-full h-8 text-sm">
-                                    <SelectValue placeholder="Pick a client…" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {allClients.map((c) => (
-                                      <SelectItem key={c} value={c}>
-                                        {c}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Input
-                                  value={current}
-                                  onChange={(e) => field.onChange(e.target.value)}
-                                  placeholder="…or type a new client name"
-                                  className="h-7 text-xs"
-                                />
-                              </>
-                            )
-                          }}
+                          render={({ field }) => (
+                            <ClientCombobox
+                              clients={allClients}
+                              value={field.value ?? ''}
+                              onChange={field.onChange}
+                            />
+                          )}
                         />
                       </div>
 
