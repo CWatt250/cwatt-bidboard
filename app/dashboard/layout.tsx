@@ -13,9 +13,15 @@ export default async function DashboardLayout({ children }: { children: React.Re
   if (!user) redirect('/login')
 
   const [{ data: profile }, { data: profilesRaw }] = await Promise.all([
-    supabase.from('profiles').select('name').eq('id', user.id).single(),
+    supabase.from('profiles').select('name, is_active').eq('id', user.id).single(),
     supabase.from('profiles').select('id, name, user_branches(branch)').order('name'),
   ])
+
+  // Eject deactivated users immediately — server-side gate before any content renders
+  if (!profile || !profile.is_active) {
+    await supabase.auth.signOut()
+    redirect('/login?error=account_deactivated')
+  }
 
   const profiles = (profilesRaw ?? []).map((p: any) => ({
     id: p.id,
