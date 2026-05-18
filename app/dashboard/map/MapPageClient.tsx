@@ -1,10 +1,13 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import dynamic from 'next/dynamic'
 import { useBidDetail } from '@/contexts/bidDetail'
+import { useUserRole } from '@/contexts/userRole'
 import { IREX_BRANCHES } from '@/config/irex-branches'
+import type { Branch } from '@/lib/supabase/types'
+import { MapFilters, MAP_BRANCHES, type StatusFilter } from './MapFilters'
 
 const LocalsMap = dynamic(() => import('./LocalsMap'), { ssr: false })
 const JobListPanel = dynamic(() => import('./JobListPanel'), { ssr: false })
@@ -19,6 +22,8 @@ export interface MapBid {
   longitude: number
   bid_due_date: string
   project_location: string | null
+  estimator_id: string | null
+  estimator_name: string | null
 }
 
 export function MapPageClient() {
@@ -27,7 +32,13 @@ export function MapPageClient() {
   const [selectedBidId, setSelectedBidId] = useState<string | null>(null)
   const [hoveredBidId, setHoveredBidId] = useState<string | null>(null)
 
+  // Filter-bar state
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('both')
+  const [selectedBranches, setSelectedBranches] = useState<Branch[]>([...MAP_BRANCHES])
+  const [selectedEstimator, setSelectedEstimator] = useState<string | null>(null)
+
   const { openBid, selectedBid } = useBidDetail()
+  const { isAdmin } = useUserRole()
 
   // Sync local selectedBidId when drawer closes
   useEffect(() => {
@@ -38,12 +49,16 @@ export function MapPageClient() {
     const supabase = createClient()
     supabase
       .from('bids')
-      .select('id, project_name, branch, status, latitude, longitude, bid_due_date, project_location, bid_line_items(price)')
+      .select(
+        'id, project_name, branch, status, latitude, longitude, bid_due_date, project_location, estimator_id, profiles!bids_estimator_id_fkey(name), bid_line_items(price)',
+      )
       .in('status', ['Awarded', 'Verbal'])
       .not('latitude', 'is', null)
       .not('longitude', 'is', null)
       .then(({ data }) => {
-        const rows: MapBid[] = ((data ?? []) as {
+        // Cast via `unknown`: a to-one FK embed (`profiles`) is an object at
+        // runtime, but the generated types infer it as an array.
+        const rows: MapBid[] = ((data ?? []) as unknown as {
           id: string
           project_name: string
           branch: string
@@ -52,6 +67,8 @@ export function MapPageClient() {
           longitude: number
           bid_due_date: string
           project_location: string | null
+          estimator_id: string | null
+          profiles: { name: string } | null
           bid_line_items: { price: number | null }[]
         }[]).map((b) => ({
           id: b.id,
@@ -62,6 +79,8 @@ export function MapPageClient() {
           longitude: b.longitude,
           bid_due_date: b.bid_due_date,
           project_location: b.project_location,
+          estimator_id: b.estimator_id,
+          estimator_name: b.profiles?.name ?? null,
           total_price: b.bid_line_items.reduce<number | null>((sum, li) => {
             if (li.price == null) return sum
             return (sum ?? 0) + li.price
@@ -113,6 +132,24 @@ export function MapPageClient() {
     })
   }, [openBid])
 
+  const handleBranchToggle = useCallback((branch: Branch) => {
+    setSelectedBranches((prev) =>
+      prev.includes(branch) ? prev.filter((b) => b !== branch) : [...prev, branch],
+    )
+  }, [])
+
+  // Client-side filtered view passed to both the map and the job list.
+  const filteredBids = useMemo(
+    () =>
+      bids.filter((b) => {
+        if (statusFilter !== 'both' && b.status.toLowerCase() !== statusFilter) return false
+        if (!selectedBranches.includes(b.branch as Branch)) return false
+        if (selectedEstimator && b.estimator_name !== selectedEstimator) return false
+        return true
+      }),
+    [bids, statusFilter, selectedBranches, selectedEstimator],
+  )
+
   if (loading) {
     return (
       <div
@@ -163,6 +200,18 @@ export function MapPageClient() {
         </span>
       </div>
 
+      {/* Filter bar */}
+      <MapFilters
+        bids={bids}
+        statusFilter={statusFilter}
+        onStatusChange={setStatusFilter}
+        selectedBranches={selectedBranches}
+        onBranchToggle={handleBranchToggle}
+        selectedEstimator={selectedEstimator}
+        onEstimatorChange={setSelectedEstimator}
+        isAdmin={isAdmin}
+      />
+
       {/* Two-column layout */}
       <div
         style={{
@@ -174,7 +223,7 @@ export function MapPageClient() {
         {/* Left: Job list */}
         <div style={{ width: '320px', flexShrink: 0 }}>
           <JobListPanel
-            bids={bids}
+            bids={filteredBids}
             selectedBidId={selectedBidId}
             hoveredBidId={hoveredBidId}
             onBidHover={handleBidHover}
@@ -185,7 +234,7 @@ export function MapPageClient() {
         {/* Right: Map */}
         <div style={{ flex: 1, minWidth: 0 }}>
           <LocalsMap
-            bids={bids}
+            bids={filteredBids}
             selectedBidId={selectedBidId}
             hoveredBidId={hoveredBidId}
             onBidHover={handleBidHover}
