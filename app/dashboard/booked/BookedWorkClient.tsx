@@ -8,8 +8,18 @@ import { BranchLane } from './BranchLane'
 import { ViewToggle, type ViewMode } from './ViewToggle'
 import { JobCard } from './JobCard'
 import { SummaryBanner } from './SummaryBanner'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const BRANCH_ORDER: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
+
+/** Sentinel <Select> value for the "no client filter" option. */
+const ALL_CLIENTS = '__all_clients__'
 
 const BID_QUERY = `
   id,
@@ -120,6 +130,7 @@ export function BookedWorkClient() {
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('branch')
   const [searchQuery, setSearchQuery] = useState('')
+  const [selectedClient, setSelectedClient] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -213,8 +224,31 @@ export function BookedWorkClient() {
   const verbalCount = bids.filter((b) => b.status === 'Verbal').length
   const totalValue = bids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
 
+  // Unique client names across all loaded bids — feeds the client filter dropdown.
+  const clientNames = Array.from(
+    new Set(
+      bids.flatMap((b) =>
+        (b.bid_clients ?? [])
+          .map((c) => c.clients?.name ?? c.client_name ?? '')
+          .filter((n) => n !== ''),
+      ),
+    ),
+  ).sort((a, b) => a.localeCompare(b))
+
+  // A bid is visible only when it matches BOTH the search text and the client filter.
   const q = searchQuery.trim().toLowerCase()
-  const matches = (b: BookedBid) => q === '' || b.project_name.toLowerCase().includes(q)
+  const matches = (b: BookedBid) => {
+    if (q !== '' && !b.project_name.toLowerCase().includes(q)) return false
+    if (
+      selectedClient !== null &&
+      !(b.bid_clients ?? []).some(
+        (c) => (c.clients?.name ?? c.client_name ?? '') === selectedClient,
+      )
+    ) {
+      return false
+    }
+    return true
+  }
 
   // ---- Branch-lanes view ----
   function renderBranchLanes() {
@@ -325,6 +359,24 @@ export function BookedWorkClient() {
         </h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
           <SearchInput value={searchQuery} onChange={setSearchQuery} />
+          <Select
+            value={selectedClient ?? ALL_CLIENTS}
+            onValueChange={(v) =>
+              setSelectedClient(v && v !== ALL_CLIENTS ? String(v) : null)
+            }
+          >
+            <SelectTrigger className="w-[200px]" aria-label="Filter by client">
+              <SelectValue placeholder="Filter by client..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL_CLIENTS}>All clients</SelectItem>
+              {clientNames.map((name) => (
+                <SelectItem key={name} value={name}>
+                  {name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <ViewToggle value={viewMode} onChange={setViewMode} />
         </div>
       </div>

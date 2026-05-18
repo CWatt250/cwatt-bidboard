@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import Link from 'next/link'
 import { ChevronDown, Building2 } from 'lucide-react'
 import type { Bid, BidLineItem, Branch } from '@/lib/supabase/types'
 
@@ -48,6 +49,7 @@ interface JobCardBid extends Bid {
 
 export function JobCard({ bid }: { bid: JobCardBid }) {
   const [expanded, setExpanded] = useState(false)
+  const [hovered, setHovered] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
   const lineItems = bid.line_items ?? []
@@ -60,7 +62,7 @@ export function JobCard({ bid }: { bid: JobCardBid }) {
   const scopes = Array.from(new Set(lineItems.map((li) => li.scope)))
   const accent = BRANCH_COLORS[bid.branch]
 
-  // Click-outside to collapse
+  // Click-outside to collapse the inline scope panel
   useEffect(() => {
     if (!expanded) return
     function handleClick(e: MouseEvent) {
@@ -73,197 +75,221 @@ export function JobCard({ bid }: { bid: JobCardBid }) {
   return (
     <div
       ref={ref}
-      role="button"
-      tabIndex={0}
-      aria-expanded={expanded}
-      onClick={() => setExpanded((p) => !p)}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          setExpanded((p) => !p)
-        }
-      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       style={{
-        background: 'var(--surface)',
-        border: '0.5px solid var(--border)',
+        background: hovered ? `${accent}0a` : 'var(--surface)',
+        border: `0.5px solid ${hovered ? 'var(--border2)' : 'var(--border)'}`,
         borderRadius: 'var(--radius-lg)',
         overflow: 'hidden',
-        cursor: 'pointer',
         minWidth: 260,
         maxWidth: 260,
         flexShrink: 0,
-        transition: 'border-color 0.2s ease',
-      }}
-      onMouseEnter={(e) => {
-        if (!expanded) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border2)'
-      }}
-      onMouseLeave={(e) => {
-        if (!expanded) (e.currentTarget as HTMLElement).style.borderColor = 'var(--border)'
+        boxShadow: hovered ? 'var(--shadow-sm)' : 'none',
+        transition: 'border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease',
       }}
     >
-      {/* Top accent bar — branch color */}
-      <div style={{ height: 4, background: accent }} />
+      {/* Card body — clicking navigates to the full project detail page */}
+      <Link
+        href={`/dashboard/bids/${bid.id}`}
+        style={{ display: 'block', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+      >
+        {/* Top accent bar — branch color */}
+        <div style={{ height: 4, background: accent }} />
 
-      {/* Body */}
-      <div style={{ padding: '10px 14px 10px' }}>
-        {/* Row 1: badges */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-          <span
+        {/* Body */}
+        <div style={{ padding: '10px 14px 10px' }}>
+          {/* Row 1: badges */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <span
+              style={{
+                background: `${accent}18`,
+                color: accent,
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                padding: '1px 6px',
+                borderRadius: 4,
+                letterSpacing: '0.02em',
+              }}
+            >
+              {bid.branch}
+            </span>
+            <span
+              style={{
+                background:
+                  bid.status === 'Awarded' ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)',
+                color: bid.status === 'Awarded' ? '#10b981' : '#3b82f6',
+                fontSize: '0.6rem',
+                fontWeight: 700,
+                padding: '1px 6px',
+                borderRadius: 4,
+              }}
+            >
+              {bid.status}
+            </span>
+          </div>
+
+          {/* Row 2: project name — up to 2 lines */}
+          <div
             style={{
-              background: `${accent}18`,
-              color: accent,
-              fontSize: '0.6rem',
-              fontWeight: 700,
-              padding: '1px 6px',
-              borderRadius: 4,
-              letterSpacing: '0.02em',
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              color: 'var(--text)',
+              lineHeight: 1.3,
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+            }}
+            title={bid.project_name}
+          >
+            {bid.project_name}
+          </div>
+
+          {/* Row 3: client */}
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              marginTop: 5,
+              fontSize: '0.75rem',
+              color: 'var(--text3)',
             }}
           >
-            {bid.branch}
-          </span>
-          <span
-            style={{
-              background:
-                bid.status === 'Awarded' ? 'rgba(16,185,129,0.12)' : 'rgba(59,130,246,0.12)',
-              color: bid.status === 'Awarded' ? '#10b981' : '#3b82f6',
-              fontSize: '0.6rem',
-              fontWeight: 700,
-              padding: '1px 6px',
-              borderRadius: 4,
-            }}
-          >
-            {bid.status}
-          </span>
+            <Building2 size={12} style={{ flexShrink: 0 }} aria-hidden="true" />
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {companyName ?? 'No client'}
+            </span>
+          </div>
+
+          {/* Row 4: scope chips */}
+          {scopes.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
+              {scopes.slice(0, 3).map((s) => (
+                <span
+                  key={s}
+                  style={{
+                    fontSize: '0.625rem',
+                    color: 'var(--text2)',
+                    background: 'var(--surface2)',
+                    padding: '1px 6px',
+                    borderRadius: 4,
+                  }}
+                >
+                  {s}
+                </span>
+              ))}
+              {scopes.length > 3 && (
+                <span style={{ fontSize: '0.625rem', color: 'var(--text3)', padding: '1px 4px' }}>
+                  +{scopes.length - 3}
+                </span>
+              )}
+            </div>
+          )}
         </div>
 
-        {/* Row 2: project name — up to 2 lines */}
-        <div
-          style={{
-            fontSize: '0.875rem',
-            fontWeight: 500,
-            color: 'var(--text)',
-            lineHeight: 1.3,
-            display: '-webkit-box',
-            WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical',
-            overflow: 'hidden',
-          }}
-          title={bid.project_name}
-        >
-          {bid.project_name}
-        </div>
-
-        {/* Row 3: client */}
+        {/* Footer: value (left) + due date chip (right) */}
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 4,
-            marginTop: 5,
-            fontSize: '0.75rem',
-            color: 'var(--text3)',
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '8px 14px',
+            borderTop: '0.5px solid var(--border)',
           }}
         >
-          <Building2 size={12} style={{ flexShrink: 0 }} aria-hidden="true" />
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {companyName ?? 'No client'}
-          </span>
-        </div>
-
-        {/* Row 4: scope chips */}
-        {scopes.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 8 }}>
-            {scopes.slice(0, 3).map((s) => (
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, minWidth: 0 }}>
+            {hasValue ? (
               <span
-                key={s}
                 style={{
-                  fontSize: '0.625rem',
-                  color: 'var(--text2)',
-                  background: 'var(--surface2)',
-                  padding: '1px 6px',
-                  borderRadius: 4,
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  color: 'var(--green)',
+                  fontFamily: 'var(--font-mono), monospace',
                 }}
               >
-                {s}
+                {formatCurrency(totalValue)}
               </span>
-            ))}
-            {scopes.length > 3 && (
-              <span style={{ fontSize: '0.625rem', color: 'var(--text3)', padding: '1px 4px' }}>
-                +{scopes.length - 3}
+            ) : (
+              <span style={{ fontSize: '0.8125rem', fontStyle: 'italic', color: 'var(--text3)' }}>
+                TBD
+              </span>
+            )}
+            {hovered && (
+              <span
+                style={{ fontSize: '0.625rem', color: 'var(--text3)', whiteSpace: 'nowrap' }}
+              >
+                Open →
               </span>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Footer: value (left) + due date chip (right) */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 8,
-          padding: '8px 14px',
-          borderTop: '0.5px solid var(--border)',
-        }}
-      >
-        {hasValue ? (
           <span
             style={{
-              fontSize: '1rem',
-              fontWeight: 700,
-              color: 'var(--green)',
-              fontFamily: 'var(--font-mono), monospace',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              flexShrink: 0,
+              fontSize: '0.6875rem',
+              color: 'var(--text2)',
+              background: 'var(--surface2)',
+              padding: '2px 8px',
+              borderRadius: 5,
             }}
           >
-            {formatCurrency(totalValue)}
+            <span
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: dueColor(bid.bid_due_date),
+                flexShrink: 0,
+              }}
+            />
+            {bid.bid_due_date ? formatDate(bid.bid_due_date) : '—'}
           </span>
-        ) : (
-          <span style={{ fontSize: '0.8125rem', fontStyle: 'italic', color: 'var(--text3)' }}>
-            TBD
-          </span>
-        )}
+        </div>
+      </Link>
 
-        <span
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 5,
-            flexShrink: 0,
-            fontSize: '0.6875rem',
-            color: 'var(--text2)',
-            background: 'var(--surface2)',
-            padding: '2px 8px',
-            borderRadius: 5,
-          }}
-        >
-          <span
-            style={{
-              width: 6,
-              height: 6,
-              borderRadius: '50%',
-              background: dueColor(bid.bid_due_date),
-              flexShrink: 0,
-            }}
-          />
-          {bid.bid_due_date ? formatDate(bid.bid_due_date) : '—'}
-        </span>
-      </div>
-
-      {/* Expand chevron — always visible */}
-      <div
+      {/* Expand chevron — separate zone: peek at scopes without leaving the page */}
+      <button
+        type="button"
+        aria-label={expanded ? 'Hide scope details' : 'Show scope details'}
+        aria-expanded={expanded}
+        onClick={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setExpanded((p) => !p)
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--surface2)'
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent'
+        }}
         style={{
           display: 'flex',
+          width: '100%',
           alignItems: 'center',
           justifyContent: 'center',
           padding: '3px 0',
+          border: 'none',
+          borderTop: '0.5px solid var(--border)',
+          background: 'transparent',
           color: 'var(--text3)',
-          transition: 'transform 0.2s ease',
-          transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          cursor: 'pointer',
         }}
       >
-        <ChevronDown size={14} />
-      </div>
+        <ChevronDown
+          size={14}
+          style={{
+            transition: 'transform 0.2s ease',
+            transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+          }}
+        />
+      </button>
 
       {/* Expanded line items */}
       {expanded && (
