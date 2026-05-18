@@ -110,15 +110,29 @@ export function WeeklyTab() {
   const [atRiskOpen, setAtRiskOpen] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
 
-  // Estimator names for the admin dropdown — derived from already-loaded bids.
-  // Keyed by name (not UUID) so the <Select> trigger displays the person's name.
+  // Estimator options for the admin dropdown — derived from already-loaded bids.
+  // The <Select> is keyed by name (so the trigger shows the person's name), but
+  // the estimator's id is kept alongside it for scope-price computation.
   const estimatorOptions = useMemo(() => {
-    const names = new Set<string>()
+    const byName = new Map<string, string>()
     for (const b of bids) {
-      if (b.estimator_name) names.add(b.estimator_name)
+      if (b.estimator_name && b.estimator_id && !byName.has(b.estimator_name)) {
+        byName.set(b.estimator_name, b.estimator_id)
+      }
     }
-    return Array.from(names).sort((a, b) => a.localeCompare(b))
+    return Array.from(byName, ([name, id]) => ({ name, id })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
   }, [bids])
+
+  // The estimator whose scope prices the recap should narrow to. Non-admins are
+  // always scoped to themselves; admins are scoped only when a specific
+  // estimator is picked ("All estimators" → null → full bid totals).
+  const activeEstimatorId = useMemo(() => {
+    if (!isAdmin) return profile?.id ?? null
+    if (!selectedEstimator) return null
+    return estimatorOptions.find((e) => e.name === selectedEstimator)?.id ?? null
+  }, [isAdmin, profile, selectedEstimator, estimatorOptions])
 
   // Recap scope: non-admins only ever see their own bids; admins see org-wide
   // unless they pick a specific estimator (matched by estimator name).
@@ -143,25 +157,31 @@ export function WeeklyTab() {
   )
 
   const lastWeekTotals = useMemo(
-    () => ({ count: lastWeekBids.length, total: bidTotalValue(lastWeekBids) }),
-    [lastWeekBids],
+    () => ({
+      count: lastWeekBids.length,
+      total: bidTotalValue(lastWeekBids, activeEstimatorId),
+    }),
+    [lastWeekBids, activeEstimatorId],
   )
   const thisWeekTotals = useMemo(
-    () => ({ count: thisWeekBids.length, total: bidTotalValue(thisWeekBids) }),
-    [thisWeekBids],
+    () => ({
+      count: thisWeekBids.length,
+      total: bidTotalValue(thisWeekBids, activeEstimatorId),
+    }),
+    [thisWeekBids, activeEstimatorId],
   )
 
   const securedLastWeek = useMemo(
-    () => securedInWeek(filteredBids, lastWeek.start, lastWeek.end),
-    [filteredBids, lastWeek],
+    () => securedInWeek(filteredBids, lastWeek.start, lastWeek.end, activeEstimatorId),
+    [filteredBids, lastWeek, activeEstimatorId],
   )
   const verbalsLastWeek = useMemo(
-    () => verbalsInWeek(filteredBids, lastWeek.start, lastWeek.end),
-    [filteredBids, lastWeek],
+    () => verbalsInWeek(filteredBids, lastWeek.start, lastWeek.end, activeEstimatorId),
+    [filteredBids, lastWeek, activeEstimatorId],
   )
   const branchBreakdown = useMemo(
-    () => branchBreakdownThisWeek(filteredBids, thisWeek.start, thisWeek.end),
-    [filteredBids, thisWeek],
+    () => branchBreakdownThisWeek(filteredBids, thisWeek.start, thisWeek.end, activeEstimatorId),
+    [filteredBids, thisWeek, activeEstimatorId],
   )
   const atRisk = useMemo(() => atRiskBids(filteredBids, new Date()), [filteredBids])
   const atRiskBidList = useMemo(
@@ -306,9 +326,9 @@ export function WeeklyTab() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value={ALL_ESTIMATORS}>All estimators</SelectItem>
-                  {estimatorOptions.map((name) => (
-                    <SelectItem key={name} value={name}>
-                      {name}
+                  {estimatorOptions.map((e) => (
+                    <SelectItem key={e.name} value={e.name}>
+                      {e.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -490,12 +510,14 @@ export function WeeklyTab() {
             title="Bids due last week"
             subtitle={`${lastRangeLabel} · ${lastWeekTotals.count} bid${lastWeekTotals.count === 1 ? '' : 's'} · ${formatCurrency(lastWeekTotals.total)} · ${lastWeekSentCount} sent`}
             bids={lastWeekBids}
+            estimatorId={activeEstimatorId}
             emptyMessage="No bids were due last week."
           />
           <BidsTable
             title="Bids due this week"
             subtitle={`${thisRangeLabel} · ${thisWeekTotals.count} bid${thisWeekTotals.count === 1 ? '' : 's'} · ${formatCurrency(thisWeekTotals.total)} · ${thisWeekSentCount} sent`}
             bids={thisWeekBids}
+            estimatorId={activeEstimatorId}
             emptyMessage="No bids are due this week."
           />
 
@@ -605,6 +627,7 @@ export function WeeklyTab() {
         title="Secured Last Week"
         subtitle={`${lastRangeLabel} · ${formatCurrency(securedLastWeek.total)} · ${securedLastWeek.count} bid${securedLastWeek.count === 1 ? '' : 's'}`}
         bids={securedLastWeek.bids}
+        estimatorId={activeEstimatorId}
       />
       <WeeklyBidsDrawer
         open={verbalsDrawerOpen}
@@ -612,6 +635,7 @@ export function WeeklyTab() {
         title="Verbals Last Week"
         subtitle={`${lastRangeLabel} · ${formatCurrency(verbalsLastWeek.total)} · ${verbalsLastWeek.count} bid${verbalsLastWeek.count === 1 ? '' : 's'}`}
         bids={verbalsLastWeek.bids}
+        estimatorId={activeEstimatorId}
       />
 
       <style>{`

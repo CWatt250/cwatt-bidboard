@@ -5,17 +5,12 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/comp
 import { STATUS_BADGE_CLASSES, BRANCH_BADGE_CLASSES } from '@/config/colors'
 import { getBidClientName } from '@/lib/supabase/types'
 import type { Bid } from '@/lib/supabase/types'
+import { estimatorScopedPrice } from '@/lib/recap-aggregations'
 
 function formatCurrency(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
   if (value >= 1_000) return `$${(value / 1_000).toFixed(1)}K`
   return `$${value.toFixed(0)}`
-}
-
-/** A bid's value — prefers the precomputed total, falls back to line items. */
-function bidValue(b: Bid): number {
-  if (typeof b.total_price === 'number') return b.total_price
-  return (b.line_items ?? []).reduce((sum, li) => sum + (li.price ?? 0), 0)
 }
 
 interface WeeklyBidsDrawerProps {
@@ -27,6 +22,8 @@ interface WeeklyBidsDrawerProps {
   subtitle: string
   /** The specific bids to list. */
   bids: Bid[]
+  /** When set, per-bid values are scoped to this estimator's line items. */
+  estimatorId?: string | null
 }
 
 /**
@@ -39,9 +36,12 @@ export function WeeklyBidsDrawer({
   title,
   subtitle,
   bids,
+  estimatorId = null,
 }: WeeklyBidsDrawerProps) {
-  const sorted = [...bids].sort((a, b) => bidValue(b) - bidValue(a))
-  const total = sorted.reduce((sum, b) => sum + bidValue(b), 0)
+  const sorted = [...bids].sort(
+    (a, b) => estimatorScopedPrice(b, estimatorId) - estimatorScopedPrice(a, estimatorId),
+  )
+  const total = sorted.reduce((sum, b) => sum + estimatorScopedPrice(b, estimatorId), 0)
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -121,7 +121,7 @@ export function WeeklyBidsDrawer({
                           color: '#10b981',
                         }}
                       >
-                        {formatCurrency(bidValue(bid))}
+                        {formatCurrency(estimatorScopedPrice(bid, estimatorId))}
                       </span>
                     </div>
                   </div>

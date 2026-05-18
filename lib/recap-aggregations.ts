@@ -39,6 +39,22 @@ function lineItemTotal(b: Bid): number {
   return (b.line_items ?? []).reduce((sum, li) => sum + (li.price ?? 0), 0)
 }
 
+/**
+ * A bid's value scoped to a single estimator. With `estimatorId === null` this
+ * is the full bid total; otherwise it sums only the line items belonging to
+ * that estimator — either explicitly assigned to them, or unassigned and so
+ * inheriting the bid's primary estimator. Returns 0 when none match.
+ */
+export function estimatorScopedPrice(bid: Bid, estimatorId: string | null): number {
+  if (estimatorId === null) return lineItemTotal(bid)
+  return (bid.line_items ?? []).reduce((sum, li) => {
+    const mine =
+      li.estimator_id === estimatorId ||
+      (li.estimator_id === null && bid.estimator_id === estimatorId)
+    return mine ? sum + (li.price ?? 0) : sum
+  }, 0)
+}
+
 export function weekRange(date: Date): WeekRange {
   return {
     start: startOfWeek(date, { weekStartsOn: 1 }),
@@ -57,11 +73,16 @@ export function bidsInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): Bid[] {
   })
 }
 
-export function bidTotalValue(bids: Bid[]): number {
-  return bids.reduce((sum, b) => sum + lineItemTotal(b), 0)
+export function bidTotalValue(bids: Bid[], estimatorId: string | null = null): number {
+  return bids.reduce((sum, b) => sum + estimatorScopedPrice(b, estimatorId), 0)
 }
 
-export function securedInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): WeekTotals {
+export function securedInWeek(
+  bids: Bid[],
+  weekStart: Date,
+  weekEnd: Date,
+  estimatorId: string | null = null,
+): WeekTotals {
   const startMs = weekStart.getTime()
   const endMs = weekEnd.getTime()
   const wonBids = new Map<string, Bid>()
@@ -72,13 +93,24 @@ export function securedInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): Week
       const t = new Date(li.awarded_at).getTime()
       if (t < startMs || t > endMs) continue
       wonBids.set(b.id, b)
-      total += li.price ?? 0
+      // Which bids count as secured is unchanged; the dollar total is scoped
+      // to the estimator's own awarded line items when an estimator is set.
+      const mine =
+        estimatorId === null ||
+        li.estimator_id === estimatorId ||
+        (li.estimator_id === null && b.estimator_id === estimatorId)
+      if (mine) total += li.price ?? 0
     }
   }
   return { count: wonBids.size, total, bids: Array.from(wonBids.values()) }
 }
 
-export function verbalsInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): WeekTotals {
+export function verbalsInWeek(
+  bids: Bid[],
+  weekStart: Date,
+  weekEnd: Date,
+  estimatorId: string | null = null,
+): WeekTotals {
   // We don't track a verbal_at timestamp, so this is a proxy: bids currently in
   // status 'Verbal' whose row updated_at lands in the week. Edits to other
   // fields will move them in and out of this bucket.
@@ -91,7 +123,7 @@ export function verbalsInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): Week
   })
   return {
     count: matching.length,
-    total: matching.reduce((sum, b) => sum + lineItemTotal(b), 0),
+    total: matching.reduce((sum, b) => sum + estimatorScopedPrice(b, estimatorId), 0),
     bids: matching,
   }
 }
@@ -123,6 +155,7 @@ export function branchBreakdownThisWeek(
   bids: Bid[],
   weekStart: Date,
   weekEnd: Date,
+  estimatorId: string | null = null,
 ): BranchBreakdownItem[] {
   const inWeek = bidsInWeek(bids, weekStart, weekEnd)
   return ALL_BRANCHES.map((branch) => {
@@ -130,7 +163,7 @@ export function branchBreakdownThisWeek(
     return {
       branch,
       count: branchBids.length,
-      total: bidTotalValue(branchBids),
+      total: bidTotalValue(branchBids, estimatorId),
     }
   })
 }

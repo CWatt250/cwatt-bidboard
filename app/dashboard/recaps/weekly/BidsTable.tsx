@@ -4,12 +4,15 @@ import { format } from 'date-fns'
 import { STATUS_BADGE_CLASSES, BRANCH_BADGE_CLASSES } from '@/config/colors'
 import { getBidClientName } from '@/lib/supabase/types'
 import type { Bid } from '@/lib/supabase/types'
+import { estimatorScopedPrice } from '@/lib/recap-aggregations'
 
 interface BidsTableProps {
   title: string
   subtitle: string
   bids: Bid[]
   emptyMessage?: string
+  /** When set, the Bid Price column shows only this estimator's scoped value. */
+  estimatorId?: string | null
 }
 
 function formatCurrency(value: number): string {
@@ -23,6 +26,7 @@ export function BidsTable({
   subtitle,
   bids,
   emptyMessage = 'No bids in this range.',
+  estimatorId = null,
 }: BidsTableProps) {
   const sorted = [...bids].sort((a, b) => {
     const av = a.bid_due_date ?? ''
@@ -122,6 +126,7 @@ export function BidsTable({
                       ? clientNames[0]
                       : `${clientNames[0]} +${clientNames.length - 1}`
                 const due = bid.bid_due_date ? new Date(bid.bid_due_date + 'T00:00:00') : null
+                const price = estimatorScopedPrice(bid, estimatorId)
                 return (
                   <tr
                     key={bid.id}
@@ -213,7 +218,7 @@ export function BidsTable({
                         whiteSpace: 'nowrap',
                       }}
                     >
-                      {bid.total_price ? formatCurrency(bid.total_price) : '—'}
+                      {price ? formatCurrency(price) : '—'}
                     </td>
                   </tr>
                 )
