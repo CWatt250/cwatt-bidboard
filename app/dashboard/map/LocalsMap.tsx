@@ -4,7 +4,14 @@ import { useEffect, useRef, useState } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import * as turf from '@turf/turf'
-import type { Feature, Geometry, Polygon, MultiPolygon } from 'geojson'
+import type {
+  Feature,
+  FeatureCollection,
+  Geometry,
+  Point,
+  Polygon,
+  MultiPolygon,
+} from 'geojson'
 import { LOCALS, type LocalNumber } from '@/config/locals'
 import { IREX_BRANCHES } from '@/config/irex-branches'
 import type { MapBid } from './MapPageClient'
@@ -35,10 +42,7 @@ interface LocalsMapProps {
   onBidClick: (id: string) => void
 }
 
-function getBidColor(
-  bid: MapBid,
-  territories: GeoFeatureCollection | null,
-): string {
+function getBidColor(bid: MapBid, territories: GeoFeatureCollection | null): string {
   if (!territories) return '#9ca3af'
   const pt = turf.point([bid.longitude, bid.latitude])
   for (const feature of territories.features) {
@@ -53,17 +57,84 @@ function getBidColor(
   return '#9ca3af'
 }
 
-const BUILDING_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="16" height="20" x="4" y="2" rx="2" ry="2"/><path d="M9 22v-4h6v4"/><path d="M8 6h.01"/><path d="M16 6h.01"/><path d="M12 6h.01"/><path d="M12 10h.01"/><path d="M12 14h.01"/><path d="M16 10h.01"/><path d="M16 14h.01"/><path d="M8 10h.01"/><path d="M8 14h.01"/></svg>`
+const currencyFmt = new Intl.NumberFormat('en-US', {
+  style: 'currency',
+  currency: 'USD',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
 
-export default function LocalsMap({ bids, selectedBidId, hoveredBidId, onBidHover, onBidClick }: LocalsMapProps) {
+/** Formatted bid value — a dollar amount, or "TBD" when no prices are entered. */
+function formatBidValue(total: number | null): string {
+  return total == null ? 'TBD' : currencyFmt.format(total)
+}
+
+/** Minimal HTML escaping for values interpolated into popup markup. */
+function escapeHtml(value: unknown): string {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+}
+
+/** GeoJSON FeatureCollection for the Awarded/Verbal bid pins. */
+function buildBidFeatures(
+  bids: MapBid[],
+  territories: GeoFeatureCollection | null,
+): FeatureCollection<Point> {
+  return {
+    type: 'FeatureCollection',
+    features: bids.map((bid) => ({
+      type: 'Feature',
+      geometry: { type: 'Point', coordinates: [bid.longitude, bid.latitude] },
+      properties: {
+        id: bid.id,
+        name: bid.project_name,
+        color: getBidColor(bid, territories),
+        status: bid.status,
+        value: formatBidValue(bid.total_price),
+        branch: bid.branch,
+      },
+    })),
+  }
+}
+
+const EMPTY_FC: FeatureCollection<Point> = { type: 'FeatureCollection', features: [] }
+
+/** Static GeoJSON for the Irex branch points. */
+const IREX_FC: FeatureCollection<Point> = {
+  type: 'FeatureCollection',
+  features: IREX_BRANCHES.map((branch) => ({
+    type: 'Feature',
+    geometry: { type: 'Point', coordinates: [branch.lng, branch.lat] },
+    properties: {
+      id: branch.id,
+      label: branch.city.toUpperCase(),
+      fullName: `${branch.city} Branch`,
+      location: `${branch.city}, ${branch.state}`,
+    },
+  })),
+}
+
+export default function LocalsMap({
+  bids,
+  selectedBidId,
+  hoveredBidId,
+  onBidHover,
+  onBidClick,
+}: LocalsMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<mapboxgl.Map | null>(null)
-  const markersRef = useRef<mapboxgl.Marker[]>([])
-  const branchMarkersRef = useRef<mapboxgl.Marker[]>([])
-  const markerElsRef = useRef<Map<string, HTMLElement>>(new Map())
   const popupRef = useRef<mapboxgl.Popup | null>(null)
   const [territories, setTerritories] = useState<GeoFeatureCollection | null>(null)
+  const [layersReady, setLayersReady] = useState(false)
 
+  // Keep the latest callbacks reachable from map event handlers that are
+  // registered once — avoids stale closures without re-binding listeners.
+  const callbacksRef = useRef({ onBidHover, onBidClick })
+  callbacksRef.current = { onBidHover, onBidClick }
+
+  // Load territory polygons (used to color the bid pins)
   useEffect(() => {
     fetch('/locals-territories.geojson')
       .then((r) => r.json() as Promise<GeoFeatureCollection>)
@@ -71,7 +142,7 @@ export default function LocalsMap({ bids, selectedBidId, hoveredBidId, onBidHove
       .catch((err: unknown) => console.warn('[LocalsMap] Failed to load territories:', err))
   }, [])
 
-  // Build map once
+  // Build the map once
   useEffect(() => {
     if (!containerRef.current) return
 
@@ -82,14 +153,20 @@ export default function LocalsMap({ bids, selectedBidId, hoveredBidId, onBidHove
       zoom: 5.5,
     })
     mapRef.current = map
-
     map.addControl(new mapboxgl.NavigationControl(), 'top-right')
 
+    // One popup instance, reused for every bid and Irex hover.
+    const popup = new mapboxgl.Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 12,
+      className: 'bidwatt-popup',
+    })
+    popupRef.current = popup
+
     map.on('load', () => {
-      map.addSource('locals', {
-        type: 'geojson',
-        data: '/locals-territories.geojson',
-      })
+      // --- Territory fills + borders ---
+      map.addSource('locals', { type: 'geojson', data: '/locals-territories.geojson' })
 
       map.addLayer({
         id: 'locals-fill',
@@ -112,6 +189,7 @@ export default function LocalsMap({ bids, selectedBidId, hoveredBidId, onBidHove
         },
       })
 
+      // --- Territory labels ---
       const localNumbers: LocalNumber[] = [7, 16, 28, 36, 69, 73, 76, 82, 135]
       localNumbers.forEach((num) => {
         const local = LOCALS[num]
@@ -150,145 +228,162 @@ export default function LocalsMap({ bids, selectedBidId, hoveredBidId, onBidHove
         })
       })
 
-      // Irex branch markers — add after map layers so they sit above territories
-      IREX_BRANCHES.forEach((branch) => {
-        const el = document.createElement('div')
-        el.style.cssText = `
-          width: 28px;
-          height: 28px;
-          border-radius: 6px;
-          background: #fff;
-          border: 1.5px solid #374151;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #374151;
-          cursor: default;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-        `
-        el.innerHTML = BUILDING_SVG
+      // --- Bid pins: source + circle + label layers ---
+      // promoteId lets setFeatureState key off properties.id for hover scaling.
+      map.addSource('bid-points', { type: 'geojson', data: EMPTY_FC, promoteId: 'id' })
 
-        const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat([branch.lng, branch.lat])
-          .addTo(map)
-
-        branchMarkersRef.current.push(marker)
+      map.addLayer({
+        id: 'bid-circles',
+        type: 'circle',
+        source: 'bid-points',
+        paint: {
+          // 10px normally, 15px while the feature-state `hover` flag is set.
+          'circle-radius': ['case', ['boolean', ['feature-state', 'hover'], false], 15, 10],
+          'circle-color': ['get', 'color'],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-opacity': 1,
+        },
       })
+
+      map.addLayer({
+        id: 'bid-labels',
+        type: 'symbol',
+        source: 'bid-points',
+        layout: {
+          'text-field': ['get', 'name'],
+          'text-size': 11,
+          'text-offset': [0, 1.4],
+          'text-anchor': 'top',
+          'text-max-width': 12,
+          'text-allow-overlap': false,
+        },
+        paint: {
+          'text-color': '#1a1a2e',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 2,
+        },
+      })
+
+      // --- Irex branches: source + circle + label layers (always on top) ---
+      map.addSource('irex-points', { type: 'geojson', data: IREX_FC })
+
+      map.addLayer({
+        id: 'irex-circles',
+        type: 'circle',
+        source: 'irex-points',
+        paint: {
+          'circle-radius': 8,
+          'circle-color': '#0f2340',
+          'circle-stroke-width': 2.5,
+          'circle-stroke-color': '#ffffff',
+        },
+      })
+
+      map.addLayer({
+        id: 'irex-labels',
+        type: 'symbol',
+        source: 'irex-points',
+        layout: {
+          'text-field': ['get', 'label'],
+          'text-size': 10,
+          'text-font': ['DIN Offc Pro Bold', 'Arial Unicode MS Bold'],
+          'text-offset': [0, 1.3],
+          'text-anchor': 'top',
+          'text-letter-spacing': 0.05,
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': '#0f2340',
+          'text-halo-color': '#ffffff',
+          'text-halo-width': 2,
+        },
+      })
+
+      // --- Bid hover/click — map-level layer events (no DOM-marker flicker) ---
+      map.on('mouseenter', 'bid-circles', (e) => {
+        const feature = e.features?.[0]
+        if (!feature) return
+        const props = feature.properties ?? {}
+        map.getCanvas().style.cursor = 'pointer'
+        const coords: mapboxgl.LngLatLike =
+          feature.geometry.type === 'Point'
+            ? (feature.geometry.coordinates as [number, number])
+            : e.lngLat
+        popup
+          .setLngLat(coords)
+          .setHTML(
+            `<strong>${escapeHtml(props.name)}</strong><br>` +
+              `${escapeHtml(props.branch)} · ${escapeHtml(props.status)}<br>` +
+              `${escapeHtml(props.value)}`,
+          )
+          .addTo(map)
+        if (props.id) callbacksRef.current.onBidHover(String(props.id))
+      })
+
+      map.on('mouseleave', 'bid-circles', () => {
+        map.getCanvas().style.cursor = ''
+        popup.remove()
+        callbacksRef.current.onBidHover(null)
+      })
+
+      map.on('click', 'bid-circles', (e) => {
+        const props = e.features?.[0]?.properties
+        if (props?.id) callbacksRef.current.onBidClick(String(props.id))
+      })
+
+      // --- Irex hover ---
+      map.on('mouseenter', 'irex-circles', (e) => {
+        const feature = e.features?.[0]
+        if (!feature) return
+        const props = feature.properties ?? {}
+        map.getCanvas().style.cursor = 'pointer'
+        const coords: mapboxgl.LngLatLike =
+          feature.geometry.type === 'Point'
+            ? (feature.geometry.coordinates as [number, number])
+            : e.lngLat
+        popup
+          .setLngLat(coords)
+          .setHTML(
+            `<strong>${escapeHtml(props.fullName)}</strong><br>${escapeHtml(props.location)}`,
+          )
+          .addTo(map)
+      })
+
+      map.on('mouseleave', 'irex-circles', () => {
+        map.getCanvas().style.cursor = ''
+        popup.remove()
+      })
+
+      setLayersReady(true)
     })
 
     return () => {
-      markersRef.current.forEach((m) => m.remove())
-      markersRef.current = []
-      branchMarkersRef.current.forEach((m) => m.remove())
-      branchMarkersRef.current = []
-      markerElsRef.current.clear()
+      popupRef.current?.remove()
+      popupRef.current = null
       map.remove()
       mapRef.current = null
+      setLayersReady(false)
     }
   }, [])
 
-  // Add/refresh bid markers whenever bids or territories change
+  // Refresh the bid source whenever bids load or territory colors resolve
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
+    if (!map || !layersReady) return
+    const source = map.getSource('bid-points') as mapboxgl.GeoJSONSource | undefined
+    source?.setData(buildBidFeatures(bids, territories))
+  }, [bids, territories, layersReady])
 
-    markersRef.current.forEach((m) => m.remove())
-    markersRef.current = []
-    markerElsRef.current.clear()
-
-    function placeMarkers() {
-      for (const bid of bids) {
-        const color = getBidColor(bid, territories)
-
-        const el = document.createElement('div')
-        el.style.cssText = `
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: ${color};
-          border: 2px solid #fff;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-          cursor: pointer;
-        `
-
-        const marker = new mapboxgl.Marker({ element: el })
-          .setLngLat([bid.longitude, bid.latitude])
-          .addTo(map!)
-
-        el.addEventListener('mouseenter', () => {
-          // Remove previous popup
-          if (popupRef.current) {
-            popupRef.current.remove()
-            popupRef.current = null
-          }
-
-          const popup = new mapboxgl.Popup({
-            closeButton: false,
-            closeOnClick: false,
-            offset: 10,
-          }).setHTML(
-            `<div style="font-family: system-ui, sans-serif; font-size: 0.8125rem; font-weight: 600; color: #111; padding: 2px 4px; white-space: nowrap;">${bid.project_name}</div>`
-          )
-
-          marker.setPopup(popup)
-          marker.togglePopup()
-          popupRef.current = popup
-          onBidHover(bid.id)
-        })
-
-        el.addEventListener('mouseleave', () => {
-          if (popupRef.current) {
-            popupRef.current.remove()
-            popupRef.current = null
-          }
-          onBidHover(null)
-        })
-
-        el.addEventListener('click', () => {
-          onBidClick(bid.id)
-        })
-
-        markerElsRef.current.set(bid.id, el)
-        markersRef.current.push(marker)
-      }
-    }
-
-    if (map.isStyleLoaded()) {
-      placeMarkers()
-    } else {
-      map.once('load', placeMarkers)
-    }
-  }, [bids, territories, onBidHover, onBidClick])
-
-  // Update marker sizes when selectedBidId or hoveredBidId changes
+  // Sync hovered/selected bid → enlarged circle via feature-state
   useEffect(() => {
-    markerElsRef.current.forEach((el, id) => {
-      const isActive = id === selectedBidId || id === hoveredBidId
-      if (isActive) {
-        const color = el.style.background
-        el.style.cssText = `
-          width: 18px;
-          height: 18px;
-          border-radius: 50%;
-          background: ${color};
-          border: 2px solid #fff;
-          box-shadow: 0 0 0 4px ${color}66;
-          cursor: pointer;
-        `
-      } else {
-        const color = el.style.background
-        el.style.cssText = `
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          background: ${color};
-          border: 2px solid #fff;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-          cursor: pointer;
-        `
-      }
-    })
-  }, [selectedBidId, hoveredBidId])
+    const map = mapRef.current
+    if (!map || !layersReady) return
+    map.removeFeatureState({ source: 'bid-points' })
+    for (const id of [hoveredBidId, selectedBidId]) {
+      if (id) map.setFeatureState({ source: 'bid-points', id }, { hover: true })
+    }
+  }, [hoveredBidId, selectedBidId, layersReady, bids])
 
   return (
     <div

@@ -491,3 +491,39 @@ input[type=number] {
     transition-duration: 0ms !important;
   }
 }
+
+/* ── Mapbox hover popup — Local Jurisdictions map ───────────────────── */
+/* pointer-events: none so the tooltip never steals canvas hover (no flicker) */
+.bidwatt-popup {
+  pointer-events: none;
+}
+.bidwatt-popup .mapboxgl-popup-content {
+  background: #0f2340;
+  color: #ffffff;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.45;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  max-width: 200px;
+}
+.bidwatt-popup .mapboxgl-popup-content strong {
+  font-weight: 700;
+}
+/* Recolor the popup tip to match the navy bubble, per anchor position */
+.bidwatt-popup.mapboxgl-popup-anchor-top .mapboxgl-popup-tip,
+.bidwatt-popup.mapboxgl-popup-anchor-top-left .mapboxgl-popup-tip,
+.bidwatt-popup.mapboxgl-popup-anchor-top-right .mapboxgl-popup-tip {
+  border-bottom-color: #0f2340;
+}
+.bidwatt-popup.mapboxgl-popup-anchor-bottom .mapboxgl-popup-tip,
+.bidwatt-popup.mapboxgl-popup-anchor-bottom-left .mapboxgl-popup-tip,
+.bidwatt-popup.mapboxgl-popup-anchor-bottom-right .mapboxgl-popup-tip {
+  border-top-color: #0f2340;
+}
+.bidwatt-popup.mapboxgl-popup-anchor-left .mapboxgl-popup-tip {
+  border-right-color: #0f2340;
+}
+.bidwatt-popup.mapboxgl-popup-anchor-right .mapboxgl-popup-tip {
+  border-left-color: #0f2340;
+}
