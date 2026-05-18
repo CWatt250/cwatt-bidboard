@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect } from 'react'
+import { useMemo, useState, useEffect, useRef } from 'react'
 import { format, subDays, addDays, startOfWeek, isValid } from 'date-fns'
 import { ChevronLeft, ChevronRight, CalendarIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
@@ -72,6 +72,16 @@ export function WeeklyTab() {
   const { bids, loading, error } = useRecapData()
   const { profile, isAdmin } = useUserRole()
   const [selectedEstimator, setSelectedEstimator] = useState<string | null>(null)
+  // Admins land on their own recap by default. profile loads async so it isn't
+  // available for the useState init above; this applies the default once it
+  // arrives, and the ref keeps a later "All estimators" pick from being undone.
+  const estimatorDefaulted = useRef(false)
+  useEffect(() => {
+    if (!estimatorDefaulted.current && isAdmin && profile?.name) {
+      setSelectedEstimator(profile.name)
+      estimatorDefaulted.current = true
+    }
+  }, [isAdmin, profile])
   const [securedDrawerOpen, setSecuredDrawerOpen] = useState(false)
   const [verbalsDrawerOpen, setVerbalsDrawerOpen] = useState(false)
 
