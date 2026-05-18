@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, forwardRef, useImperativeHandle } from 'react'
+import { ChevronRight } from 'lucide-react'
 import type { Bid, BidLineItem, Branch } from '@/lib/supabase/types'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
 import { JobCard } from './JobCard'
@@ -18,97 +18,94 @@ interface BranchLaneBid extends Bid {
   bid_clients?: { clients?: { name: string } | null; client_name?: string | null }[]
 }
 
-export interface BranchLaneHandle {
-  scrollToBid: (bidId: string) => void
-}
+/**
+ * One branch swim lane. Always renders its header — when `bids` is empty
+ * (e.g. a search filtered every card out) the card strip shows an empty
+ * state rather than the lane disappearing.
+ */
+export function BranchLane({ branch, bids }: { branch: Branch; bids: BranchLaneBid[] }) {
+  const totalValue = bids.reduce((sum, b) => {
+    const v = b.total_price ?? b.line_items?.reduce((s, li) => s + (li.price ?? 0), 0) ?? 0
+    return sum + v
+  }, 0)
 
-export const BranchLane = forwardRef<BranchLaneHandle, { branch: Branch; bids: BranchLaneBid[] }>(
-  function BranchLane({ branch, bids }, ref) {
-    const scrollRef = useRef<HTMLDivElement>(null)
-    const cardRefs = useRef<Map<string, HTMLDivElement>>(new Map())
+  // Only show a dollar figure when prices are actually entered.
+  const totalLabel =
+    totalValue > 0
+      ? new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 0,
+          maximumFractionDigits: 0,
+        }).format(totalValue)
+      : '—'
 
-    useImperativeHandle(ref, () => ({
-      scrollToBid(bidId: string) {
-        const card = cardRefs.current.get(bidId)
-        if (card) {
-          card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
-          card.style.boxShadow = '0 0 0 2px var(--ring)'
-          setTimeout(() => {
-            card.style.boxShadow = ''
-          }, 2000)
-        }
-      },
-    }))
-
-    if (bids.length === 0) return null
-
-    const totalValue = bids.reduce((sum, b) => {
-      const v = b.line_items?.reduce((s, li) => s + (li.price ?? 0), 0) ?? 0
-      return sum + v
-    }, 0)
-
-    return (
-      <div style={{ marginBottom: 12 }}>
-        {/* Lane header */}
-        <div
+  return (
+    <div style={{ marginBottom: 12 }}>
+      {/* Lane header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'baseline',
+          gap: 8,
+          marginBottom: 8,
+          paddingLeft: 4,
+        }}
+      >
+        <span
           style={{
-            display: 'flex',
-            alignItems: 'baseline',
-            gap: 8,
-            marginBottom: 8,
-            paddingLeft: 4,
+            fontSize: '0.8125rem',
+            fontWeight: 700,
+            color: BRANCH_COLORS[branch],
+            letterSpacing: '0.02em',
           }}
         >
+          {branch}
+        </span>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--text3)' }}>
+          {BRANCH_LABELS[branch]}
+        </span>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--text3)' }}>
+          {bids.length} job{bids.length !== 1 ? 's' : ''}
+        </span>
+        <span style={{ fontSize: '0.6875rem', color: 'var(--text2)', fontWeight: 500 }}>
+          {totalLabel}
+        </span>
+        {bids.length > 3 && (
           <span
             style={{
-              fontSize: '0.8125rem',
-              fontWeight: 700,
-              color: BRANCH_COLORS[branch],
-              letterSpacing: '0.02em',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 1,
+              marginLeft: 'auto',
+              fontSize: '0.625rem',
+              color: 'var(--text3)',
             }}
           >
-            {branch}
+            scroll
+            <ChevronRight size={11} />
           </span>
-          <span style={{ fontSize: '0.6875rem', color: 'var(--text3)' }}>
-            {BRANCH_LABELS[branch]}
-          </span>
-          <span style={{ fontSize: '0.6875rem', color: 'var(--text3)' }}>
-            {bids.length} job{bids.length !== 1 ? 's' : ''}
-          </span>
-          <span style={{ fontSize: '0.6875rem', color: 'var(--text2)', fontWeight: 500 }}>
-            {new Intl.NumberFormat('en-US', {
-              style: 'currency',
-              currency: 'USD',
-              minimumFractionDigits: 0,
-              maximumFractionDigits: 0,
-            }).format(totalValue)}
-          </span>
-        </div>
-
-        {/* Scrollable card row */}
-        <div
-          ref={scrollRef}
-          style={{
-            display: 'flex',
-            gap: 10,
-            overflowX: 'auto',
-            padding: '4px 4px 8px',
-            scrollBehavior: 'smooth',
-          }}
-        >
-          {bids.map((bid) => (
-            <div
-              key={bid.id}
-              ref={(el) => {
-                if (el) cardRefs.current.set(bid.id, el)
-                else cardRefs.current.delete(bid.id)
-              }}
-            >
-              <JobCard bid={bid} />
-            </div>
-          ))}
-        </div>
+        )}
       </div>
-    )
-  },
-)
+
+      {/* Scrollable card row */}
+      <div
+        style={{
+          display: 'flex',
+          gap: 10,
+          overflowX: 'auto',
+          padding: '4px 4px 8px',
+          scrollBehavior: 'smooth',
+        }}
+      >
+        {bids.length > 0 ? (
+          bids.map((bid) => <JobCard key={bid.id} bid={bid} />)
+        ) : (
+          <div style={{ fontSize: '0.75rem', color: 'var(--text3)', padding: '16px 4px' }}>
+            No matching projects
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}

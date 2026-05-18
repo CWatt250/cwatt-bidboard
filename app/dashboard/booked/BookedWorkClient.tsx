@@ -1,14 +1,15 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, type CSSProperties } from 'react'
+import { Search, X } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import type { Bid, BidLineItem, Branch } from '@/lib/supabase/types'
-import { BRANCH_LABELS } from '@/lib/supabase/types'
-import { EstimatorScorestrip, BRANCH_ORDER } from './EstimatorScorestrip'
 import { BranchLane } from './BranchLane'
-import type { BranchLaneHandle } from './BranchLane'
 import { ViewToggle, type ViewMode } from './ViewToggle'
 import { JobCard } from './JobCard'
+import { SummaryBanner } from './SummaryBanner'
+
+const BRANCH_ORDER: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 
 const BID_QUERY = `
   id,
@@ -33,79 +34,157 @@ interface BookedBid extends Bid {
 
 type Status = 'loading' | 'error' | 'success'
 
+const centeredMessageStyle: CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  minHeight: 200,
+  color: 'var(--text3)',
+  fontSize: '0.875rem',
+}
+
+function SearchInput({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div style={{ position: 'relative', width: 280, maxWidth: '100%' }}>
+      <Search
+        size={14}
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          left: 10,
+          top: '50%',
+          transform: 'translateY(-50%)',
+          color: 'var(--text3)',
+          pointerEvents: 'none',
+        }}
+      />
+      <input
+        type="text"
+        placeholder="Search projects..."
+        aria-label="Search projects"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        style={{
+          width: '100%',
+          height: 34,
+          padding: '0 30px',
+          fontSize: '0.8125rem',
+          color: 'var(--text)',
+          background: 'var(--surface)',
+          border: '0.5px solid var(--border)',
+          borderRadius: 8,
+          outline: 'none',
+        }}
+        onFocus={(e) => {
+          e.currentTarget.style.borderColor = 'var(--accent)'
+          e.currentTarget.style.boxShadow = '0 0 0 3px var(--accent-light)'
+        }}
+        onBlur={(e) => {
+          e.currentTarget.style.borderColor = 'var(--border)'
+          e.currentTarget.style.boxShadow = 'none'
+        }}
+      />
+      {value && (
+        <button
+          type="button"
+          aria-label="Clear search"
+          onClick={() => onChange('')}
+          style={{
+            position: 'absolute',
+            right: 6,
+            top: '50%',
+            transform: 'translateY(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            width: 20,
+            height: 20,
+            padding: 0,
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--text3)',
+            cursor: 'pointer',
+          }}
+        >
+          <X size={14} />
+        </button>
+      )}
+    </div>
+  )
+}
+
 export function BookedWorkClient() {
   const [bids, setBids] = useState<BookedBid[]>([])
+  const [userName, setUserName] = useState('You')
   const [status, setStatus] = useState<Status>('loading')
   const [error, setError] = useState<string | null>(null)
   const [viewMode, setViewMode] = useState<ViewMode>('branch')
-
-  // Refs to each BranchLane for scroll-to-estimator
-  const laneRefs = useRef<Map<Branch, BranchLaneHandle>>(new Map())
+  const [searchQuery, setSearchQuery] = useState('')
 
   useEffect(() => {
+    let cancelled = false
     const supabase = createClient()
-    supabase
-      .from('bids')
-      .select(BID_QUERY)
-      .in('status', ['Awarded', 'Verbal'])
-      .order('bid_due_date', { ascending: false })
-      .then(({ data, error: err }) => {
-        if (err) {
-          setError(err.message)
+
+    async function load() {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      if (!user) {
+        if (!cancelled) {
+          setError('You are not signed in.')
           setStatus('error')
-        } else {
-          // Map estimator_name from joined profiles
-          const mapped = (data as any[]).map((b: any) => ({
-            ...b,
-            estimator_name: b.profiles?.name ?? null,
-          })) as BookedBid[]
-          setBids(mapped)
-          setStatus('success')
         }
-      })
-  }, [])
-
-  const handleEstimatorClick = useCallback(
-    (bidId: string) => {
-      // Find the bid to know its branch and estimator
-      const bid = bids.find((b) => b.id === bidId)
-      if (!bid) return
-
-      // Scroll to the branch lane containing this bid, then find the card
-      if (viewMode === 'branch' || viewMode === 'value') {
-        const laneHandle = laneRefs.current.get(bid.branch)
-        laneHandle?.scrollToBid(bidId)
-      } else {
-        // By-estimator view: scroll to the estimator section
-        const el = document.getElementById(`estimator-section-${bid.estimator_id ?? 'unassigned'}`)
-        el?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        // Brief highlight
-        const card = document.getElementById(`bid-card-${bidId}`)
-        if (card) {
-          card.style.boxShadow = '0 0 0 2px var(--ring)'
-          setTimeout(() => { card.style.boxShadow = '' }, 2000)
-        }
+        return
       }
-    },
-    [bids, viewMode],
-  )
+
+      // Personal view: only bids where the logged-in user is the estimator.
+      const [bidsRes, profileRes] = await Promise.all([
+        supabase
+          .from('bids')
+          .select(BID_QUERY)
+          .in('status', ['Awarded', 'Verbal'])
+          .eq('estimator_id', user.id)
+          .order('bid_due_date', { ascending: false }),
+        supabase.from('profiles').select('name').eq('id', user.id).maybeSingle(),
+      ])
+
+      if (cancelled) return
+
+      if (bidsRes.error) {
+        setError(bidsRes.error.message)
+        setStatus('error')
+        return
+      }
+
+      // The query returns line items under `bid_line_items`; map them onto
+      // `line_items` and precompute `total_price` so cards/lanes can read a
+      // real value instead of an undefined field (which previously read $0).
+      const mapped = (((bidsRes.data as unknown) as any[]) ?? []).map((b: any) => {
+        const line_items = (b.bid_line_items ?? []) as BidLineItem[]
+        const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
+        return {
+          ...b,
+          estimator_name: b.profiles?.name ?? null,
+          line_items,
+          total_price,
+        }
+      }) as BookedBid[]
+
+      setBids(mapped)
+      setUserName(profileRes.data?.name ?? mapped[0]?.estimator_name ?? user.email ?? 'You')
+      setStatus('success')
+    }
+
+    load()
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   // ---- Loading ----
   if (status === 'loading') {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          minHeight: 200,
-          color: 'var(--text3)',
-          fontSize: '0.875rem',
-        }}
-      >
-        Loading booked work...
-      </div>
-    )
+    return <div style={centeredMessageStyle}>Loading booked work...</div>
   }
 
   // ---- Error ----
@@ -129,72 +208,46 @@ export function BookedWorkClient() {
     )
   }
 
-  // ---- Empty ----
-  if (bids.length === 0) {
-    return (
-      <div className="space-y-4">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <h1
-            style={{
-              fontSize: '1.25rem',
-              fontWeight: 800,
-              color: 'var(--text)',
-              letterSpacing: '-0.3px',
-            }}
-          >
-            Booked Work
-          </h1>
-        </div>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            minHeight: 200,
-            color: 'var(--text3)',
-            fontSize: '0.875rem',
-          }}
-        >
-          No awarded or verbal bids yet.
-        </div>
-      </div>
-    )
-  }
+  // ---- Derived (summary reflects all bids; search only filters the cards) ----
+  const awardedCount = bids.filter((b) => b.status === 'Awarded').length
+  const verbalCount = bids.filter((b) => b.status === 'Verbal').length
+  const totalValue = bids.reduce((sum, b) => sum + (b.total_price ?? 0), 0)
+
+  const q = searchQuery.trim().toLowerCase()
+  const matches = (b: BookedBid) => q === '' || b.project_name.toLowerCase().includes(q)
 
   // ---- Branch-lanes view ----
   function renderBranchLanes() {
     return BRANCH_ORDER.map((branch) => {
       const branchBids = bids.filter((b) => b.branch === branch)
-      return (
-        <BranchLane
-          key={branch}
-          branch={branch}
-          bids={branchBids}
-          ref={(handle) => {
-            if (handle) laneRefs.current.set(branch, handle)
-            else laneRefs.current.delete(branch)
-          }}
-        />
-      )
+      // Skip branches with no booked work at all; keep lanes that merely got
+      // emptied by the search (they render a header + empty strip).
+      if (branchBids.length === 0) return null
+      return <BranchLane key={branch} branch={branch} bids={branchBids.filter(matches)} />
     })
   }
 
   // ---- By-estimator view ----
   function renderByEstimator() {
+    const visible = bids.filter(matches)
     const grouped = new Map<string, BookedBid[]>()
-    for (const b of bids) {
+    for (const b of visible) {
       const key = b.estimator_id ?? 'unassigned'
       if (!grouped.has(key)) grouped.set(key, [])
       grouped.get(key)!.push(b)
     }
     const entries = Array.from(grouped.entries()).sort((a, b) => b[1].length - a[1].length)
 
+    if (entries.length === 0) {
+      return <div style={centeredMessageStyle}>No projects match your search.</div>
+    }
+
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {entries.map(([key, estimatorBids]) => {
           const name = estimatorBids[0]?.estimator_name ?? 'Unassigned'
           return (
-            <div key={key} id={`estimator-section-${key}`}>
+            <div key={key}>
               <div
                 style={{
                   fontSize: '0.875rem',
@@ -205,15 +258,20 @@ export function BookedWorkClient() {
                 }}
               >
                 {name}
-                <span style={{ fontSize: '0.6875rem', color: 'var(--text3)', fontWeight: 400, marginLeft: 8 }}>
+                <span
+                  style={{
+                    fontSize: '0.6875rem',
+                    color: 'var(--text3)',
+                    fontWeight: 400,
+                    marginLeft: 8,
+                  }}
+                >
                   {estimatorBids.length} job{estimatorBids.length !== 1 ? 's' : ''}
                 </span>
               </div>
               <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 4px 8px' }}>
                 {estimatorBids.map((bid) => (
-                  <div key={bid.id} id={`bid-card-${bid.id}`}>
-                    <JobCard bid={bid} />
-                  </div>
+                  <JobCard key={bid.id} bid={bid} />
                 ))}
               </div>
             </div>
@@ -225,18 +283,19 @@ export function BookedWorkClient() {
 
   // ---- Sort-by-value view ----
   function renderByValue() {
-    const sorted = [...bids].sort((a, b) => {
-      const aVal = a.line_items?.reduce((s, li) => s + (li.price ?? 0), 0) ?? 0
-      const bVal = b.line_items?.reduce((s, li) => s + (li.price ?? 0), 0) ?? 0
-      return bVal - aVal
-    })
+    const sorted = bids
+      .filter(matches)
+      .slice()
+      .sort((a, b) => (b.total_price ?? 0) - (a.total_price ?? 0))
+
+    if (sorted.length === 0) {
+      return <div style={centeredMessageStyle}>No projects match your search.</div>
+    }
 
     return (
-      <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 4px 8px', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 10, padding: '4px 4px 8px', flexWrap: 'wrap' }}>
         {sorted.map((bid) => (
-          <div key={bid.id} id={`bid-card-${bid.id}`}>
-            <JobCard bid={bid} />
-          </div>
+          <JobCard key={bid.id} bid={bid} />
         ))}
       </div>
     )
@@ -244,7 +303,16 @@ export function BookedWorkClient() {
 
   return (
     <div className="space-y-4">
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+      {/* Page header — title left, search + view toggle right */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: 12,
+        }}
+      >
         <h1
           style={{
             fontSize: '1.25rem',
@@ -255,16 +323,30 @@ export function BookedWorkClient() {
         >
           Booked Work
         </h1>
-        <ViewToggle value={viewMode} onChange={setViewMode} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <SearchInput value={searchQuery} onChange={setSearchQuery} />
+          <ViewToggle value={viewMode} onChange={setViewMode} />
+        </div>
       </div>
 
-      <EstimatorScorestrip bids={bids} onEstimatorClick={handleEstimatorClick} />
+      {/* Personal summary banner */}
+      <SummaryBanner
+        userName={userName}
+        awardedCount={awardedCount}
+        verbalCount={verbalCount}
+        totalValue={totalValue}
+      />
 
-      <div>
-        {viewMode === 'branch' && renderBranchLanes()}
-        {viewMode === 'estimator' && renderByEstimator()}
-        {viewMode === 'value' && renderByValue()}
-      </div>
+      {/* Content */}
+      {bids.length === 0 ? (
+        <div style={centeredMessageStyle}>No awarded or verbal bids assigned to you yet.</div>
+      ) : (
+        <div>
+          {viewMode === 'branch' && renderBranchLanes()}
+          {viewMode === 'estimator' && renderByEstimator()}
+          {viewMode === 'value' && renderByValue()}
+        </div>
+      )}
     </div>
   )
 }
