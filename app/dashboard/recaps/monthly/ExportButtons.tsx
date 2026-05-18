@@ -79,6 +79,13 @@ function buildEmailText(
   return lines.join('\n')
 }
 
+/** Quote a CSV cell when it contains a comma, quote, or newline. Branch labels
+ *  like "Pasco, WA" carry commas, so this is required to keep columns aligned. */
+function csvCell(value: string | number): string {
+  const s = String(value)
+  return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s
+}
+
 function buildCSV(
   stats: BranchMonthlyStats[],
   month: number,
@@ -86,17 +93,36 @@ function buildCSV(
   bundleMode: boolean,
   bundled: BundledStats | null,
 ): string {
-  const rows: string[] = ['Branch,Submitted,Total Value,Secured']
+  const monthName = MONTH_NAMES[month - 1]
+  const rows: string[] = []
+  const row = (cells: (string | number)[]) => rows.push(cells.map(csvCell).join(','))
+
+  row(['Branch', 'Branch #', 'Month', 'Year', 'Bids Submitted', 'Total Bid Value', 'Total Secured'])
+
   if (bundleMode && bundled) {
-    rows.push(`All Branches,${bundled.submitted},${bundled.totalValue},${bundled.secured}`)
+    row(['All Branches', '', monthName, year, bundled.submitted, bundled.totalValue, bundled.secured])
   } else {
     for (const s of stats) {
-      rows.push(`${BRANCH_LABELS[s.branch]},${s.submitted},${s.totalValue},${s.secured}`)
+      row([
+        BRANCH_LABELS[s.branch],
+        BRANCH_NUMBERS[s.branch],
+        monthName,
+        year,
+        s.submitted,
+        s.totalValue,
+        s.secured,
+      ])
     }
     if (stats.length >= 2) {
-      rows.push(
-        `Combined,${stats.reduce((sum, s) => sum + s.submitted, 0)},${stats.reduce((sum, s) => sum + s.totalValue, 0)},${stats.reduce((sum, s) => sum + s.secured, 0)}`,
-      )
+      row([
+        'Combined',
+        '',
+        monthName,
+        year,
+        stats.reduce((sum, s) => sum + s.submitted, 0),
+        stats.reduce((sum, s) => sum + s.totalValue, 0),
+        stats.reduce((sum, s) => sum + s.secured, 0),
+      ])
     }
   }
   return rows.join('\n')
@@ -122,8 +148,10 @@ export function ExportButtons({
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `monthly-recap-${year}-${String(month).padStart(2, '0')}.csv`
+    a.download = `BidWatt-Monthly-${MONTH_NAMES[month - 1]}-${year}.csv`
+    document.body.appendChild(a)
     a.click()
+    document.body.removeChild(a)
     URL.revokeObjectURL(url)
   }
 

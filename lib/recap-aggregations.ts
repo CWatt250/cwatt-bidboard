@@ -220,14 +220,30 @@ export function bidsInMonth(bids: Bid[], year: number, month: number): Bid[] {
   })
 }
 
-function securedFromBid(b: Bid): number {
-  const isWon = b.status === 'Awarded' || b.status === 'Verbal'
-  if (isWon) {
-    return (b.line_items ?? [])
-      .filter((li) => li.is_awarded)
-      .reduce((sum, li) => sum + (li.price ?? 0), 0)
+/**
+ * The portion of a bid that counts toward "Total Secured", scoped to one
+ * estimator. Only Awarded/Verbal bids contribute — anything else returns 0.
+ * When the bid has line items explicitly flagged `is_awarded` we sum just
+ * those; a won bid with nothing flagged is a status-only award, so the whole
+ * bid counts. The dollar figure is always narrowed to the estimator's own line
+ * items (`estimatorId === null` → no narrowing, full bid).
+ */
+function securedFromBid(bid: Bid, estimatorId: string | null): number {
+  if (bid.status !== 'Awarded' && bid.status !== 'Verbal') return 0
+  const items = bid.line_items ?? []
+  const flagged = items.filter((li) => li.is_awarded)
+  if (flagged.length === 0) {
+    // Status-only award — the whole bid is secured (estimator-scoped).
+    return estimatorScopedPrice(bid, estimatorId)
   }
-  return (b.line_items ?? []).reduce((sum, li) => sum + (li.price ?? 0), 0)
+  // Explicit line-item awards — only the flagged items, still estimator-scoped.
+  return flagged.reduce((sum, li) => {
+    const mine =
+      estimatorId === null ||
+      li.estimator_id === estimatorId ||
+      (li.estimator_id === null && bid.estimator_id === estimatorId)
+    return mine ? sum + (li.price ?? 0) : sum
+  }, 0)
 }
 
 export function monthlyBranchStats(
@@ -235,6 +251,7 @@ export function monthlyBranchStats(
   branches: Branch[],
   year: number,
   month: number,
+  estimatorId: string | null = null,
 ): BranchMonthlyStats[] {
   const inMonth = bidsInMonth(bids, year, month)
   return branches.map((branch) => {
@@ -242,8 +259,8 @@ export function monthlyBranchStats(
     return {
       branch,
       submitted: branchBids.length,
-      totalValue: branchBids.reduce((sum, b) => sum + lineItemTotal(b), 0),
-      secured: branchBids.reduce((sum, b) => sum + securedFromBid(b), 0),
+      totalValue: branchBids.reduce((sum, b) => sum + estimatorScopedPrice(b, estimatorId), 0),
+      secured: branchBids.reduce((sum, b) => sum + securedFromBid(b, estimatorId), 0),
     }
   })
 }
@@ -252,11 +269,12 @@ export function bundledStats(
   bids: Bid[],
   year: number,
   month: number,
+  estimatorId: string | null = null,
 ): BundledStats {
   const inMonth = bidsInMonth(bids, year, month)
   return {
     submitted: inMonth.length,
-    totalValue: inMonth.reduce((sum, b) => sum + lineItemTotal(b), 0),
-    secured: inMonth.reduce((sum, b) => sum + securedFromBid(b), 0),
+    totalValue: inMonth.reduce((sum, b) => sum + estimatorScopedPrice(b, estimatorId), 0),
+    secured: inMonth.reduce((sum, b) => sum + securedFromBid(b, estimatorId), 0),
   }
 }
