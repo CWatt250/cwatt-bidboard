@@ -33,6 +33,9 @@ export interface WorkspaceTodo {
   text: string
   is_completed: boolean
   completed_at?: string
+  /** Set when the task is hidden from the to-do list. The row stays in the DB
+   *  (recaps still use it); null means the task is visible in the list. */
+  dismissed_from_list_at?: string | null
   created_at: string
   updated_at: string
 }
