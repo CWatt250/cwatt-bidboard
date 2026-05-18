@@ -16,6 +16,8 @@ import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
 import { logActivity } from '@/lib/activity'
+import { startOfWeek, addDays } from 'date-fns'
+import { WeekNavigator } from './WeekNavigator'
 
 const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal']
 
@@ -26,6 +28,9 @@ export default function KanbanPage() {
   const [localBids, setLocalBids] = useState<Bid[]>([])
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [newBidOpen, setNewBidOpen] = useState(false)
+  const [selectedWeek, setSelectedWeek] = useState<Date>(() =>
+    startOfWeek(new Date(), { weekStartsOn: 1 }),
+  )
 
   useEffect(() => {
     const myBids = profile
@@ -83,34 +88,23 @@ export default function KanbanPage() {
     }
   }
 
-  // Current calendar week (Sunday → Saturday), recomputed on each render so
-  // it auto-rolls forward at midnight without a refresh.
-  const today = new Date()
-  const startOfWeek = new Date(today)
-  startOfWeek.setDate(today.getDate() - today.getDay())
-  const endOfWeek = new Date(startOfWeek)
-  endOfWeek.setDate(startOfWeek.getDate() + 6)
+  // The week shown on the board, driven by the header navigator. Each column
+  // shows bids due within this Mon–Sun week; undated bids always show.
   const toDateStr = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  const startStr = toDateStr(startOfWeek)
-  const endStr = toDateStr(endOfWeek)
+  const startStr = toDateStr(selectedWeek)
+  const endStr = toDateStr(addDays(selectedWeek, 6))
 
-  function inCurrentWeek(bid: Bid): boolean {
-    if (!bid.bid_due_date) return false
-    return bid.bid_due_date >= startStr && bid.bid_due_date <= endStr
-  }
-  function currentWeekOrFuture(bid: Bid): boolean {
+  function inSelectedWeekOrUndated(bid: Bid): boolean {
     if (!bid.bid_due_date) return true
-    return bid.bid_due_date >= startStr
+    return bid.bid_due_date >= startStr && bid.bid_due_date <= endStr
   }
 
   const bidsByStatus = STATUSES.reduce<Record<BidStatus, Bid[]>>(
     (acc, status) => {
-      const ofStatus = localBids.filter((b) => b.status === status)
-      acc[status] =
-        status === 'Unassigned'
-          ? ofStatus.filter(currentWeekOrFuture)
-          : ofStatus.filter(inCurrentWeek)
+      acc[status] = localBids.filter(
+        (b) => b.status === status && inSelectedWeekOrUndated(b),
+      )
       return acc
     },
     { Unassigned: [], Bidding: [], 'In Progress': [], Sent: [], Verbal: [] } as unknown as Record<BidStatus, Bid[]>
@@ -148,27 +142,30 @@ export default function KanbanPage() {
             Drag and drop bids to move them through your process
           </p>
         </div>
-        <Button
-          onClick={() => setNewBidOpen(true)}
-          style={{
-            background: '#2563EB',
-            color: '#fff',
-            fontWeight: 500,
-            padding: '10px 20px',
-            borderRadius: 8,
-            border: 'none',
-          }}
-          onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#1D4ED8' }}
-          onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = '#2563EB' }}
-        >
-          <PlusIcon />
-          New Bid
-        </Button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <WeekNavigator value={selectedWeek} onChange={setSelectedWeek} />
+          <Button
+            onClick={() => setNewBidOpen(true)}
+            style={{
+              background: '#2563EB',
+              color: '#fff',
+              fontWeight: 500,
+              padding: '10px 20px',
+              borderRadius: 8,
+              border: 'none',
+            }}
+            onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.background = '#1D4ED8' }}
+            onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.background = '#2563EB' }}
+          >
+            <PlusIcon />
+            New Bid
+          </Button>
+        </div>
         <NewBidDialog open={newBidOpen} onOpenChange={setNewBidOpen} />
       </div>
 
       {/* KPI Row */}
-      <KpiRow bids={localBids} boardBids={boardBids} sentBids={sentColumnBids} />
+      <KpiRow bids={localBids} boardBids={boardBids} sentBids={sentColumnBids} selectedWeek={selectedWeek} />
 
       {/* Main content: kanban + right panel */}
       <div className="flex gap-4 flex-1 min-h-0">

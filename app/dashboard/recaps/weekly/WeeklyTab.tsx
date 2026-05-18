@@ -5,6 +5,14 @@ import { format, subDays, addDays, startOfWeek, isValid } from 'date-fns'
 import { ChevronLeft, ChevronRight, CalendarIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRecapData } from '@/hooks/useRecapData'
+import { useUserRole } from '@/contexts/userRole'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import {
   atRiskBids,
   bidTotalValue,
@@ -56,8 +64,13 @@ function formatCompletedTime(dateStr: string): string {
   return format(d, "'Completed' E MMM d 'at' h:mma")
 }
 
+/** Sentinel <Select> value for the admin "show every estimator" option. */
+const ALL_ESTIMATORS = '__all_estimators__'
+
 export function WeeklyTab() {
   const { bids, loading, error } = useRecapData()
+  const { profile, isAdmin } = useUserRole()
+  const [selectedEstimator, setSelectedEstimator] = useState<string | null>(null)
 
   const [userId, setUserId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<WorkspaceTodo[]>([])
@@ -94,16 +107,37 @@ export function WeeklyTab() {
   const [atRiskOpen, setAtRiskOpen] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
 
+  // Estimator options for the admin dropdown — derived from already-loaded bids.
+  const estimatorOptions = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const b of bids) {
+      if (b.estimator_id && b.estimator_name) byId.set(b.estimator_id, b.estimator_name)
+    }
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
+      a.name.localeCompare(b.name),
+    )
+  }, [bids])
+
+  // Recap scope: non-admins only ever see their own bids; admins see org-wide
+  // unless they pick a specific estimator.
+  const filteredBids = useMemo(() => {
+    if (!isAdmin) {
+      return profile ? bids.filter((b) => b.estimator_id === profile.id) : []
+    }
+    if (!selectedEstimator) return bids
+    return bids.filter((b) => b.estimator_id === selectedEstimator)
+  }, [bids, isAdmin, profile, selectedEstimator])
+
   const thisWeek = useMemo(() => weekRange(anchor), [anchor])
   const lastWeek = useMemo(() => weekRange(subDays(anchor, 7)), [anchor])
 
   const lastWeekBids = useMemo(
-    () => bidsInWeek(bids, lastWeek.start, lastWeek.end),
-    [bids, lastWeek],
+    () => bidsInWeek(filteredBids, lastWeek.start, lastWeek.end),
+    [filteredBids, lastWeek],
   )
   const thisWeekBids = useMemo(
-    () => bidsInWeek(bids, thisWeek.start, thisWeek.end),
-    [bids, thisWeek],
+    () => bidsInWeek(filteredBids, thisWeek.start, thisWeek.end),
+    [filteredBids, thisWeek],
   )
 
   const lastWeekTotals = useMemo(
@@ -116,21 +150,21 @@ export function WeeklyTab() {
   )
 
   const securedLastWeek = useMemo(
-    () => securedInWeek(bids, lastWeek.start, lastWeek.end),
-    [bids, lastWeek],
+    () => securedInWeek(filteredBids, lastWeek.start, lastWeek.end),
+    [filteredBids, lastWeek],
   )
   const verbalsLastWeek = useMemo(
-    () => verbalsInWeek(bids, lastWeek.start, lastWeek.end),
-    [bids, lastWeek],
+    () => verbalsInWeek(filteredBids, lastWeek.start, lastWeek.end),
+    [filteredBids, lastWeek],
   )
   const branchBreakdown = useMemo(
-    () => branchBreakdownThisWeek(bids, thisWeek.start, thisWeek.end),
-    [bids, thisWeek],
+    () => branchBreakdownThisWeek(filteredBids, thisWeek.start, thisWeek.end),
+    [filteredBids, thisWeek],
   )
-  const atRisk = useMemo(() => atRiskBids(bids, new Date()), [bids])
+  const atRisk = useMemo(() => atRiskBids(filteredBids, new Date()), [filteredBids])
   const atRiskBidList = useMemo(
     () =>
-      bids.filter((b) => {
+      filteredBids.filter((b) => {
         const preSentStatuses = new Set(['Unassigned', 'Bidding', 'In Progress'])
         if (!preSentStatuses.has(b.status)) return false
         if (!b.bid_due_date) return false
@@ -139,7 +173,7 @@ export function WeeklyTab() {
         today.setHours(0, 0, 0, 0)
         return due.getTime() < today.getTime()
       }),
-    [bids],
+    [filteredBids],
   )
 
   const lastWeekSentCount = lastWeekBids.filter((b) => b.status === 'Sent').length
@@ -240,7 +274,7 @@ export function WeeklyTab() {
           </h2>
         </div>
 
-        {/* Week navigator */}
+        {/* Estimator filter (admin) + week navigator */}
         <div
           style={{
             display: 'flex',
@@ -248,6 +282,26 @@ export function WeeklyTab() {
             gap: 8,
           }}
         >
+          {isAdmin && (
+            <Select
+              value={selectedEstimator ?? ALL_ESTIMATORS}
+              onValueChange={(v) =>
+                setSelectedEstimator(v && v !== ALL_ESTIMATORS ? String(v) : null)
+              }
+            >
+              <SelectTrigger className="w-[180px]" aria-label="Filter by estimator">
+                <SelectValue placeholder="All estimators" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL_ESTIMATORS}>All estimators</SelectItem>
+                {estimatorOptions.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <button
             onClick={() => setAnchor((prev) => subDays(prev, 7))}
             style={{

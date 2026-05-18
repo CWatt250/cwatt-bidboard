@@ -2,6 +2,11 @@
 
 import type { Bid } from '@/hooks/useBids'
 import { CalendarDays, Clock, Send, TrendingUp } from 'lucide-react'
+import { addDays } from 'date-fns'
+
+function toYmd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
 
 function formatCompact(val: number): string {
   if (val >= 1_000_000) return `$${(val / 1_000_000).toFixed(2)}M`
@@ -92,38 +97,33 @@ interface KpiRowProps {
   boardBids: Bid[]
   /** Bids currently in the kanban Sent column. Source of truth for the Sent KPI. */
   sentBids: Bid[]
+  /** Monday that starts the week selected in the page header. */
+  selectedWeek: Date
 }
 
-export function KpiRow({ bids, boardBids, sentBids }: KpiRowProps) {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+export function KpiRow({ bids, boardBids, sentBids, selectedWeek }: KpiRowProps) {
+  // Selected week, Monday → Sunday (driven by the page header navigator).
+  const startStr = toYmd(selectedWeek)
+  const endStr = toYmd(addDays(selectedWeek, 6))
+  const todayStr = toYmd(new Date())
 
-  // Current calendar week, Sunday → Saturday
-  const startOfWeek = new Date(today)
-  startOfWeek.setDate(today.getDate() - today.getDay())
-  const endOfWeek = new Date(startOfWeek)
-  endOfWeek.setDate(startOfWeek.getDate() + 6)
-
-  // Due Today
-  const dueTodayBids = bids.filter((b) => {
-    if (!b.bid_due_date) return false
-    const d = new Date(b.bid_due_date + 'T00:00:00')
-    return d.getTime() === today.getTime()
-  })
+  // Due Today — only counts when today falls inside the selected week.
+  const todayInWeek = todayStr >= startStr && todayStr <= endStr
+  const dueTodayBids = todayInWeek
+    ? bids.filter((b) => b.bid_due_date === todayStr)
+    : []
   const dueTodayValue = dueTodayBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Due This Week (Sunday through Saturday of current calendar week, all statuses)
-  const dueWeekBids = bids.filter((b) => {
-    if (!b.bid_due_date) return false
-    const d = new Date(b.bid_due_date + 'T00:00:00')
-    return d >= startOfWeek && d <= endOfWeek
-  })
+  // Due This Week — bids due within the selected Mon–Sun week (all statuses).
+  const dueWeekBids = bids.filter(
+    (b) => !!b.bid_due_date && b.bid_due_date >= startStr && b.bid_due_date <= endStr,
+  )
   const dueWeekValue = dueWeekBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
   // Sent — exactly the bids in the kanban Sent column
   const sentValue = sentBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
-  // Total Bid Value — sum across all bids currently on the board
+  // Total Bid Value — sum across all bids currently on the (week-filtered) board
   const weekValue = boardBids.reduce((s, b) => s + (b.total_price ?? 0), 0)
 
   return (
