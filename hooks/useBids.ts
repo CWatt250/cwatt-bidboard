@@ -13,6 +13,12 @@ interface UseBidsResult {
   bids: Bid[]
   loading: boolean
   error: string | null
+  /** Merge partial fields into the matching bid in local state instantly. */
+  patchBid: (id: string, partial: Partial<Bid>) => void
+  /** Remove a bid from local state immediately. */
+  removeBid: (id: string) => void
+  /** Manual full refetch escape hatch. */
+  refreshBids: () => void
 }
 
 interface UseBidsOptions {
@@ -108,6 +114,23 @@ export function useBids(options: UseBidsOptions = {}): UseBidsResult {
     setBids(filtered)
     setError(null)
   }, [branch, scope, status, isAdmin, isBranchManager, isEstimator, userBranches, profile, skipEstimatorSelfFilter])
+
+  // Optimistic local-state helpers. patchBid/removeBid are pure state merges —
+  // no Supabase call — so save sites can reflect a change instantly without
+  // waiting on a refetch or the Realtime round-trip.
+  const patchBid = useCallback((id: string, partial: Partial<Bid>) => {
+    setBids((prev) => prev.map((b) => (b.id === id ? { ...b, ...partial } : b)))
+  }, [])
+
+  const removeBid = useCallback((id: string) => {
+    setBids((prev) => prev.filter((b) => b.id !== id))
+  }, [])
+
+  // Manual full refetch — used by operations (e.g. client changes) that modify
+  // joined data which is hard to patch locally.
+  const refreshBids = useCallback(() => {
+    void fetchBids()
+  }, [fetchBids])
 
   useEffect(() => {
     setLoading(true)
@@ -219,12 +242,19 @@ export function useBids(options: UseBidsOptions = {}): UseBidsResult {
           setBids((prev) => prev.map((b) => (b.id === bid.id ? bid : b)))
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[useBids] Realtime channel connected')
+        }
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[useBids] Realtime channel failed:', status)
+        }
+      })
 
     return () => {
       supabase.removeChannel(channel)
     }
   }, [channelId])
 
-  return { bids, loading, error }
+  return { bids, loading, error, patchBid, removeBid, refreshBids }
 }

@@ -4,6 +4,7 @@ import {
   type ColumnDef,
   type Row,
   type RowData,
+  type Table,
 } from '@tanstack/react-table'
 import {
   ArrowUpDownIcon,
@@ -39,7 +40,8 @@ import { InlineDateCell } from '@/components/bids/InlineDateCell'
 import { InlineStatusCell } from '@/components/bids/InlineStatusCell'
 import { InlineEstimatorCell } from '@/components/bids/InlineEstimatorCell'
 
-// Augment TanStack Table meta so cells can call updateBid
+// Augment TanStack Table meta so cells can call updateBid and the optimistic
+// local-state helpers (patchBid / removeBid / refreshBids) from useBids.
 declare module '@tanstack/react-table' {
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   interface TableMeta<TData extends RowData> {
@@ -48,6 +50,12 @@ declare module '@tanstack/react-table' {
       field: 'notes' | 'project_location' | 'mike_estimate_number',
       value: string | null
     ) => Promise<void>
+    /** Merge partial fields into a bid in local state instantly. */
+    patchBid: (id: string, partial: Partial<Bid>) => void
+    /** Remove a bid from local state immediately. */
+    removeBid: (id: string) => void
+    /** Full refetch escape hatch. */
+    refreshBids: () => void
   }
 }
 
@@ -180,7 +188,15 @@ function InlineEditCell({
 
 // ─── ActionsCell ──────────────────────────────────────────────────────────────
 
-function ActionsCell({ row, onEdit }: { row: Row<Bid>; onEdit: (bid: Bid) => void }) {
+function ActionsCell({
+  row,
+  table,
+  onEdit,
+}: {
+  row: Row<Bid>
+  table: Table<Bid>
+  onEdit: (bid: Bid) => void
+}) {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const bid = row.original
@@ -194,6 +210,10 @@ function ActionsCell({ row, onEdit }: { row: Row<Bid>; onEdit: (bid: Bid) => voi
       toast.error('Failed to delete bid.')
       return
     }
+    // Drop the row from local state instantly so it doesn't linger until refresh.
+    table.options.meta?.removeBid(bid.id)
+    // Safety net: useBids refetches on this event in case anything was missed.
+    window.dispatchEvent(new Event('bidwatt:bid-created'))
     toast.success('Bid deleted.')
     setDeleteOpen(false)
   }
@@ -289,6 +309,7 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
           onSave={async (raw) => {
             const value = raw.trim() === '' ? null : raw.trim()
             await table.options.meta?.updateBid(row.original.id, 'project_location', value)
+            table.options.meta?.patchBid(row.original.id, { project_location: value })
           }}
           renderDisplay={(raw) => (
             <span className={raw === '' ? 'italic text-muted-foreground text-xs' : 'text-sm'}>
@@ -347,6 +368,7 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
           onSave={async (raw) => {
             const value = raw.trim() === '' ? null : raw.trim()
             await table.options.meta?.updateBid(row.original.id, 'mike_estimate_number', value)
+            table.options.meta?.patchBid(row.original.id, { mike_estimate_number: value })
           }}
           renderDisplay={(raw) => (
             <span
@@ -375,7 +397,7 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
         if (b == null) return 1
         return a < b ? -1 : a > b ? 1 : 0
       },
-      cell: ({ row }) => (
+      cell: ({ row, table }) => (
         <InlineDateCell
           bidId={row.original.id}
           userId={currentUserId}
@@ -384,6 +406,13 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
           displayClassName="block w-full text-left truncate rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
           displayStyle={
             row.original.bid_due_date ? dueDateStyle(row.original.bid_due_date) : undefined
+          }
+          onSaved={(date) =>
+            // bid_due_date is nullable at runtime even though the Bid type
+            // narrows it to string — cast keeps the local merge honest.
+            table.options.meta?.patchBid(row.original.id, {
+              bid_due_date: date,
+            } as Partial<Bid>)
           }
         />
       ),
@@ -395,12 +424,15 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
       minSize: 80,
       maxSize: 140,
       header: ({ column }) => <SortableHeader label="Status" column={column} />,
-      cell: ({ row }) => (
+      cell: ({ row, table }) => (
         <InlineStatusCell
           bidId={row.original.id}
           userId={currentUserId}
           projectName={row.original.project_name}
           initialStatus={row.original.status}
+          onSaved={(status) =>
+            table.options.meta?.patchBid(row.original.id, { status })
+          }
         />
       ),
     },
@@ -411,13 +443,19 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
       minSize: 110,
       maxSize: 180,
       header: ({ column }) => <SortableHeader label="Estimator" column={column} />,
-      cell: ({ row }) => (
+      cell: ({ row, table }) => (
         <InlineEstimatorCell
           bidId={row.original.id}
           userId={currentUserId}
           projectName={row.original.project_name}
           initialEstimatorId={row.original.estimator_id}
           initialEstimatorName={row.original.estimator_name}
+          onSaved={(estimatorId, estimatorName) =>
+            table.options.meta?.patchBid(row.original.id, {
+              estimator_id: estimatorId,
+              estimator_name: estimatorName,
+            })
+          }
         />
       ),
     },
@@ -428,9 +466,12 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
       minSize: 140,
       maxSize: 240,
       header: ({ column }) => <SortableHeader label="Client(s)" column={column} />,
-      cell: ({ row }) => (
+      cell: ({ row, table }) => (
         <div className="truncate">
-          <ClientsPopover bid={row.original} />
+          <ClientsPopover
+            bid={row.original}
+            onSaved={() => table.options.meta?.refreshBids()}
+          />
         </div>
       ),
     },
@@ -463,6 +504,7 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
           onSave={async (raw) => {
             const value = raw.trim() === '' ? null : raw.trim()
             await table.options.meta?.updateBid(row.original.id, 'notes', value)
+            table.options.meta?.patchBid(row.original.id, { notes: value })
           }}
           renderDisplay={(raw) => (
             <span className={raw === '' ? 'italic text-muted-foreground text-xs' : 'text-sm'}>
@@ -476,7 +518,7 @@ export function createColumns({ onOpenBid, onEdit, currentUserId }: ColumnCallba
     {
       id: 'actions',
       header: () => <span className="sr-only">Actions</span>,
-      cell: ({ row }) => <ActionsCell row={row} onEdit={onEdit} />,
+      cell: ({ row, table }) => <ActionsCell row={row} table={table} onEdit={onEdit} />,
       enableSorting: false,
     },
   ]

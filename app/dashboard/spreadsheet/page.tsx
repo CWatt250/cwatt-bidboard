@@ -106,7 +106,7 @@ function exportToCsv(bids: Bid[]) {
 }
 
 export default function SpreadsheetPage() {
-  const { bids, loading, error } = useBids()
+  const { bids, loading, error, patchBid, removeBid, refreshBids } = useBids()
   const { profile, isAdmin, isBranchManager } = useUserRole()
   const canSeeAllEstimators = isAdmin || isBranchManager
 
@@ -165,6 +165,9 @@ export default function SpreadsheetPage() {
         onEstimatorFilterChange={setEstimatorFilter}
         estimators={estimators}
         canSeeAllEstimators={canSeeAllEstimators}
+        patchBid={patchBid}
+        removeBid={removeBid}
+        refreshBids={refreshBids}
       />
     </div>
   )

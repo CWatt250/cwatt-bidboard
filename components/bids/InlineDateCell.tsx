@@ -26,6 +26,8 @@ interface InlineDateCellProps {
   initialDate: string | null
   displayClassName?: string
   displayStyle?: React.CSSProperties
+  /** Called after a successful Supabase save so callers can patch local state. */
+  onSaved?: (date: string | null) => void
 }
 
 function toISODate(date: Date): string {
@@ -148,6 +150,7 @@ export function InlineDateCell({
   initialDate,
   displayClassName,
   displayStyle,
+  onSaved,
 }: InlineDateCellProps) {
   const [open, setOpen] = useState(false)
   const [optimistic, setOptimistic] = useState<string | null>(initialDate)
@@ -183,6 +186,10 @@ export function InlineDateCell({
       toast.error('Failed to update bid due date.')
       return
     }
+
+    // Reflect the saved date in the parent's row data instantly so sort
+    // by due date updates without waiting on a refetch.
+    onSaved?.(next)
 
     if (userId) {
       await logActivity(

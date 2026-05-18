@@ -70,6 +70,10 @@ interface DataTableProps {
   onEstimatorFilterChange: (next: EstimatorFilter) => void
   estimators: { id: string; name: string }[]
   canSeeAllEstimators: boolean
+  /** Optimistic local-state helpers from useBids — wired through table meta. */
+  patchBid: (id: string, partial: Partial<Bid>) => void
+  removeBid: (id: string) => void
+  refreshBids: () => void
 }
 
 function applyLocalFilters(bids: Bid[], filters: ActiveFilters): Bid[] {
@@ -115,6 +119,9 @@ export function DataTable({
   onEstimatorFilterChange,
   estimators,
   canSeeAllEstimators,
+  patchBid,
+  removeBid,
+  refreshBids,
 }: DataTableProps) {
   const { openBid } = useBidDetail()
   const { profile } = useUserRole()
@@ -155,6 +162,9 @@ export function DataTable({
         toast.error('Failed to save changes. Please try again.')
         throw error
       }
+      // Safety net: useBids listens for this and does a full refetch in case
+      // an optimistic patchBid missed anything.
+      window.dispatchEvent(new Event('bidwatt:bid-created'))
     },
     []
   )
@@ -178,7 +188,7 @@ export function DataTable({
     globalFilterFn,
     initialState: { pagination: { pageSize: PAGE_SIZE } },
     autoResetPageIndex: false,
-    meta: { updateBid },
+    meta: { updateBid, patchBid, removeBid, refreshBids },
   })
 
   const { rows } = table.getRowModel()

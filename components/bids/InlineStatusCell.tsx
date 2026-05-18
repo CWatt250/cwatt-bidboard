@@ -29,6 +29,8 @@ interface InlineStatusCellProps {
   userId: string | null
   projectName: string
   initialStatus: BidStatus
+  /** Called after a successful Supabase save so callers can patch local state. */
+  onSaved?: (status: BidStatus) => void
 }
 
 export function InlineStatusCell({
@@ -36,6 +38,7 @@ export function InlineStatusCell({
   userId,
   projectName,
   initialStatus,
+  onSaved,
 }: InlineStatusCellProps) {
   const [optimistic, setOptimistic] = useState<BidStatus>(initialStatus)
   const [saving, setSaving] = useState(false)
@@ -70,6 +73,10 @@ export function InlineStatusCell({
       toast.error('Failed to update status.')
       return
     }
+
+    // Reflect the saved status in the parent's row data instantly so the
+    // status filter and sort pick it up without waiting on a refetch.
+    onSaved?.(next)
 
     if (userId) {
       await logActivity(

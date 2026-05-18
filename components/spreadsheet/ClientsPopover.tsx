@@ -24,6 +24,12 @@ interface ClientsPopoverProps {
   onDraftSave?: (names: string[]) => void
   placeholder?: React.ReactNode
   triggerClassName?: string
+  /**
+   * Called after a successful real (non-draft) save. Client changes touch the
+   * bid_clients junction table, so callers refetch joined client names rather
+   * than patching local state.
+   */
+  onSaved?: () => void
 }
 
 export function ClientsPopover({
@@ -33,6 +39,7 @@ export function ClientsPopover({
   onDraftSave,
   placeholder,
   triggerClassName,
+  onSaved,
 }: ClientsPopoverProps) {
   const [open, setOpen] = useState(false)
   const [allClients, setAllClients] = useState<string[]>([])
@@ -129,6 +136,10 @@ export function ClientsPopover({
 
       toast.success('Clients updated.')
       setOpen(false)
+      // Joined client names changed — refetch rather than patch locally.
+      onSaved?.()
+      // Safety net: useBids also refetches on this event.
+      window.dispatchEvent(new Event('bidwatt:bid-created'))
     } catch {
       toast.error('Failed to update clients.')
     } finally {

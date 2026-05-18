@@ -20,6 +20,8 @@ interface InlineEstimatorCellProps {
   projectName: string
   initialEstimatorId: string | null
   initialEstimatorName: string | null
+  /** Called after a successful Supabase save so callers can patch local state. */
+  onSaved?: (estimatorId: string | null, estimatorName: string | null) => void
 }
 
 export function InlineEstimatorCell({
@@ -28,6 +30,7 @@ export function InlineEstimatorCell({
   projectName,
   initialEstimatorId,
   initialEstimatorName,
+  onSaved,
 }: InlineEstimatorCellProps) {
   const { profiles } = useBidDetail()
   const [optimisticId, setOptimisticId] = useState<string | null>(initialEstimatorId)
@@ -75,6 +78,13 @@ export function InlineEstimatorCell({
       toast.error('Failed to update estimator.')
       return
     }
+
+    // Reflect the saved estimator in the parent's row data instantly so the
+    // "My Bids" filter hides reassigned bids without waiting on a refetch.
+    onSaved?.(
+      nextId,
+      nextId === null ? null : profiles.find((p) => p.id === nextId)?.name ?? null,
+    )
 
     if (userId) {
       await logActivity(
