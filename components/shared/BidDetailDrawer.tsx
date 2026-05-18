@@ -5,12 +5,12 @@ import { useForm, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
-import { ExternalLinkIcon, XIcon } from 'lucide-react'
+import { ExternalLinkIcon, PlusIcon, XIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
-import { STATUS_BADGE_CLASSES } from '@/config/colors'
+import { STATUS_BADGE_CLASSES, SCOPE_BADGE_CLASSES } from '@/config/colors'
 import type { BidStatus, BidLineItem } from '@/hooks/useBids'
 import type { Branch as BranchType } from '@/lib/supabase/types'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,8 @@ import { SmartDateInput } from '@/components/ui/SmartDateInput'
 import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
 import { ClientsPopover } from '@/components/spreadsheet/ClientsPopover'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
+import { InlinePriceCell } from '@/components/bids/InlinePriceCell'
+import { InlineScopeEstimatorCell } from '@/components/bids/InlineScopeEstimatorCell'
 import {
   Select,
   SelectContent,
@@ -124,7 +126,7 @@ function DeleteConfirmDialog({
 export function BidDetailDrawer() {
   const router = useRouter()
   const { selectedBid, profiles, closeBid, openBid } = useBidDetail()
-  const { isAdmin, isBranchManager, isEstimator, branches: userBranches } = useUserRole()
+  const { isAdmin, isBranchManager, isEstimator, branches: userBranches, profile } = useUserRole()
   const [saving, setSaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -277,6 +279,47 @@ export function BidDetailDrawer() {
     setDeleteOpen(false)
     closeBid()
   }
+
+  // ─── Scope line-item helpers ──────────────────────────────────────────────
+  // InlinePriceCell / InlineScopeEstimatorCell persist their own changes to
+  // supabase; these callbacks mirror the edit into the shared bid state so the
+  // drawer's rows and Bid Total update immediately (same optimistic pattern as
+  // BidDetailClient, applied to the context-owned selectedBid).
+
+  function updateLineItemPrice(lineItemId: string, price: number | null) {
+    if (!selectedBid?.line_items) return
+    const line_items = selectedBid.line_items.map((li) =>
+      li.id === lineItemId ? { ...li, price } : li,
+    )
+    const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
+    openBid({ ...selectedBid, line_items, total_price })
+  }
+
+  function updateLineItemEstimator(lineItemId: string, estimatorId: string | null) {
+    if (!selectedBid?.line_items) return
+    const line_items = selectedBid.line_items.map((li) =>
+      li.id === lineItemId ? { ...li, estimator_id: estimatorId } : li,
+    )
+    openBid({ ...selectedBid, line_items })
+  }
+
+  async function removeLineItem(lineItemId: string) {
+    if (!selectedBid?.line_items) return
+    const prevBid = selectedBid
+    const line_items = selectedBid.line_items.filter((li) => li.id !== lineItemId)
+    const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
+    openBid({ ...selectedBid, line_items, total_price })
+
+    const supabase = createClient()
+    const { error } = await supabase.from('bid_line_items').delete().eq('id', lineItemId)
+    if (error) {
+      openBid(prevBid)
+      toast.error('Failed to delete scope line item.')
+    }
+  }
+
+  // Scope-only line items (no per-client rows) — the editable Scope Pricing list.
+  const scopeItems = (selectedBid?.line_items ?? []).filter((li) => !li.client)
 
   const isOpen = selectedBid !== null
 
@@ -515,30 +558,90 @@ export function BidDetailDrawer() {
                   )}
                 </div>
 
-                {/* Scopes + Pricing */}
-                <div className="space-y-1">
-                  <Label>Scopes &amp; Pricing</Label>
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      minHeight: 36,
-                      padding: '6px 10px',
-                      borderRadius: 'var(--radius)',
-                      border: '1px solid var(--border)',
-                      background: 'var(--surface)',
-                    }}
-                  >
-                    <ScopeEditor
-                      bid={selectedBid}
-                      placeholder={
-                        <span className="italic text-muted-foreground text-xs">
-                          Click to add scopes &amp; prices
-                        </span>
-                      }
-                      triggerClassName="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
-                    />
+                {/* Scopes + Pricing — each scope row has an inline-editable
+                    price cell (InlinePriceCell), matching the full Project
+                    Detail page. ScopeEditor stays as the add/remove-scopes UI. */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <Label>Scopes &amp; Pricing</Label>
+                    {scopeItems.length > 0 && (
+                      <ScopeEditor
+                        bid={selectedBid}
+                        trigger={
+                          <Button variant="outline" size="sm" type="button">
+                            <PlusIcon className="size-3.5 mr-1" />
+                            Add Scope
+                          </Button>
+                        }
+                      />
+                    )}
                   </div>
+
+                  {scopeItems.length === 0 ? (
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        minHeight: 36,
+                        padding: '6px 10px',
+                        borderRadius: 'var(--radius)',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                      }}
+                    >
+                      <ScopeEditor
+                        bid={selectedBid}
+                        placeholder={
+                          <span className="italic text-muted-foreground text-xs">
+                            Click to add scopes &amp; prices
+                          </span>
+                        }
+                        triggerClassName="w-full text-left rounded px-1 -mx-1 hover:bg-muted/60 transition-colors"
+                      />
+                    </div>
+                  ) : (
+                    <div className="overflow-hidden rounded-[var(--radius)] border border-[var(--border)] bg-[var(--surface)]">
+                      {scopeItems.map((li) => (
+                        <div
+                          key={li.id}
+                          className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 border-b border-[var(--border)] px-2.5 py-1.5 last:border-b-0"
+                        >
+                          <Badge
+                            className={SCOPE_BADGE_CLASSES[li.scope]}
+                            variant="outline"
+                            style={{ fontSize: '0.7rem' }}
+                          >
+                            {li.scope}
+                          </Badge>
+                          <InlineScopeEstimatorCell
+                            lineItemId={li.id}
+                            bidId={selectedBid.id}
+                            userId={profile?.id ?? null}
+                            scope={li.scope}
+                            initialEstimatorId={li.estimator_id}
+                            leadEstimatorName={selectedBid.estimator_name}
+                            onChange={updateLineItemEstimator}
+                          />
+                          <InlinePriceCell
+                            lineItemId={li.id}
+                            bidId={selectedBid.id}
+                            userId={profile?.id ?? null}
+                            scope={li.scope}
+                            initialPrice={li.price}
+                            onChange={updateLineItemPrice}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeLineItem(li.id)}
+                            aria-label={`Delete scope ${li.scope}`}
+                            className="flex size-6 items-center justify-center rounded text-[var(--red,#dc2626)] opacity-60 transition-opacity hover:bg-[rgba(220,38,38,0.08)] hover:opacity-100"
+                          >
+                            <XIcon className="size-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Clients */}

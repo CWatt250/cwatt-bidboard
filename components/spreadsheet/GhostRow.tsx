@@ -15,6 +15,7 @@ import { parseLooseDate } from '@/lib/utils'
 import { TableCell, TableRow } from '@/components/ui/table'
 import { ScopeEditor, type DraftItem } from './ScopeEditor'
 import { AutocompleteCell } from './AutocompleteCell'
+import { LocationAutocomplete } from '@/components/shared/LocationAutocomplete'
 
 const BRANCHES: BidBranch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
@@ -22,6 +23,9 @@ const STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', '
 interface GhostState {
   project_name: string
   project_location: string
+  /** Captured from the Mapbox suggestion picked for project_location; null for freeform text. */
+  latitude: number | null
+  longitude: number | null
   mike_estimate_number: string
   scopes: DraftItem[]
   bid_due_date: string
@@ -35,6 +39,8 @@ interface GhostState {
 const EMPTY_GHOST: GhostState = {
   project_name: '',
   project_location: '',
+  latitude: null,
+  longitude: null,
   mike_estimate_number: '',
   scopes: [],
   bid_due_date: '',
@@ -178,6 +184,8 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
     const bidPayload = {
       project_name: ghost.project_name.trim(),
       project_location: ghost.project_location.trim() || null,
+      latitude: ghost.latitude,
+      longitude: ghost.longitude,
       mike_estimate_number: ghost.mike_estimate_number.trim() || null,
       branch: ghost.branch,
       estimator_id: ghost.status === 'Unassigned' ? null : ghost.estimator_id,
@@ -295,16 +303,28 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
         )
 
       case 'project_location':
+        // Mapbox-backed autocomplete (same component as the New Bid dialog).
+        // Picking a suggestion captures lat/lng; freeform text clears them.
+        // LocationAutocomplete gracefully degrades to a plain input when
+        // NEXT_PUBLIC_MAPBOX_TOKEN is absent. The wrapper class re-skins its
+        // shadcn Input to match the borderless ghost-row cells.
         return (
-          <input
-            type="text"
-            value={ghost.project_location}
-            placeholder="City, State…"
-            onChange={(e) => setGhost((g) => ({ ...g, project_location: e.target.value }))}
-            onKeyDown={handleEnter}
-            className="ghost-cell-input"
-            style={cellInputStyle}
-          />
+          <div className="ghost-location-cell">
+            <LocationAutocomplete
+              value={ghost.project_location}
+              onChange={(value) =>
+                setGhost((g) => ({ ...g, project_location: value }))
+              }
+              onCoordinatesChange={(coords) =>
+                setGhost((g) => ({
+                  ...g,
+                  latitude: coords?.latitude ?? null,
+                  longitude: coords?.longitude ?? null,
+                }))
+              }
+              placeholder="City, State…"
+            />
+          </div>
         )
 
       case 'mike_estimate_number':
@@ -524,6 +544,27 @@ export function GhostRow({ visibleColumnIds }: GhostRowProps) {
       <style>{`
         .ghost-cell-input:focus {
           border-bottom: 2px solid #378add !important;
+        }
+        /* Re-skin LocationAutocomplete's shadcn Input as a borderless ghost
+           cell so it matches the other ghost-row fields (the component itself
+           is shared with the New Bid dialog and must not be modified). */
+        .ghost-location-cell input {
+          width: 100%;
+          height: auto;
+          padding: 0;
+          border: none;
+          border-radius: 0;
+          background: transparent;
+          box-shadow: none;
+          color: var(--text);
+          font-size: 0.8rem;
+          font-family: inherit;
+        }
+        .ghost-location-cell input:focus,
+        .ghost-location-cell input:focus-visible {
+          outline: none;
+          box-shadow: none;
+          border-bottom: 2px solid #378add;
         }
       `}</style>
       <TableRow
