@@ -598,7 +598,6 @@ export function WeeklyTab() {
                         color: 'var(--text)',
                         flex: 1,
                         minWidth: 0,
-                        textDecoration: 'line-through',
                         opacity: 0.7,
                       }}
                     >
