@@ -9,6 +9,8 @@ export interface WeekRange {
 export interface WeekTotals {
   count: number
   total: number
+  /** The specific bids that make up this total — for drill-down drawers. */
+  bids: Bid[]
 }
 
 export interface AtRiskSummary {
@@ -62,18 +64,18 @@ export function bidTotalValue(bids: Bid[]): number {
 export function securedInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): WeekTotals {
   const startMs = weekStart.getTime()
   const endMs = weekEnd.getTime()
-  const wonBids = new Set<string>()
+  const wonBids = new Map<string, Bid>()
   let total = 0
   for (const b of bids) {
     for (const li of b.line_items ?? []) {
       if (!li.is_awarded || !li.awarded_at) continue
       const t = new Date(li.awarded_at).getTime()
       if (t < startMs || t > endMs) continue
-      wonBids.add(b.id)
+      wonBids.set(b.id, b)
       total += li.price ?? 0
     }
   }
-  return { count: wonBids.size, total }
+  return { count: wonBids.size, total, bids: Array.from(wonBids.values()) }
 }
 
 export function verbalsInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): WeekTotals {
@@ -90,6 +92,7 @@ export function verbalsInWeek(bids: Bid[], weekStart: Date, weekEnd: Date): Week
   return {
     count: matching.length,
     total: matching.reduce((sum, b) => sum + lineItemTotal(b), 0),
+    bids: matching,
   }
 }
 

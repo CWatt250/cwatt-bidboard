@@ -1,5 +1,7 @@
 'use client'
 
+import { useState } from 'react'
+import { ChevronRight } from 'lucide-react'
 import { BRANCH_BADGE_CLASSES } from '@/config/colors'
 import type { BranchBreakdownItem, WeekTotals } from '@/lib/recap-aggregations'
 
@@ -12,6 +14,9 @@ interface QuickTotalsRailProps {
   /** When true, drops position: sticky so the rail flows inline (used in Meeting Mode). */
   inline?: boolean
   scale?: number
+  /** Optional — when provided, the Secured / Verbals cards become clickable. */
+  onSecuredClick?: () => void
+  onVerbalsClick?: () => void
 }
 
 function formatCurrency(value: number): string {
@@ -31,23 +36,45 @@ function MiniCard({
   count,
   delta,
   scale,
+  onClick,
 }: {
   label: string
   total: number
   count: number
   delta?: number | null
   scale: number
+  onClick?: () => void
 }) {
   const deltaPositive = delta != null && delta > 0
   const deltaNegative = delta != null && delta < 0
+  const clickable = !!onClick
+  const [hovered, setHovered] = useState(false)
   return (
     <div
+      onClick={onClick}
+      onMouseEnter={clickable ? () => setHovered(true) : undefined}
+      onMouseLeave={clickable ? () => setHovered(false) : undefined}
+      onKeyDown={
+        clickable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                onClick!()
+              }
+            }
+          : undefined
+      }
+      role={clickable ? 'button' : undefined}
+      tabIndex={clickable ? 0 : undefined}
       style={{
-        background: 'var(--surface)',
-        border: '0.5px solid var(--border)',
+        background: clickable && hovered ? 'var(--surface2)' : 'var(--surface)',
+        border: `0.5px solid ${clickable && hovered ? 'var(--border2)' : 'var(--border)'}`,
         borderRadius: 'var(--radius-lg, var(--radius))',
         boxShadow: 'var(--shadow-sm)',
         padding: `${14 * scale}px ${16 * scale}px`,
+        position: 'relative',
+        cursor: clickable ? 'pointer' : undefined,
+        transition: 'background 0.12s ease, border-color 0.12s ease',
       }}
     >
       <p
@@ -98,6 +125,24 @@ function MiniCard({
           </span>
         )}
       </p>
+      {clickable && hovered && (
+        <span
+          style={{
+            position: 'absolute',
+            right: `${14 * scale}px`,
+            bottom: `${12 * scale}px`,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            fontSize: `${10 * scale}px`,
+            fontWeight: 600,
+            color: 'var(--text3)',
+          }}
+        >
+          View
+          <ChevronRight size={Math.round(12 * scale)} />
+        </span>
+      )}
     </div>
   )
 }
@@ -174,6 +219,8 @@ export function QuickTotalsRail({
   branchBreakdown,
   inline = false,
   scale = 1,
+  onSecuredClick,
+  onVerbalsClick,
 }: QuickTotalsRailProps) {
   const maxBranchTotal = Math.max(...branchBreakdown.map((b) => b.total), 1)
   const delta = percentDelta(thisWeek.total, lastWeek.total)
@@ -206,12 +253,14 @@ export function QuickTotalsRail({
         total={secured.total}
         count={secured.count}
         scale={scale}
+        onClick={onSecuredClick}
       />
       <MiniCard
         label="Verbals last week"
         total={verbals.total}
         count={verbals.count}
         scale={scale}
+        onClick={onVerbalsClick}
       />
 
       <div

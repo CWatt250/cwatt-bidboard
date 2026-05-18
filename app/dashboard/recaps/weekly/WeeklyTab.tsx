@@ -28,6 +28,7 @@ import { AtRiskCallout } from './AtRiskCallout'
 import { AtRiskDrawer } from './AtRiskDrawer'
 import { BidsTable } from './BidsTable'
 import { QuickTotalsRail } from './QuickTotalsRail'
+import { WeeklyBidsDrawer } from './WeeklyBidsDrawer'
 
 function formatCurrency(value: number): string {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`
@@ -71,6 +72,8 @@ export function WeeklyTab() {
   const { bids, loading, error } = useRecapData()
   const { profile, isAdmin } = useUserRole()
   const [selectedEstimator, setSelectedEstimator] = useState<string | null>(null)
+  const [securedDrawerOpen, setSecuredDrawerOpen] = useState(false)
+  const [verbalsDrawerOpen, setVerbalsDrawerOpen] = useState(false)
 
   const [userId, setUserId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<WorkspaceTodo[]>([])
@@ -107,25 +110,24 @@ export function WeeklyTab() {
   const [atRiskOpen, setAtRiskOpen] = useState(false)
   const [showPicker, setShowPicker] = useState(false)
 
-  // Estimator options for the admin dropdown — derived from already-loaded bids.
+  // Estimator names for the admin dropdown — derived from already-loaded bids.
+  // Keyed by name (not UUID) so the <Select> trigger displays the person's name.
   const estimatorOptions = useMemo(() => {
-    const byId = new Map<string, string>()
+    const names = new Set<string>()
     for (const b of bids) {
-      if (b.estimator_id && b.estimator_name) byId.set(b.estimator_id, b.estimator_name)
+      if (b.estimator_name) names.add(b.estimator_name)
     }
-    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) =>
-      a.name.localeCompare(b.name),
-    )
+    return Array.from(names).sort((a, b) => a.localeCompare(b))
   }, [bids])
 
   // Recap scope: non-admins only ever see their own bids; admins see org-wide
-  // unless they pick a specific estimator.
+  // unless they pick a specific estimator (matched by estimator name).
   const filteredBids = useMemo(() => {
     if (!isAdmin) {
       return profile ? bids.filter((b) => b.estimator_id === profile.id) : []
     }
     if (!selectedEstimator) return bids
-    return bids.filter((b) => b.estimator_id === selectedEstimator)
+    return bids.filter((b) => b.estimator_name === selectedEstimator)
   }, [bids, isAdmin, profile, selectedEstimator])
 
   const thisWeek = useMemo(() => weekRange(anchor), [anchor])
@@ -283,24 +285,35 @@ export function WeeklyTab() {
           }}
         >
           {isAdmin && (
-            <Select
-              value={selectedEstimator ?? ALL_ESTIMATORS}
-              onValueChange={(v) =>
-                setSelectedEstimator(v && v !== ALL_ESTIMATORS ? String(v) : null)
-              }
-            >
-              <SelectTrigger className="w-[180px]" aria-label="Filter by estimator">
-                <SelectValue placeholder="All estimators" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value={ALL_ESTIMATORS}>All estimators</SelectItem>
-                {estimatorOptions.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  fontSize: 13,
+                  color: 'var(--text2)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Estimator
+              </span>
+              <Select
+                value={selectedEstimator ?? ALL_ESTIMATORS}
+                onValueChange={(v) =>
+                  setSelectedEstimator(v && v !== ALL_ESTIMATORS ? String(v) : null)
+                }
+              >
+                <SelectTrigger className="w-[180px]" aria-label="Filter by estimator">
+                  <SelectValue placeholder="All estimators" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_ESTIMATORS}>All estimators</SelectItem>
+                  {estimatorOptions.map((name) => (
+                    <SelectItem key={name} value={name}>
+                      {name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           )}
           <button
             onClick={() => setAnchor((prev) => subDays(prev, 7))}
@@ -581,8 +594,25 @@ export function WeeklyTab() {
           secured={securedLastWeek}
           verbals={verbalsLastWeek}
           branchBreakdown={branchBreakdown}
+          onSecuredClick={() => setSecuredDrawerOpen(true)}
+          onVerbalsClick={() => setVerbalsDrawerOpen(true)}
         />
       </div>
+
+      <WeeklyBidsDrawer
+        open={securedDrawerOpen}
+        onOpenChange={setSecuredDrawerOpen}
+        title="Secured Last Week"
+        subtitle={`${lastRangeLabel} · ${formatCurrency(securedLastWeek.total)} · ${securedLastWeek.count} bid${securedLastWeek.count === 1 ? '' : 's'}`}
+        bids={securedLastWeek.bids}
+      />
+      <WeeklyBidsDrawer
+        open={verbalsDrawerOpen}
+        onOpenChange={setVerbalsDrawerOpen}
+        title="Verbals Last Week"
+        subtitle={`${lastRangeLabel} · ${formatCurrency(verbalsLastWeek.total)} · ${verbalsLastWeek.count} bid${verbalsLastWeek.count === 1 ? '' : 's'}`}
+        bids={verbalsLastWeek.bids}
+      />
 
       <style>{`
         @media (min-width: 1024px) {
