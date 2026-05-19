@@ -4,7 +4,9 @@ import * as React from 'react'
 import * as SheetPrimitive from '@radix-ui/react-dialog'
 import { X } from 'lucide-react'
 
-const Sheet = SheetPrimitive.Root
+const Sheet = (props: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Root>) => (
+  <SheetPrimitive.Root modal={false} {...props} />
+)
 
 const SheetTrigger = SheetPrimitive.Trigger
 
@@ -37,6 +39,23 @@ const SheetContent = React.forwardRef<
           ? 'inset-y-0 right-0 h-full w-3/4 border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-sm'
           : 'inset-y-0 left-0 h-full w-3/4 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left sm:max-w-sm'
       }`}
+      onPointerDownOutside={(e) => {
+        // Radix Dialog's modal mode sets body.style.pointerEvents = 'none',
+        // which kills clicks on Base UI portals (Select/Popover dropdowns
+        // rendered into document.body).  This handler prevents the dialog
+        // from stealing/killing those events.
+        //
+        // Without this: clicking Branch, Status, Estimator, Add Scope, or
+        // Clients shows the dropdown for ~1 frame then it closes immediately.
+        const target = e.target as HTMLElement | null
+        if (
+          target?.closest(
+            '[data-slot="select-content"], [data-slot="popover-content"]',
+          )
+        ) {
+          e.preventDefault()
+        }
+      }}
       {...props}
     >
       {children}
