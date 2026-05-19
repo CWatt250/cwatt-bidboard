@@ -32,7 +32,7 @@ export interface OverflowEvent {
 
 export type CalendarDisplayEvent = CalendarEvent | OverflowEvent
 
-const STATUS_COLORS: Record<BidStatus, { bg: string; border: string; text: string }> = {
+export const STATUS_COLORS: Record<BidStatus, { bg: string; border: string; text: string }> = {
   Unassigned:    { bg: 'rgba(136,146,176,0.12)', border: '#8892b0', text: '#4a5270' },
   Bidding:       { bg: 'rgba(56,189,248,0.12)',  border: '#38bdf8', text: '#0ea5e9' },
   'In Progress': { bg: 'rgba(245,158,11,0.12)',  border: '#f59e0b', text: '#d97706' },
@@ -204,16 +204,14 @@ function BidCard({ event }: { event: CalendarEvent }) {
   const urgencyOverride = getUrgencyStyle(event.start)
   const blocks = buildEstimatorBlocks(bid)
 
-  const isUnassignedBlock = (estId: string) => estId === '__primary__' && !bid.estimator_id
-
   return (
     <button
       className={BRANCH_BADGE_CLASSES[bid.branch]}
       style={{
         width: '100%',
         textAlign: 'left',
-        padding: '4px 6px',
-        borderRadius: '5px',
+        padding: '3px 5px',
+        borderRadius: '4px',
         borderLeft: `3px solid ${urgencyOverride.borderLeftColor ?? statusStyle.border}`,
         cursor: 'pointer',
         display: 'block',
@@ -223,54 +221,68 @@ function BidCard({ event }: { event: CalendarEvent }) {
         openBid(bid)
       }}
     >
-      {/* Line 1 — Project name */}
-      <span
-        style={{
-          display: '-webkit-box',
-          WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical',
-          overflow: 'hidden',
-          fontWeight: 600,
-          fontSize: '0.75rem',
-          lineHeight: 1.3,
-          color: statusStyle.text,
-          maxHeight: '2.6em',
-        }}
-      >
-        {bid.project_name}
+      {/* Row 1: project name (single-line truncated) + status dot */}
+      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span
+          style={{
+            flex: 1,
+            minWidth: 0,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+            fontWeight: 600,
+            fontSize: '0.75rem',
+            lineHeight: 1.3,
+            color: statusStyle.text,
+          }}
+        >
+          {bid.project_name}
+        </span>
+        <span
+          aria-hidden
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: '50%',
+            backgroundColor: statusStyle.border,
+            flexShrink: 0,
+          }}
+          title={bid.status}
+        />
       </span>
 
-      {/* Estimator blocks */}
-      {blocks.map((block, idx) => {
+      {/* One row per estimator: initials · scope chips inline */}
+      {blocks.map((block) => {
         const scopes: BidScope[] = [...new Set<BidScope>(block.lineItems.map((li) => li.scope))]
         const estInitials = getInitials(block.estimatorName) || '??'
         return (
-          <div key={block.estimatorId} style={{ marginTop: idx === 0 ? 3 : 5 }}>
-            {/* Block header: Initials · Status */}
-            <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+          <span
+            key={block.estimatorId}
+            style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 3, marginTop: 2 }}
+          >
+            <span
+              style={{
+                fontWeight: 500,
+                fontSize: '0.6875rem',
+                lineHeight: 1.2,
+                color: statusStyle.text,
+              }}
+            >
+              {estInitials}
+            </span>
+            <span style={{ color: statusStyle.text, opacity: 0.35, fontSize: '0.5rem', lineHeight: 1 }}>·</span>
+            {scopes.map((scope) => (
               <span
-                style={{
-                  fontWeight: 700,
-                  fontSize: '0.6875rem',
-                  lineHeight: 1.2,
-                  color: statusStyle.text,
-                  letterSpacing: '0.01em',
-                }}
+                key={scope}
+                className={cn(
+                  'inline-flex items-center rounded border px-1.5 text-[10px] font-semibold leading-none',
+                  SCOPE_BADGE_CLASSES[scope],
+                )}
               >
-                {estInitials}
+                {SCOPE_ABBREVIATIONS[scope] ?? scope}
               </span>
-              {isUnassignedBlock(block.estimatorId) ? null : (
-                <>
-                  <span style={{ color: statusStyle.text, opacity: 0.5, fontSize: '0.6875rem' }}>·</span>
-                  <StatusIndicator status={bid.status} />
-                </>
-              )}
-            </span>
-            {/* Block content: scope chips */}
-            <span style={{ display: 'block', marginTop: 2 }}>
-              <ScopeChips scopes={scopes} />
-            </span>
-          </div>
+            ))}
+          </span>
         )
       })}
     </button>
@@ -291,7 +303,7 @@ function OverflowMore({ event }: { event: OverflowEvent }) {
           <button
             type="button"
             onClick={(e) => e.stopPropagation()}
-            className="block w-full cursor-pointer px-1.5 py-0.5 text-left text-xs text-muted-foreground hover:underline"
+            className="block w-full cursor-pointer py-1 px-2 text-center text-xs text-muted-foreground hover:text-foreground"
           />
         }
       >
