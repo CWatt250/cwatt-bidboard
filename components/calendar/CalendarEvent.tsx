@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { differenceInCalendarDays, format, startOfToday } from 'date-fns'
 import { useBidDetail } from '@/contexts/bidDetail'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
-import type { Bid, BidStatus } from '@/hooks/useBids'
+import type { Bid, BidStatus, BidLineItem, BidScope } from '@/hooks/useBids'
 import { cn } from '@/lib/utils'
 import {
   BRANCH_BADGE_CLASSES,
@@ -75,6 +75,65 @@ function getInitials(name: string | null | undefined): string {
   return (parts[0].charAt(0) + parts[parts.length - 1].charAt(0)).toUpperCase()
 }
 
+/** Group a bid's line items by estimator. Each key is an estimator_id (or
+ *  '__primary__' for items that fall back to the bid's primary estimator).
+ *  Returns an array of { estimatorId, estimatorName, lineItems } sorted:
+ *  primary estimator first, then others alphabetically by name. */
+interface EstimatorBlock {
+  estimatorId: string
+  estimatorName: string | null
+  lineItems: BidLineItem[]
+}
+
+function buildEstimatorBlocks(bid: Bid): EstimatorBlock[] {
+  const lineItems = bid.line_items ?? []
+  if (lineItems.length === 0) return []
+
+  // Map estimatorId → { estimatorName, lineItems[] }
+  const map = new Map<string, { name: string | null; items: BidLineItem[] }>()
+
+  for (const li of lineItems) {
+    const estId = li.estimator_id ?? '__primary__'
+    const existing = map.get(estId)
+    if (existing) {
+      existing.items.push(li)
+    } else {
+      // Determine the name for this estimator block
+      let name: string | null
+      if (li.estimator_id) {
+        name = li.estimator_name ?? null
+      } else {
+        // Falls back to bid's primary estimator
+        name = bid.estimator_name ?? null
+      }
+      map.set(estId, { name, items: [li] })
+    }
+  }
+
+  const primaryId = bid.estimator_id ?? '__primary__'
+
+  const blocks: EstimatorBlock[] = []
+  const others: EstimatorBlock[] = []
+
+  for (const [estId, { name, items }] of map) {
+    const block: EstimatorBlock = { estimatorId: estId, estimatorName: name, lineItems: items }
+    if (estId === primaryId) {
+      blocks.push(block)
+    } else {
+      others.push(block)
+    }
+  }
+
+  // Sort others alphabetically by estimator name (falling back to id for stable order)
+  others.sort((a, b) => {
+    const na = a.estimatorName ?? a.estimatorId
+    const nb = b.estimatorName ?? b.estimatorId
+    return na.localeCompare(nb)
+  })
+
+  return [...blocks, ...others]
+}
+
 /** Synthetic month-view event standing in for the bids hidden by the 3-card cap. */
 export interface OverflowEvent {
   id: string
@@ -122,14 +181,13 @@ function scopesOf(bid: Bid) {
   return [...new Set((bid.line_items ?? []).map((li) => li.scope))]
 }
 
-function ScopeChips({ bid }: { bid: Bid }) {
-  const uniqueScopes = scopesOf(bid)
-  if (uniqueScopes.length === 0) return null
+function ScopeChips({ scopes }: { scopes: BidScope[] }) {
+  if (scopes.length === 0) return null
   return (
     <span
-      style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxHeight: 40, overflow: 'hidden' }}
+      style={{ display: 'flex', gap: 4, flexWrap: 'wrap', maxHeight: 20, overflow: 'hidden' }}
     >
-      {uniqueScopes.map((scope) => (
+      {scopes.map((scope) => (
         <span key={scope} className={cn(CHIP_CLASS, SCOPE_BADGE_CLASSES[scope])}>
           {SCOPE_ABBREVIATIONS[scope] ?? scope}
         </span>
@@ -146,7 +204,9 @@ function BidCard({ event }: { event: CalendarEvent }) {
   const isUnassigned = !bid.estimator_id
   const statusStyle = isUnassigned ? UNASSIGNED_COLORS : (STATUS_COLORS[bid.status] ?? STATUS_COLORS.Unassigned)
   const urgencyOverride = getUrgencyStyle(event.start)
-  const initials = getInitials(bid.estimator_name)
+  const blocks = buildEstimatorBlocks(bid)
+
+  const isUnassignedBlock = (estId: string) => estId === '__primary__' && !bid.estimator_id
 
   return (
     <button
@@ -154,7 +214,7 @@ function BidCard({ event }: { event: CalendarEvent }) {
       style={{
         width: '100%',
         textAlign: 'left',
-        padding: '3px 6px',
+        padding: '4px 6px',
         borderRadius: '5px',
         borderLeft: `3px solid ${urgencyOverride.borderLeftColor ?? statusStyle.border}`,
         cursor: 'pointer',
@@ -165,31 +225,56 @@ function BidCard({ event }: { event: CalendarEvent }) {
         openBid(bid)
       }}
     >
+      {/* Line 1 — Project name */}
       <span
         style={{
-          display: 'block',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
           fontWeight: 600,
-          fontSize: '0.7rem',
+          fontSize: '0.75rem',
           lineHeight: 1.3,
           color: statusStyle.text,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
+          maxHeight: '2.6em',
         }}
       >
-        {initials ? `${initials} — ${bid.project_name}` : bid.project_name}
-        {bid.project_location ? ` · ${bid.project_location}` : ''}
+        {bid.project_name}
       </span>
 
-      {/* Row 1 — status as plain colored text + dot */}
-      <span style={{ display: 'block', marginTop: 2 }}>
-        <StatusIndicator status={bid.status} />
-      </span>
-
-      {/* Row 2 — scope chips (colored pills) */}
-      <span style={{ display: 'block', marginTop: 3 }}>
-        <ScopeChips bid={bid} />
-      </span>
+      {/* Estimator blocks */}
+      {blocks.map((block, idx) => {
+        const scopes: BidScope[] = [...new Set<BidScope>(block.lineItems.map((li) => li.scope))]
+        const estInitials = getInitials(block.estimatorName) || '??'
+        return (
+          <div key={block.estimatorId} style={{ marginTop: idx === 0 ? 3 : 5 }}>
+            {/* Block header: Initials · Status */}
+            <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              <span
+                style={{
+                  fontWeight: 700,
+                  fontSize: '0.6875rem',
+                  lineHeight: 1.2,
+                  color: statusStyle.text,
+                  letterSpacing: '0.01em',
+                }}
+              >
+                {estInitials}
+              </span>
+              {isUnassignedBlock(block.estimatorId) ? null : (
+                <>
+                  <span style={{ color: statusStyle.text, opacity: 0.5, fontSize: '0.6875rem' }}>·</span>
+                  <StatusIndicator status={bid.status} />
+                </>
+              )}
+            </span>
+            {/* Block content: scope chips */}
+            <span style={{ display: 'block', marginTop: 2 }}>
+              <ScopeChips scopes={scopes} />
+            </span>
+          </div>
+        )
+      })}
     </button>
   )
 }
