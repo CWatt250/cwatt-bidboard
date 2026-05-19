@@ -16,6 +16,7 @@ import { useFilters, type Branch, type Status } from '@/contexts/filters'
 import { useUserRole } from '@/contexts/userRole'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
+import { BRANCH_BADGE_CLASSES } from '@/config/colors'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
 import type { Bid } from '@/hooks/useBids'
 
@@ -203,6 +204,32 @@ export default function CalendarPage() {
             <option key={s} value={s}>{s === 'All' ? 'All Statuses' : s}</option>
           ))}
         </select>
+      </div>
+
+      {/* Branch color legend */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          flexWrap: 'wrap',
+          gap: 16,
+          fontSize: 11,
+          padding: '6px 0',
+        }}
+      >
+        {ALL_BRANCHES.map((b) => (
+          <span key={b} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span
+              aria-hidden
+              className={`border ${BRANCH_BADGE_CLASSES[b]}`}
+              style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, flexShrink: 0 }}
+            />
+            <span style={{ fontWeight: 700, color: 'var(--text)' }}>{b}</span>
+            <span style={{ color: 'var(--text3)' }}>
+              — {(BRANCH_LABELS as Record<string, string>)[b]}
+            </span>
+          </span>
+        ))}
       </div>
 
       {/* Calendar */}

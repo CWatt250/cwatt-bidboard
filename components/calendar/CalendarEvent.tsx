@@ -5,7 +5,12 @@ import { useBidDetail } from '@/contexts/bidDetail'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
 import type { BidStatus } from '@/hooks/useBids'
 import { cn } from '@/lib/utils'
-import { SCOPE_ABBREVIATIONS, SCOPE_BADGE_CLASSES } from '@/config/colors'
+import {
+  BRANCH_BADGE_CLASSES,
+  SCOPE_ABBREVIATIONS,
+  SCOPE_BADGE_CLASSES,
+  STATUS_BADGE_CLASSES,
+} from '@/config/colors'
 
 const STATUS_COLORS: Record<BidStatus, { bg: string; border: string; text: string }> = {
   Unassigned:    { bg: 'rgba(136,146,176,0.12)', border: '#8892b0', text: '#4a5270' },
@@ -22,6 +27,17 @@ const UNASSIGNED_COLORS = {
   bg: 'rgba(251,113,133,0.12)',
   border: '#fb7185',
   text: '#e11d48',
+}
+
+/** Short status labels for the on-card status chip. */
+const STATUS_LABELS: Record<BidStatus, string> = {
+  Unassigned: 'UNASSGN',
+  Bidding: 'BIDDING',
+  'In Progress': 'IN PROG',
+  Sent: 'SENT',
+  Verbal: 'VERBAL',
+  Awarded: 'AWARDED',
+  Lost: 'LOST',
 }
 
 function getUrgencyStyle(dueDate: Date): React.CSSProperties {
@@ -53,13 +69,13 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
 
   return (
     <button
+      className={BRANCH_BADGE_CLASSES[bid.branch]}
       style={{
         width: '100%',
         textAlign: 'left',
         padding: '3px 6px',
         borderRadius: '5px',
         borderLeft: `3px solid ${urgencyOverride.borderLeftColor ?? statusStyle.border}`,
-        background: urgencyOverride.background ?? statusStyle.bg,
         cursor: 'pointer',
         display: 'block',
       }}
@@ -84,40 +100,37 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
         {bid.project_location ? ` · ${bid.project_location}` : ''}
       </span>
 
-      {isUnassigned ? (
-        <span style={{
-          display: 'block',
-          fontSize: '0.6rem',
-          fontWeight: 600,
-          color: UNASSIGNED_COLORS.text,
-          marginTop: 1,
-        }}>
-          Unassigned
-        </span>
-      ) : (
+      <span
+        style={{
+          display: 'flex',
+          gap: 4,
+          marginTop: 2,
+          flexWrap: 'wrap',
+          maxHeight: 40,
+          overflow: 'hidden',
+        }}
+      >
+        {/* Status chip — branch now drives the card background, so status shows here */}
         <span
-          style={{
-            display: 'flex',
-            gap: 4,
-            marginTop: 2,
-            flexWrap: 'wrap',
-            maxHeight: 40,
-            overflow: 'hidden',
-          }}
+          className={cn(
+            'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+            STATUS_BADGE_CLASSES[bid.status],
+          )}
         >
-          {uniqueScopes.map((scope) => (
-            <span
-              key={scope}
-              className={cn(
-                'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none',
-                SCOPE_BADGE_CLASSES[scope],
-              )}
-            >
-              {SCOPE_ABBREVIATIONS[scope] ?? scope}
-            </span>
-          ))}
+          {STATUS_LABELS[bid.status] ?? bid.status}
         </span>
-      )}
+        {uniqueScopes.map((scope) => (
+          <span
+            key={scope}
+            className={cn(
+              'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+              SCOPE_BADGE_CLASSES[scope],
+            )}
+          >
+            {SCOPE_ABBREVIATIONS[scope] ?? scope}
+          </span>
+        ))}
+      </span>
     </button>
   )
 }
