@@ -488,12 +488,14 @@ export default function ProjectsLibraryPage() {
               selected={filters.branches}
               onToggle={(v) => toggleArrayFilter('branches', v)}
             />
+            <FilterDivider />
             <ChipGroup
               label="Year"
               options={allYears.map((y) => ({ value: y, label: String(y) }))}
               selected={filters.years}
               onToggle={(v) => toggleArrayFilter('years', v)}
             />
+            <FilterDivider />
             <ChipGroup
               label="Status"
               options={ALL_STATUSES.map((s) => ({ value: s, label: s }))}
@@ -621,13 +623,29 @@ export default function ProjectsLibraryPage() {
 // ─── Subcomponents ──────────────────────────────────────────────────────────
 
 const inlineLabelStyle: React.CSSProperties = {
-  fontSize: '0.7rem',
-  fontWeight: 700,
+  fontSize: '10px',
+  fontWeight: 600,
   color: 'var(--text3)',
   textTransform: 'uppercase',
-  letterSpacing: '0.05em',
+  letterSpacing: '0.06em',
   whiteSpace: 'nowrap',
   flexShrink: 0,
+}
+
+/** Thin vertical rule separating filter groups that share a row. */
+function FilterDivider() {
+  return (
+    <div
+      aria-hidden
+      style={{
+        alignSelf: 'center',
+        width: 1,
+        height: 16,
+        background: 'var(--border)',
+        flexShrink: 0,
+      }}
+    />
+  )
 }
 
 const compactInputStyle: React.CSSProperties = {
