@@ -372,6 +372,13 @@ export default function CalendarPage() {
           background: #BFDBFE;
           color: #1E40AF;
         }
+        .rbc-event:has(.bidwatt-overflow-slot) {
+          min-height: 20px !important;
+          padding: 0 !important;
+          margin-top: 2px !important;
+          background: transparent !important;
+          border: none !important;
+        }
       `}</style>
 
       {/* Legend */}

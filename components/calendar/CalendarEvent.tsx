@@ -16,7 +16,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 
 /** Month view shows at most this many bid cards per day; the rest collapse
  *  into a single "+N more" overflow event. */
-export const MONTH_VIEW_EVENT_CAP = 3
+export const MONTH_VIEW_EVENT_CAP = 4
 
 /** Synthetic month-view event standing in for the bids hidden by the 3-card cap. */
 export interface OverflowEvent {
@@ -297,8 +297,9 @@ function OverflowMore({ event }: { event: OverflowEvent }) {
   const hiddenCount = event.bids.length - MONTH_VIEW_EVENT_CAP
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
+    <div className="bidwatt-overflow-slot">
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger
         render={
           <button
             type="button"
@@ -343,5 +344,6 @@ function OverflowMore({ event }: { event: OverflowEvent }) {
         </div>
       </PopoverContent>
     </Popover>
+    </div>
   )
 }
