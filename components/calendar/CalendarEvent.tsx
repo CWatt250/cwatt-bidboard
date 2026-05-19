@@ -89,11 +89,15 @@ function buildEstimatorBlocks(bid: Bid): EstimatorBlock[] {
   const lineItems = bid.line_items ?? []
   if (lineItems.length === 0) return []
 
+  const primaryId = bid.estimator_id ?? '__primary__'
+
   // Map estimatorId → { estimatorName, lineItems[] }
   const map = new Map<string, { name: string | null; items: BidLineItem[] }>()
 
   for (const li of lineItems) {
-    const estId = li.estimator_id ?? '__primary__'
+    // Use the bid's actual primary ID for unassigned items so they
+    // correctly match the primary estimator block.
+    const estId = li.estimator_id ?? primaryId
     const existing = map.get(estId)
     if (existing) {
       existing.items.push(li)
@@ -109,8 +113,6 @@ function buildEstimatorBlocks(bid: Bid): EstimatorBlock[] {
       map.set(estId, { name, items: [li] })
     }
   }
-
-  const primaryId = bid.estimator_id ?? '__primary__'
 
   const blocks: EstimatorBlock[] = []
   const others: EstimatorBlock[] = []
@@ -289,15 +291,25 @@ function OverflowMore({ event }: { event: OverflowEvent }) {
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger
-        render={
+        render={(props) => (
           <button
+            ref={props.ref}
             type="button"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation()
+              props.onClick?.(e)
+            }}
+            onMouseDown={props.onMouseDown}
+            onPointerDown={props.onPointerDown}
+            onPointerEnter={props.onPointerEnter}
+            onPointerLeave={props.onPointerLeave}
+            onFocus={props.onFocus}
+            onBlur={props.onBlur}
             className="block w-full cursor-pointer px-1.5 py-0.5 text-left text-xs text-muted-foreground hover:underline"
           >
             + {hiddenCount} more
           </button>
-        }
+        )}
       />
       <PopoverContent align="start" className="w-72 p-0">
         <div className="border-b px-3 py-2 text-xs font-semibold text-muted-foreground">
