@@ -8,6 +8,7 @@ import type { Bid, BidStatus, BidLineItem, BidScope } from '@/hooks/useBids'
 import { cn } from '@/lib/utils'
 import {
   BRANCH_BADGE_CLASSES,
+  DARK_BRANCH_COLORS,
   SCOPE_ABBREVIATIONS,
   SCOPE_BADGE_CLASSES,
   STATUS_BADGE_CLASSES,
@@ -199,8 +200,6 @@ function ScopeChips({ scopes }: { scopes: BidScope[] }) {
 function BidCard({ event }: { event: CalendarEvent }) {
   const { openBid } = useBidDetail()
   const { resource: bid } = event
-  const isUnassigned = !bid.estimator_id
-  const statusStyle = isUnassigned ? UNASSIGNED_COLORS : (STATUS_COLORS[bid.status] ?? STATUS_COLORS.Unassigned)
   const urgencyOverride = getUrgencyStyle(event.start)
   const blocks = buildEstimatorBlocks(bid)
 
@@ -212,7 +211,7 @@ function BidCard({ event }: { event: CalendarEvent }) {
         textAlign: 'left',
         padding: '3px 5px',
         borderRadius: '4px',
-        borderLeft: `3px solid ${urgencyOverride.borderLeftColor ?? statusStyle.border}`,
+        borderLeft: `3px solid ${urgencyOverride.borderLeftColor ?? DARK_BRANCH_COLORS[bid.branch]}`,
         cursor: 'pointer',
         display: 'block',
       }}
@@ -221,34 +220,31 @@ function BidCard({ event }: { event: CalendarEvent }) {
         openBid(bid)
       }}
     >
-      {/* Row 1: project name (single-line truncated) + status dot */}
-      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {/* Row 1: project name (single-line truncated) */}
+      <span
+        style={{
+          display: 'block',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+          fontWeight: 600,
+          fontSize: '0.75rem',
+          lineHeight: 1.3,
+        }}
+      >
+        {bid.project_name}
+      </span>
+
+      {/* Row 2: status chip */}
+      <span style={{ display: 'block', marginTop: 2 }}>
         <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            fontWeight: 600,
-            fontSize: '0.75rem',
-            lineHeight: 1.3,
-            color: statusStyle.text,
-          }}
+          className={cn(
+            'inline-flex items-center rounded border px-1.5 text-[9px] font-semibold leading-none',
+            STATUS_BADGE_CLASSES[bid.status],
+          )}
         >
-          {bid.project_name}
+          {STATUS_LABELS[bid.status] ?? bid.status}
         </span>
-        <span
-          aria-hidden
-          style={{
-            width: 8,
-            height: 8,
-            borderRadius: '50%',
-            backgroundColor: statusStyle.border,
-            flexShrink: 0,
-          }}
-          title={bid.status}
-        />
       </span>
 
       {/* One row per estimator: initials · scope chips inline */}
@@ -265,12 +261,11 @@ function BidCard({ event }: { event: CalendarEvent }) {
                 fontWeight: 500,
                 fontSize: '0.6875rem',
                 lineHeight: 1.2,
-                color: statusStyle.text,
               }}
             >
               {estInitials}
             </span>
-            <span style={{ color: statusStyle.text, opacity: 0.35, fontSize: '0.5rem', lineHeight: 1 }}>·</span>
+            <span style={{ opacity: 0.35, fontSize: '0.5rem', lineHeight: 1 }}>·</span>
             {scopes.map((scope) => (
               <span
                 key={scope}

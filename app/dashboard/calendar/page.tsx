@@ -10,7 +10,6 @@ import { useBids } from '@/hooks/useBids'
 import transformBidsToEvents from '@/lib/calendar/transformBidsToEvents'
 import CalendarEventComponent, {
   MONTH_VIEW_EVENT_CAP,
-  STATUS_COLORS,
   type CalendarDisplayEvent,
   type OverflowEvent,
 } from '@/components/calendar/CalendarEvent'
@@ -23,7 +22,7 @@ import { useBidDetail } from '@/contexts/bidDetail'
 import { BRANCH_LABELS } from '@/lib/supabase/types'
 import { BRANCH_BADGE_CLASSES } from '@/config/colors'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
-import type { Bid, BidStatus } from '@/hooks/useBids'
+import type { Bid } from '@/hooks/useBids'
 
 const localizer = dateFnsLocalizer({
   format,
@@ -35,7 +34,6 @@ const localizer = dateFnsLocalizer({
 
 const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const STATUSES: Status[] = ['All', 'Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
-const LEGEND_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
 
 const selectStyle: React.CSSProperties = {
   height: 32,
@@ -277,35 +275,6 @@ export default function CalendarPage() {
             <span style={{ color: 'var(--text3)' }}>
               — {(BRANCH_LABELS as Record<string, string>)[b]}
             </span>
-          </span>
-        ))}
-      </div>
-
-      {/* Status color legend */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: 16,
-          fontSize: 11,
-          padding: '2px 0 4px',
-        }}
-      >
-        {LEGEND_STATUSES.map((s) => (
-          <span key={s} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span
-              aria-hidden
-              style={{
-                display: 'inline-block',
-                width: 8,
-                height: 8,
-                borderRadius: '50%',
-                backgroundColor: STATUS_COLORS[s].border,
-                flexShrink: 0,
-              }}
-            />
-            <span style={{ fontWeight: 500, color: 'var(--text)' }}>{s}</span>
           </span>
         ))}
       </div>
