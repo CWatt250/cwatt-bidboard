@@ -11,6 +11,7 @@ import {
   ArrowUp,
   ArrowDown,
   X,
+  Check,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useUserRole } from '@/contexts/userRole'
@@ -25,6 +26,16 @@ import {
   type BidStatus,
   type Branch,
 } from '@/lib/supabase/types'
+import { cn } from '@/lib/utils'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { ClientCombobox } from '@/components/shared/ClientCombobox'
+import { SCOPE_BADGE_CLASSES } from '@/config/colors'
 
 const ALL_BRANCHES: Branch[] = ['PSC', 'SEA', 'POR', 'PHX', 'SLC']
 const ALL_STATUSES: BidStatus[] = ['Unassigned', 'Bidding', 'In Progress', 'Sent', 'Verbal', 'Awarded', 'Lost']
@@ -39,6 +50,9 @@ const ALL_SCOPES: BidScope[] = [
 ]
 
 const VIEW_STORAGE_KEY = 'bidwatt:projects-library-view'
+
+/** Sentinel <Select> value for the "no estimator filter" option. */
+const ALL_ESTIMATORS = '__all_estimators__'
 
 type ViewMode = 'folder' | 'list'
 
@@ -265,17 +279,16 @@ export default function ProjectsLibraryPage() {
     })
   }, [bids, searchQuery, filters])
 
+  // Number of filter groups with an active selection — drives the "Filters (n)" badge.
   const activeFilterCount =
-    filters.branches.length +
-    filters.years.length +
-    filters.statuses.length +
-    filters.estimatorIds.length +
-    filters.clients.length +
-    filters.scopes.length +
-    (filters.minValue ? 1 : 0) +
-    (filters.maxValue ? 1 : 0) +
-    (filters.dueStart ? 1 : 0) +
-    (filters.dueEnd ? 1 : 0)
+    (filters.branches.length > 0 ? 1 : 0) +
+    (filters.years.length > 0 ? 1 : 0) +
+    (filters.statuses.length > 0 ? 1 : 0) +
+    (filters.estimatorIds.length > 0 ? 1 : 0) +
+    (filters.clients.length > 0 ? 1 : 0) +
+    (filters.scopes.length > 0 ? 1 : 0) +
+    (filters.minValue || filters.maxValue ? 1 : 0) +
+    (filters.dueStart || filters.dueEnd ? 1 : 0)
 
   // Folder view: flat alphabetical list
   const folderProjects = useMemo(() => {
@@ -457,90 +470,127 @@ export default function ProjectsLibraryPage() {
       {showFilters && (
         <div
           style={{
-            padding: 16,
+            padding: 14,
             background: 'var(--surface)',
             border: '1px solid var(--border)',
             borderRadius: 'var(--radius-sm)',
             boxShadow: 'var(--shadow-sm)',
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-            gap: 16,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 14,
           }}
         >
-          <ChipGroup
-            label="Branch"
-            options={accessibleBranches.map((b) => ({ value: b, label: BRANCH_LABELS[b] }))}
-            selected={filters.branches}
-            onToggle={(v) => toggleArrayFilter('branches', v)}
-          />
-          <ChipGroup
-            label="Year"
-            options={allYears.map((y) => ({ value: y, label: String(y) }))}
-            selected={filters.years}
-            onToggle={(v) => toggleArrayFilter('years', v)}
-          />
-          <ChipGroup
-            label="Status"
-            options={ALL_STATUSES.map((s) => ({ value: s, label: s }))}
-            selected={filters.statuses}
-            onToggle={(v) => toggleArrayFilter('statuses', v)}
-          />
-          <ChipGroup
-            label="Estimator"
-            options={[
-              ...estimatorOptions.map((p) => ({ value: p.id, label: p.name })),
-              { value: '__unassigned__', label: 'Unassigned' },
-            ]}
-            selected={filters.estimatorIds}
-            onToggle={(v) => toggleArrayFilter('estimatorIds', v)}
-          />
-          <ChipGroup
-            label="Client"
-            options={allClients.map((c) => ({ value: c, label: c }))}
-            selected={filters.clients}
-            onToggle={(v) => toggleArrayFilter('clients', v)}
-          />
-          <ChipGroup
-            label="Scope"
-            options={ALL_SCOPES.map((s) => ({ value: s, label: s }))}
+          {/* Row 1 — Branch + Year + Status */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 20, rowGap: 10 }}>
+            <ChipGroup
+              label="Branch"
+              options={accessibleBranches.map((b) => ({ value: b, label: BRANCH_LABELS[b] }))}
+              selected={filters.branches}
+              onToggle={(v) => toggleArrayFilter('branches', v)}
+            />
+            <ChipGroup
+              label="Year"
+              options={allYears.map((y) => ({ value: y, label: String(y) }))}
+              selected={filters.years}
+              onToggle={(v) => toggleArrayFilter('years', v)}
+            />
+            <ChipGroup
+              label="Status"
+              options={ALL_STATUSES.map((s) => ({ value: s, label: s }))}
+              selected={filters.statuses}
+              onToggle={(v) => toggleArrayFilter('statuses', v)}
+            />
+          </div>
+
+          {/* Row 2 — Scope (color-coded pills) */}
+          <ScopeChipGroup
             selected={filters.scopes}
             onToggle={(v) => toggleArrayFilter('scopes', v)}
           />
-          <div>
-            <FilterLabel>Bid Value</FilterLabel>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+
+          {/* Row 3 — Estimator dropdown + Client combobox */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 20, rowGap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={inlineLabelStyle}>Estimator</span>
+              <Select
+                value={filters.estimatorIds[0] ?? ALL_ESTIMATORS}
+                onValueChange={(v) => {
+                  const id = String(v)
+                  setFilters((f) => ({
+                    ...f,
+                    estimatorIds: id === ALL_ESTIMATORS ? [] : [id],
+                  }))
+                }}
+              >
+                <SelectTrigger className="w-[160px]" aria-label="Filter by estimator">
+                  <SelectValue placeholder="All estimators" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_ESTIMATORS}>All estimators</SelectItem>
+                  {estimatorOptions.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={inlineLabelStyle}>Client</span>
+              <div style={{ width: 240 }}>
+                <ClientCombobox
+                  clients={allClients}
+                  value={filters.clients[0] ?? ''}
+                  onChange={(name) =>
+                    setFilters((f) => ({ ...f, clients: name ? [name] : [] }))
+                  }
+                  placeholder="All clients"
+                  allowCreate={false}
+                  emptyOptionLabel="All clients"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Row 4 — Bid Value range + Due Date range */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 20, rowGap: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={inlineLabelStyle}>Bid Value</span>
               <input
                 type="number"
                 placeholder="Min"
+                aria-label="Minimum bid value"
                 value={filters.minValue}
                 onChange={(e) => setFilters((f) => ({ ...f, minValue: e.target.value }))}
-                style={numberInputStyle}
+                style={{ ...compactInputStyle, width: 92 }}
               />
               <span style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>–</span>
               <input
                 type="number"
                 placeholder="Max"
+                aria-label="Maximum bid value"
                 value={filters.maxValue}
                 onChange={(e) => setFilters((f) => ({ ...f, maxValue: e.target.value }))}
-                style={numberInputStyle}
+                style={{ ...compactInputStyle, width: 92 }}
               />
             </div>
-          </div>
-          <div>
-            <FilterLabel>Due Date</FilterLabel>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={inlineLabelStyle}>Due Date</span>
               <input
                 type="date"
+                aria-label="Due date from"
                 value={filters.dueStart}
                 onChange={(e) => setFilters((f) => ({ ...f, dueStart: e.target.value }))}
-                style={numberInputStyle}
+                style={{ ...compactInputStyle, width: 150 }}
               />
               <span style={{ color: 'var(--text3)', fontSize: '0.75rem' }}>–</span>
               <input
                 type="date"
+                aria-label="Due date to"
                 value={filters.dueEnd}
                 onChange={(e) => setFilters((f) => ({ ...f, dueEnd: e.target.value }))}
-                style={numberInputStyle}
+                style={{ ...compactInputStyle, width: 150 }}
               />
             </div>
           </div>
@@ -570,9 +620,18 @@ export default function ProjectsLibraryPage() {
 
 // ─── Subcomponents ──────────────────────────────────────────────────────────
 
-const numberInputStyle: React.CSSProperties = {
-  height: 30,
-  flex: 1,
+const inlineLabelStyle: React.CSSProperties = {
+  fontSize: '0.7rem',
+  fontWeight: 700,
+  color: 'var(--text3)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.05em',
+  whiteSpace: 'nowrap',
+  flexShrink: 0,
+}
+
+const compactInputStyle: React.CSSProperties = {
+  height: 32,
   minWidth: 0,
   padding: '0 8px',
   borderRadius: 6,
@@ -582,14 +641,7 @@ const numberInputStyle: React.CSSProperties = {
   fontSize: '0.78rem',
 }
 
-function FilterLabel({ children }: { children: React.ReactNode }) {
-  return (
-    <p style={{ fontSize: '0.7rem', fontWeight: 700, color: 'var(--text3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
-      {children}
-    </p>
-  )
-}
-
+/** Toggleable pill group with an inline label prefix (Branch / Year / Status). */
 function ChipGroup<T extends string | number>({
   label,
   options,
@@ -601,38 +653,79 @@ function ChipGroup<T extends string | number>({
   selected: T[]
   onToggle: (value: T) => void
 }) {
-  if (options.length === 0) {
-    return (
-      <div>
-        <FilterLabel>{label}</FilterLabel>
-        <p style={{ fontSize: '0.72rem', color: 'var(--text3)', fontStyle: 'italic' }}>No options</p>
-      </div>
-    )
-  }
   return (
-    <div>
-      <FilterLabel>{label}</FilterLabel>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-        {options.map((opt) => {
-          const isSelected = selected.includes(opt.value)
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <span style={inlineLabelStyle}>{label}:</span>
+      {options.length === 0 ? (
+        <span style={{ fontSize: '0.72rem', color: 'var(--text3)', fontStyle: 'italic' }}>
+          No options
+        </span>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {options.map((opt) => {
+            const isSelected = selected.includes(opt.value)
+            return (
+              <button
+                key={String(opt.value)}
+                type="button"
+                onClick={() => onToggle(opt.value)}
+                aria-pressed={isSelected}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  height: 28,
+                  padding: '0 10px',
+                  borderRadius: 999,
+                  fontSize: '0.75rem',
+                  border: '1px solid var(--border)',
+                  background: isSelected ? 'var(--accent)' : 'var(--surface)',
+                  color: isSelected ? 'white' : 'var(--text2)',
+                  fontWeight: isSelected ? 600 : 500,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 120ms',
+                }}
+              >
+                {opt.label}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** Scope pills — color-coded so each scope is recognizable at a glance. */
+function ScopeChipGroup({
+  selected,
+  onToggle,
+}: {
+  selected: BidScope[]
+  onToggle: (value: BidScope) => void
+}) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <span style={inlineLabelStyle}>Scope:</span>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+        {ALL_SCOPES.map((scope) => {
+          const isSelected = selected.includes(scope)
           return (
             <button
-              key={String(opt.value)}
+              key={scope}
               type="button"
-              onClick={() => onToggle(opt.value)}
-              style={{
-                fontSize: '0.7rem',
-                padding: '3px 9px',
-                borderRadius: 999,
-                border: '1px solid var(--border)',
-                background: isSelected ? 'var(--accent)' : 'var(--surface)',
-                color: isSelected ? 'white' : 'var(--text2)',
-                cursor: 'pointer',
-                fontWeight: isSelected ? 600 : 500,
-                transition: 'all 120ms',
-              }}
+              onClick={() => onToggle(scope)}
+              aria-pressed={isSelected}
+              className={cn(
+                'inline-flex h-7 cursor-pointer items-center gap-1 rounded-full border px-2.5 text-xs transition-all',
+                SCOPE_BADGE_CLASSES[scope],
+                isSelected
+                  ? 'font-semibold ring-2 ring-current ring-inset'
+                  : 'font-medium',
+              )}
             >
-              {opt.label}
+              {isSelected && <Check className="size-3 shrink-0" />}
+              {scope}
             </button>
           )
         })}

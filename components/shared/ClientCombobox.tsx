@@ -21,6 +21,17 @@ interface ClientComboboxProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
+  /**
+   * When false, no "create new client" action is offered — pick from existing
+   * clients only. Use for filtering, where a non-existent client is meaningless.
+   * Defaults to true (the bid-entry behavior).
+   */
+  allowCreate?: boolean
+  /**
+   * When set, a reset item with this label is shown at the top of the list that
+   * selects an empty value (e.g. "All clients" to clear a filter).
+   */
+  emptyOptionLabel?: string
 }
 
 /**
@@ -34,6 +45,8 @@ export function ClientCombobox({
   value,
   onChange,
   placeholder = 'Select or create client…',
+  allowCreate = true,
+  emptyOptionLabel,
 }: ClientComboboxProps) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -83,7 +96,7 @@ export function ClientCombobox({
                 so the "create" action shows precisely when the typed name
                 isn't an existing client. */}
             <CommandEmpty className="p-1">
-              {typed ? (
+              {allowCreate && typed ? (
                 <button
                   type="button"
                   onMouseDown={(e) => e.preventDefault()}
@@ -97,10 +110,23 @@ export function ClientCombobox({
                 </button>
               ) : (
                 <p className="py-3 text-center text-sm text-muted-foreground">
-                  No clients yet — type a name to create one.
+                  {allowCreate
+                    ? 'No clients yet — type a name to create one.'
+                    : 'No clients found.'}
                 </p>
               )}
             </CommandEmpty>
+            {emptyOptionLabel && (
+              <CommandGroup>
+                <CommandItem
+                  value={emptyOptionLabel}
+                  data-checked={!value}
+                  onSelect={() => commit('')}
+                >
+                  {emptyOptionLabel}
+                </CommandItem>
+              </CommandGroup>
+            )}
             {clients.length > 0 && (
               <CommandGroup>
                 {clients.map((name) => (
