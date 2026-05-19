@@ -300,10 +300,10 @@ function computeYtdSecured(orgBids: Bid[], now: Date): YtdSecuredResult {
       let monthIdx = -1
       if (li.awarded_at) {
         const d = new Date(li.awarded_at)
-        inYear = d.getFullYear() === ytdYear
+        inYear = d.getFullYear() === ytdYear && d <= now
         monthIdx = d.getMonth()
       } else if (b.bid_due_date) {
-        inYear = b.bid_due_date.startsWith(ytdYearStr)
+        inYear = b.bid_due_date.startsWith(ytdYearStr) && new Date(b.bid_due_date) <= now
         monthIdx = parseInt(b.bid_due_date.slice(5, 7), 10) - 1
       }
       if (!inYear) continue
