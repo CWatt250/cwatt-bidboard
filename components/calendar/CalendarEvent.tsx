@@ -4,6 +4,8 @@ import { differenceInCalendarDays, startOfToday } from 'date-fns'
 import { useBidDetail } from '@/contexts/bidDetail'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
 import type { BidStatus } from '@/hooks/useBids'
+import { cn } from '@/lib/utils'
+import { SCOPE_ABBREVIATIONS, SCOPE_BADGE_CLASSES } from '@/config/colors'
 
 const STATUS_COLORS: Record<BidStatus, { bg: string; border: string; text: string }> = {
   Unassigned:    { bg: 'rgba(136,146,176,0.12)', border: '#8892b0', text: '#4a5270' },
@@ -20,16 +22,6 @@ const UNASSIGNED_COLORS = {
   bg: 'rgba(251,113,133,0.12)',
   border: '#fb7185',
   text: '#e11d48',
-}
-
-const SCOPE_COLORS: Record<string, string> = {
-  'Plumbing Piping': '#0ea5e9',
-  'HVAC Piping':     '#06b6d4',
-  'Refer Piping':    '#6366f1',
-  'HVAC Ductwork':   '#f97316',
-  'Fire Stopping':   '#ef4444',
-  'Equipment':       '#8b5cf6',
-  'Other':           '#8892b0',
 }
 
 function getUrgencyStyle(dueDate: Date): React.CSSProperties {
@@ -103,17 +95,25 @@ export default function CalendarEventComponent({ event }: CalendarEventProps) {
           Unassigned
         </span>
       ) : (
-        <span style={{ display: 'flex', gap: 3, marginTop: 2, flexWrap: 'wrap' }}>
-          {uniqueScopes.slice(0, 1).map((scope) => (
+        <span
+          style={{
+            display: 'flex',
+            gap: 4,
+            marginTop: 2,
+            flexWrap: 'wrap',
+            maxHeight: 40,
+            overflow: 'hidden',
+          }}
+        >
+          {uniqueScopes.map((scope) => (
             <span
               key={scope}
-              style={{
-                fontSize: '0.6rem',
-                fontWeight: 600,
-                color: SCOPE_COLORS[scope] ?? 'var(--text3)',
-              }}
+              className={cn(
+                'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none',
+                SCOPE_BADGE_CLASSES[scope],
+              )}
             >
-              {scope}
+              {SCOPE_ABBREVIATIONS[scope] ?? scope}
             </span>
           ))}
         </span>

@@ -11,6 +11,17 @@ export const SCOPE_BADGE_CLASSES: Record<BidScope, string> = {
   'Other':           'bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700',
 }
 
+/** Short industry abbreviations for each bid scope (used on compact cards). */
+export const SCOPE_ABBREVIATIONS: Record<BidScope, string> = {
+  'Plumbing Piping': 'PLMB',
+  'HVAC Piping':     'MECH',
+  'HVAC Ductwork':   'DUCT',
+  'Fire Stopping':   'FS',
+  'Refer Piping':    'REF',
+  'Equipment':       'EQ',
+  'Other':           'OTHR',
+}
+
 /** Header and body background classes for each Kanban column. */
 export const STATUS_COLUMN_STYLES: Record<BidStatus, { header: string; bg: string }> = {
   Unassigned: {
