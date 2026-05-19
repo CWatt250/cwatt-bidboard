@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   AreaChart,
@@ -34,8 +34,10 @@ import {
   DARK_STATUS_COLORS,
   DARK_BRANCH_COLORS,
   SCOPE_CHART_COLORS,
+  BRANCH_BADGE_CLASSES,
 } from '@/config/colors'
 import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
+import { estimatorScopedPrice } from '@/lib/recap-aggregations'
 import type { Bid, BidStatus, Branch } from '@/lib/supabase/types'
 
 export type TimeRange = 'this-month' | 'this-quarter' | 'this-year' | 'all-time'
@@ -169,7 +171,7 @@ function lastNWeekRanges(n: number, now: Date): { start: Date; end: Date }[] {
   return out
 }
 
-function computeSecuredKpi(bids: Bid[], range: TimeRange, now: Date): KpiMetric {
+function computeSecuredKpi(bids: Bid[], range: TimeRange, now: Date, profileId: string | null = null): KpiMetric {
   const current = currentWindow(range, now)
   const prior = priorWindow(range, now)
   let value = 0
@@ -180,10 +182,10 @@ function computeSecuredKpi(bids: Bid[], range: TimeRange, now: Date): KpiMetric 
     const ymd = bidAwardedAt(b)
     if (!ymd) continue
     if (inWindow(ymd, current)) {
-      value += bidAwardedValue(b)
+      value += profileId != null ? estimatorScopedPrice(b, profileId) : bidAwardedValue(b)
       count++
     } else if (inWindow(ymd, prior)) {
-      prevValue += bidAwardedValue(b)
+      prevValue += profileId != null ? estimatorScopedPrice(b, profileId) : bidAwardedValue(b)
     }
   }
   const sparkline = lastNWeekRanges(8, now).map(({ start, end }) => {
@@ -193,7 +195,7 @@ function computeSecuredKpi(bids: Bid[], range: TimeRange, now: Date): KpiMetric 
       const ymd = bidAwardedAt(b)
       if (!ymd) continue
       if (isWithinInterval(ymd, { start, end })) {
-        total += bidAwardedValue(b)
+        total += profileId != null ? estimatorScopedPrice(b, profileId) : bidAwardedValue(b)
       }
     }
     return total
@@ -283,19 +285,26 @@ interface YtdSecuredResult {
   sparkline: number[]
 }
 
-function computeYtdSecured(orgBids: Bid[], now: Date): YtdSecuredResult {
+function computeYtdSecured(bids: Bid[], now: Date, profileId: string | null = null): YtdSecuredResult {
   const ytdYear = now.getFullYear()
   const ytdYearStr = String(ytdYear)
   const ytdBidIds = new Set<string>()
   const monthlyBuckets = new Array(12).fill(0)
   let ytdSecuredValue = 0
 
-  for (const b of orgBids) {
+  for (const b of bids) {
     if (b.status !== 'Awarded' && b.status !== 'Verbal') continue
     const lineItems = b.line_items ?? []
     const anyFlagged = lineItems.some((li) => li.is_awarded)
     const surviving = anyFlagged ? lineItems.filter((li) => li.is_awarded) : lineItems
     for (const li of surviving) {
+      // In personal mode (profileId != null), only count this estimator's line items
+      if (profileId != null) {
+        const mine =
+          li.estimator_id === profileId ||
+          (li.estimator_id === null && b.estimator_id === profileId)
+        if (!mine) continue
+      }
       let inYear = false
       let monthIdx = -1
       if (li.awarded_at) {
@@ -1659,41 +1668,84 @@ function PinnedYtdRow({ data }: { data: YtdSecuredResult }) {
 
 export function AdminDashboard() {
   const { allBids, orgBids, loading, error } = useDashboard()
-  const { profile } = useUserRole()
+  const { profile, isAdmin, isBranchManager, isEstimator } = useUserRole()
   const [timeRange, setTimeRange] = useState<TimeRange>('this-month')
+  const [selectedBranches, setSelectedBranches] = useState<Branch[]>([])
 
   const now = useMemo(() => new Date(), [])
+
+  // Available branches for the picker — admins see all 5, branch managers see their assigned branches
+  const availableBranches = useMemo<Branch[]>(() => {
+    if (isAdmin) return ALL_BRANCHES
+    if (isBranchManager) return profile?.branches ?? []
+    return []
+  }, [isAdmin, isBranchManager, profile])
+
+  // Toggle a branch in/out of selection
+  const toggleBranch = useCallback((branch: Branch) => {
+    setSelectedBranches((prev) =>
+      prev.includes(branch) ? prev.filter((b) => b !== branch) : [...prev, branch],
+    )
+  }, [])
+
+  const clearBranches = useCallback(() => setSelectedBranches([]), [])
+
+  // The master data set driving all KPIs and charts
+  const isPersonalMode = selectedBranches.length === 0
+  const displayBids = useMemo(() => {
+    if (isPersonalMode) return allBids
+    return orgBids.filter((b) => selectedBranches.includes(b.branch))
+  }, [allBids, orgBids, selectedBranches, isPersonalMode])
+
+  // Subtitle context indicator
+  const viewLabel = useMemo(() => {
+    if (isPersonalMode) return `Your YTD performance · ${allBids.length} bids`
+    const branchLabels = selectedBranches.map((b) => b).sort()
+    if (branchLabels.length === ALL_BRANCHES.length) {
+      return `All branches · ${displayBids.length} bids`
+    }
+    if (branchLabels.length === 1) {
+      return `${branchLabels[0]} branch · ${displayBids.length} bids`
+    }
+    return `${branchLabels.join(' + ')} · ${displayBids.length} bids`
+  }, [isPersonalMode, selectedBranches, allBids.length, displayBids.length])
+
+  const showBranchPicker = isAdmin || isBranchManager
 
   // Filter personal allBids by the global time range. The window applies to
   // bid_due_date — when a bid is "happening" — to match the existing pattern.
   const filteredBids = useMemo(() => {
     const window = currentWindow(timeRange, now)
-    if (!window.start) return allBids
+    if (!window.start) return displayBids
     const startMs = window.start.getTime()
-    return allBids.filter((b) => {
+    return displayBids.filter((b) => {
       const due = bidDueDate(b)
       return due != null && due.getTime() >= startMs
     })
-  }, [allBids, timeRange, now])
+  }, [displayBids, timeRange, now])
 
   const securedKpi = useMemo(
-    () => computeSecuredKpi(allBids, timeRange, now),
-    [allBids, timeRange, now],
+    () => computeSecuredKpi(displayBids, timeRange, now, isPersonalMode ? profile?.id ?? null : null),
+    [displayBids, timeRange, now, isPersonalMode, profile?.id],
   )
-  // Pinned YTD Secured row — always current calendar year, line-item-level,
-  // org-wide. Ignores the active time-range filter.
-  const ytdSecured = useMemo(() => computeYtdSecured(orgBids, now), [orgBids, now])
+  // Pinned YTD Secured row — always current calendar year, line-item-level.
+  // In personal mode (no branches selected), filter to this user's scopes only.
+  // In branch mode, show full branch-aggregate totals.
+  const ytdSecured = useMemo(
+    () => computeYtdSecured(displayBids, now, isPersonalMode ? profile?.id ?? null : null),
+    [displayBids, now, isPersonalMode, profile?.id],
+  )
   const openKpi = useMemo(
-    () => computeOpenKpi(allBids, timeRange, now),
-    [allBids, timeRange, now],
+    () => computeOpenKpi(displayBids, timeRange, now),
+    [displayBids, timeRange, now],
   )
   const sentKpi = useMemo(
-    () => computeSentKpi(allBids, timeRange, now),
-    [allBids, timeRange, now],
+    () => computeSentKpi(displayBids, timeRange, now),
+    [displayBids, timeRange, now],
   )
   const winKpi = useMemo(
-    () => computeWinRateKpi(allBids, timeRange, now),
-    [allBids, timeRange, now],
+    () => computeWinRateKpi(displayBids, timeRange, now),
+    [displayBids, timeRange, now],
   )
 
   const firstName = useMemo(() => {
@@ -1775,14 +1827,67 @@ export function AdminDashboard() {
               Welcome back, {firstName}
             </h1>
             <p style={{ fontSize: 13, color: 'var(--dash-text3)', marginTop: 4 }}>
-              {TIME_RANGE_LABEL[timeRange]} · 5 branches · {format(now, 'MMM d, yyyy')}
+              {TIME_RANGE_LABEL[timeRange]} · {viewLabel} · {format(now, 'MMM d, yyyy')}
             </p>
           </div>
-          <DarkSegmented<TimeRange>
-            value={timeRange}
-            options={TIME_RANGE_OPTIONS}
-            onChange={setTimeRange}
-          />
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 10 }}>
+            {showBranchPicker && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                {isPersonalMode ? (
+                  <span style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--dash-text3)' }}>
+                    Your dashboard
+                  </span>
+                ) : null}
+                {availableBranches.map((branch) => {
+                  const selected = selectedBranches.includes(branch)
+                  const color = DARK_BRANCH_COLORS[branch] ?? '#38bdf8'
+                  return (
+                    <button
+                      key={branch}
+                      onClick={() => toggleBranch(branch)}
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        fontFamily: '"IBM Plex Mono", monospace',
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        border: `1px solid ${selected ? color : `${color}44`}`,
+                        background: selected ? `${color}26` : 'transparent',
+                        color: selected ? color : 'var(--dash-text3)',
+                        cursor: 'pointer',
+                        transition: 'background 150ms ease, color 150ms ease, border-color 150ms ease',
+                      }}
+                    >
+                      {selected ? `${branch} ✓` : branch}
+                    </button>
+                  )
+                })}
+                {!isPersonalMode && (
+                  <button
+                    onClick={clearBranches}
+                    style={{
+                      fontSize: 10.5,
+                      color: 'var(--dash-text3)',
+                      textDecoration: 'none',
+                      border: 'none',
+                      background: 'none',
+                      cursor: 'pointer',
+                      padding: '4px 6px',
+                      fontWeight: 500,
+                      opacity: 0.7,
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+            )}
+            <DarkSegmented<TimeRange>
+              value={timeRange}
+              options={TIME_RANGE_OPTIONS}
+              onChange={setTimeRange}
+            />
+          </div>
         </header>
 
         {/* ── Row 1: Pinned YTD Secured (always current calendar year) ── */}
@@ -1871,12 +1976,12 @@ export function AdminDashboard() {
 
         {/* ── Row 3: Branch Performance + Revenue by Scope ────────── */}
         <section style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
-          <BranchPerformance bids={orgBids} />
-          <RevenueByScope bids={orgBids} />
+          <BranchPerformance bids={displayBids} />
+          <RevenueByScope bids={displayBids} />
         </section>
 
         {/* ── Row 4: Recent Bids ──────────────────────────────────── */}
-        <RecentBids bids={allBids} now={now} />
+        <RecentBids bids={displayBids} now={now} />
       </div>
     </div>
   )
