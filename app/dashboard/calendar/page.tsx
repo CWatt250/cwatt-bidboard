@@ -8,10 +8,7 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 import { useBids } from '@/hooks/useBids'
 import transformBidsToEvents from '@/lib/calendar/transformBidsToEvents'
-import CalendarEventComponent, {
-  type CalendarDisplayEvent,
-  MONTH_VIEW_EVENT_CAP,
-} from '@/components/calendar/CalendarEvent'
+import CalendarEventComponent from '@/components/calendar/CalendarEvent'
 import CalendarToolbar from '@/components/calendar/CalendarToolbar'
 import DayBidsDialog from '@/components/calendar/DayBidsDialog'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
@@ -94,39 +91,8 @@ export default function CalendarPage() {
 
   const events = useMemo(() => transformBidsToEvents(visibleBids), [visibleBids])
 
-  // Month view caps each day at 3 cards + a "+N more" overflow event; week
-  // view has taller cells, so it keeps the full event list.
+  // Week view has taller cells, so it keeps the full event list.
   const [view, setView] = useState<View>('month')
-
-  const displayEvents = useMemo<CalendarDisplayEvent[]>(() => {
-    const byDay = new Map<string, CalendarEvent[]>()
-    for (const e of events) {
-      const key = e.start.toDateString()
-      const day = byDay.get(key)
-      if (day) day.push(e)
-      else byDay.set(key, [e])
-    }
-    const result: CalendarDisplayEvent[] = []
-    for (const dayEvents of byDay.values()) {
-      if (dayEvents.length <= MONTH_VIEW_EVENT_CAP) {
-        result.push(...dayEvents)
-        continue
-      }
-      result.push(...dayEvents.slice(0, MONTH_VIEW_EVENT_CAP))
-      const d = dayEvents[0].start
-      const marker = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59)
-      result.push({
-        id: `overflow-${d.toDateString()}`,
-        title: '',
-        start: marker,
-        end: marker,
-        isOverflow: true,
-        date: d,
-        bids: dayEvents.map((e) => e.resource),
-      })
-    }
-    return result
-  }, [events])
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedDate, setSelectedDate] = useState<Date | null>(null)
@@ -276,9 +242,9 @@ export default function CalendarPage() {
             Loading…
           </div>
         ) : (
-          <Calendar<CalendarDisplayEvent>
+          <Calendar
             localizer={localizer}
-            events={view === Views.MONTH ? displayEvents : events}
+            events={events}
             view={view}
             onView={setView}
             views={[Views.MONTH, Views.WEEK]}
