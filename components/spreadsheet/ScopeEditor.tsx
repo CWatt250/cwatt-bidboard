@@ -46,6 +46,9 @@ interface ScopeEditorProps {
   draftMode?: boolean
   draftItems?: DraftItem[]
   onDraftSave?: (items: DraftItem[]) => void
+  /** Called after a successful (non-draft) supabase save — lets a parent
+   *  refresh its own copy of the bid. */
+  onSaved?: () => void
   placeholder?: React.ReactNode
   triggerClassName?: string
   /** Fully override the trigger content (replaces default badges + placeholder). */
@@ -66,6 +69,7 @@ export function ScopeEditor({
   draftMode = false,
   draftItems,
   onDraftSave,
+  onSaved,
   placeholder,
   triggerClassName,
   trigger,
@@ -195,6 +199,7 @@ export function ScopeEditor({
       }
 
       window.dispatchEvent(new Event('bidwatt:bid-created'))
+      onSaved?.()
       toast.success('Scope pricing saved.')
       setOpen(false)
     } catch (err) {

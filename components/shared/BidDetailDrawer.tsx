@@ -181,6 +181,35 @@ export function BidDetailDrawer() {
     return () => { cancelled = true }
   }, [selectedBid, reset])
 
+  // Re-fetch the selected bid (line items + clients) and push it back into the
+  // shared bid state. Used by the realtime subscription and after a ScopeEditor
+  // save, so the drawer reflects scope changes without a page refresh.
+  async function refreshSelectedBid() {
+    if (!selectedBid?.id) return
+    const supabase = createClient()
+    const { data } = await supabase
+      .from('bids')
+      .select(`
+        *,
+        profiles!bids_estimator_id_fkey(name),
+        bid_line_items(*),
+        bid_clients(*, clients(name))
+      `)
+      .eq('id', selectedBid.id)
+      .single()
+    if (!data) return
+    const row = data as any
+    const line_items: BidLineItem[] = row.bid_line_items ?? []
+    const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
+    openBid({
+      ...row,
+      estimator_name: row.profiles?.name ?? null,
+      line_items,
+      clients: row.bid_clients ?? [],
+      total_price,
+    })
+  }
+
   // Real-time: listen for bid_line_items changes and refresh the selected bid
   useEffect(() => {
     if (!selectedBid) return
@@ -196,39 +225,7 @@ export function BidDetailDrawer() {
           table: 'bid_line_items',
           filter: `bid_id=eq.${selectedBid.id}`,
         },
-        async () => {
-          // Re-fetch the bid with updated line items
-          const { data } = await supabase
-            .from('bids')
-            .select(`
-              id,
-              project_name,
-              project_location,
-              mike_estimate_number,
-              branch,
-              estimator_id,
-              status,
-              bid_due_date,
-              project_start_date,
-              notes,
-              created_at,
-              updated_at,
-              profiles!bids_estimator_id_fkey(name),
-              bid_line_items(*)
-            `)
-            .eq('id', selectedBid.id)
-            .single()
-
-          if (!data) return
-          const line_items: BidLineItem[] = (data as any).bid_line_items ?? []
-          const total_price = line_items.reduce((sum, li) => sum + (li.price ?? 0), 0)
-          openBid({
-            ...(data as any),
-            estimator_name: (data as any).profiles?.name ?? null,
-            line_items,
-            total_price,
-          })
-        }
+        () => { void refreshSelectedBid() },
       )
       .subscribe()
 
@@ -567,6 +564,7 @@ export function BidDetailDrawer() {
                     {scopeItems.length > 0 && (
                       <ScopeEditor
                         bid={selectedBid}
+                        onSaved={refreshSelectedBid}
                         trigger={
                           <Button variant="outline" size="sm" type="button">
                             <PlusIcon className="size-3.5 mr-1" />
@@ -591,6 +589,7 @@ export function BidDetailDrawer() {
                     >
                       <ScopeEditor
                         bid={selectedBid}
+                        onSaved={refreshSelectedBid}
                         placeholder={
                           <span className="italic text-muted-foreground text-xs">
                             Click to add scopes &amp; prices
