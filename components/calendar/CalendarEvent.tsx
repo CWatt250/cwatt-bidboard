@@ -1,6 +1,7 @@
 'use client'
 
 import { differenceInCalendarDays, format, startOfToday } from 'date-fns'
+import { useState } from 'react'
 import { useBidDetail } from '@/contexts/bidDetail'
 import type { CalendarEvent } from '@/lib/calendar/transformBidsToEvents'
 import type { Bid, BidStatus, BidLineItem, BidScope } from '@/hooks/useBids'
@@ -11,6 +12,25 @@ import {
   SCOPE_BADGE_CLASSES,
   STATUS_BADGE_CLASSES,
 } from '@/config/colors'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+
+/** Month view shows at most this many bid cards per day; the rest collapse
+ *  into a single "+N more" overflow event. */
+export const MONTH_VIEW_EVENT_CAP = 3
+
+/** Synthetic month-view event standing in for the bids hidden by the 3-card cap. */
+export interface OverflowEvent {
+  id: string
+  title: string
+  start: Date
+  end: Date
+  isOverflow: true
+  date: Date
+  /** Every bid due that day — the popover lists all of them. */
+  bids: Bid[]
+}
+
+export type CalendarDisplayEvent = CalendarEvent | OverflowEvent
 
 const STATUS_COLORS: Record<BidStatus, { bg: string; border: string; text: string }> = {
   Unassigned:    { bg: 'rgba(136,146,176,0.12)', border: '#8892b0', text: '#4a5270' },
@@ -130,12 +150,11 @@ function buildEstimatorBlocks(bid: Bid): EstimatorBlock[] {
   return [...blocks, ...others]
 }
 
-interface CalendarEventProps {
-  event: CalendarEvent
-}
-
-export default function CalendarEventComponent({ event }: CalendarEventProps) {
-  return <BidCard event={event} />
+export default function CalendarEventComponent({ event }: { event: CalendarDisplayEvent }) {
+  if ('isOverflow' in event) {
+    return <OverflowMore event={event as OverflowEvent} />
+  }
+  return <BidCard event={event as CalendarEvent} />
 }
 
 // ─── Status — plain colored text + dot (deliberately not a pill) ─────────────
@@ -255,5 +274,62 @@ function BidCard({ event }: { event: CalendarEvent }) {
         )
       })}
     </button>
+  )
+}
+
+// ─── "+N more" overflow popover ──────────────────────────────────────────────
+
+function OverflowMore({ event }: { event: OverflowEvent }) {
+  const { openBid } = useBidDetail()
+  const [open, setOpen] = useState(false)
+  const hiddenCount = event.bids.length - MONTH_VIEW_EVENT_CAP
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger
+        render={
+          <button
+            type="button"
+            onClick={(e) => e.stopPropagation()}
+            className="block w-full cursor-pointer px-1.5 py-0.5 text-left text-xs text-muted-foreground hover:underline"
+          />
+        }
+      >
+        + {hiddenCount} more
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-72 p-0">
+        <div className="border-b px-3 py-2 text-xs font-semibold text-muted-foreground">
+          Bids due {format(event.date, 'EEE, MMM d')}
+        </div>
+        <div className="max-h-72 overflow-y-auto p-1.5">
+          {event.bids.map((bid) => (
+            <button
+              key={bid.id}
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                openBid(bid)
+              }}
+              className="flex w-full flex-col gap-1 rounded-md px-2 py-1.5 text-left hover:bg-muted"
+            >
+              <span className="truncate text-xs font-semibold text-foreground">
+                {bid.project_name}
+              </span>
+              <span className="flex flex-wrap items-center gap-1.5">
+                <span className={cn(CHIP_CLASS, BRANCH_BADGE_CLASSES[bid.branch])}>
+                  {bid.branch}
+                </span>
+                <StatusIndicator status={bid.status} />
+                {scopesOf(bid).map((scope) => (
+                  <span key={scope} className={cn(CHIP_CLASS, SCOPE_BADGE_CLASSES[scope])}>
+                    {SCOPE_ABBREVIATIONS[scope] ?? scope}
+                  </span>
+                ))}
+              </span>
+            </button>
+          ))}
+        </div>
+      </PopoverContent>
+    </Popover>
   )
 }

@@ -8,7 +8,11 @@ import 'react-big-calendar/lib/css/react-big-calendar.css'
 
 import { useBids } from '@/hooks/useBids'
 import transformBidsToEvents from '@/lib/calendar/transformBidsToEvents'
-import CalendarEventComponent from '@/components/calendar/CalendarEvent'
+import CalendarEventComponent, {
+  MONTH_VIEW_EVENT_CAP,
+  type CalendarDisplayEvent,
+  type OverflowEvent,
+} from '@/components/calendar/CalendarEvent'
 import CalendarToolbar from '@/components/calendar/CalendarToolbar'
 import DayBidsDialog from '@/components/calendar/DayBidsDialog'
 import { NewBidDialog } from '@/components/shared/NewBidDialog'
@@ -91,7 +95,47 @@ export default function CalendarPage() {
 
   const events = useMemo(() => transformBidsToEvents(visibleBids), [visibleBids])
 
-  // Week view has taller cells, so it keeps the full event list.
+  /**
+   * Month-view event capping: each day with more than MONTH_VIEW_EVENT_CAP
+   * bids gets a synthetic overflow event so rows stay compact.
+   * Week view keeps the full list.
+   */
+  const displayEvents = useMemo<CalendarDisplayEvent[]>(() => {
+    // Group events by day key "YYYY-MM-DD"
+    const dayMap = new Map<string, CalendarDisplayEvent[]>()
+    for (const evt of events) {
+      const key = format(evt.start, 'yyyy-MM-dd')
+      const bucket = dayMap.get(key)
+      if (bucket) {
+        bucket.push(evt)
+      } else {
+        dayMap.set(key, [evt])
+      }
+    }
+
+    const result: CalendarDisplayEvent[] = []
+    for (const [, dayEvents] of dayMap) {
+      if (dayEvents.length > MONTH_VIEW_EVENT_CAP) {
+        // Keep first N events as real cards, add one overflow event
+        result.push(...dayEvents.slice(0, MONTH_VIEW_EVENT_CAP))
+
+        const first = dayEvents[0] as CalendarEvent
+        const overflow: OverflowEvent = {
+          id: `${format(first.start, 'yyyy-MM-dd')}-overflow`,
+          title: `+${dayEvents.length - MONTH_VIEW_EVENT_CAP} more`,
+          start: first.start,
+          end: first.start,
+          isOverflow: true,
+          date: first.start,
+          bids: dayEvents.map((e) => (e as CalendarEvent).resource),
+        }
+        result.push(overflow)
+      } else {
+        result.push(...dayEvents)
+      }
+    }
+    return result
+  }, [events])
   const [view, setView] = useState<View>('month')
 
   const [dialogOpen, setDialogOpen] = useState(false)
@@ -244,12 +288,11 @@ export default function CalendarPage() {
         ) : (
           <Calendar
             localizer={localizer}
-            events={events}
+            events={view === Views.MONTH ? displayEvents : events}
             view={view}
             onView={setView}
             views={[Views.MONTH, Views.WEEK]}
             style={{ height: '100%', minHeight: 1600 }}
-            popup
             dayPropGetter={dayPropGetter}
             components={{
               event: CalendarEventComponent,
@@ -262,12 +305,6 @@ export default function CalendarPage() {
               // Let CalendarEvent handle its own background; suppress default blue
               style: { background: 'transparent', border: 'none', padding: 0 },
             })}
-            onShowMore={(shownEvents, date) => {
-              openDayDialog(
-                date,
-                (shownEvents as CalendarEvent[]).map((e) => e.resource)
-              )
-            }}
             onDrillDown={(date) => {
               const dayBids = bidsByDay(date)
               if (dayBids.length > 0) {
