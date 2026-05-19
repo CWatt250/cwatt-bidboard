@@ -8,7 +8,6 @@ import { toast } from 'sonner'
 import { ExternalLinkIcon, PlusIcon, XIcon } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { logActivity } from '@/lib/activity'
 import { useBidDetail } from '@/contexts/bidDetail'
 import { useUserRole } from '@/contexts/userRole'
 import { STATUS_BADGE_CLASSES, SCOPE_BADGE_CLASSES } from '@/config/colors'
@@ -23,7 +22,6 @@ import { ScopeEditor } from '@/components/spreadsheet/ScopeEditor'
 import { ClientsPopover } from '@/components/spreadsheet/ClientsPopover'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
 import { InlinePriceCell } from '@/components/bids/InlinePriceCell'
-import { InlineAwardedCell } from '@/components/bids/InlineAwardedCell'
 import { InlineScopeEstimatorCell } from '@/components/bids/InlineScopeEstimatorCell'
 import {
   Select,
@@ -144,15 +142,11 @@ export function BidDetailDrawer() {
     return []
   })()
 
-  // Branch filter based on role
-  const allowedBranches = isAdmin ? BRANCHES : BRANCHES.filter(b => userBranches.includes(b as BranchType))
-
   const {
     register,
     handleSubmit,
     control,
     reset,
-    watch,
     formState: { errors },
   } = useForm<BidDetailForm>({
     resolver: zodResolver(bidDetailSchema),
@@ -263,21 +257,9 @@ export function BidDetailDrawer() {
       return
     }
 
-    // Activity logging for estimator changes
-    const prevEstimatorId = selectedBid.estimator_id
-    if (profile && values.estimator_id !== prevEstimatorId) {
-      const newProfile = profiles.find((p) => p.id === values.estimator_id)
-      const newName = newProfile?.name ?? 'Unknown'
-      const action = prevEstimatorId
-        ? `Reassigned to ${newName}`
-        : `Assigned to ${newName}`
-      await logActivity(selectedBid.id, profile.id, action)
-    }
-
     setSaving(false)
     toast.success('Bid updated successfully.')
-    window.dispatchEvent(new Event('bidwatt:bid-created'))
-    await refreshSelectedBid()
+    closeBid()
   }
 
   async function handleDelete() {
@@ -318,14 +300,6 @@ export function BidDetailDrawer() {
     openBid({ ...selectedBid, line_items })
   }
 
-  function updateLineItemAwarded(lineItemId: string, isAwarded: boolean) {
-    if (!selectedBid?.line_items) return
-    const line_items = selectedBid.line_items.map((li) =>
-      li.id === lineItemId ? { ...li, is_awarded: isAwarded } : li,
-    )
-    openBid({ ...selectedBid, line_items })
-  }
-
   async function removeLineItem(lineItemId: string) {
     if (!selectedBid?.line_items) return
     const prevBid = selectedBid
@@ -345,7 +319,6 @@ export function BidDetailDrawer() {
   const scopeItems = (selectedBid?.line_items ?? []).filter((li) => !li.client)
 
   const isOpen = selectedBid !== null
-  const watchedStatus = watch('status')
 
   return (
     <>
@@ -355,12 +328,12 @@ export function BidDetailDrawer() {
           <SheetHeader>
             <div className="flex flex-col gap-1.5 min-w-0">
               <SheetTitle>{selectedBid?.project_name ?? ''}</SheetTitle>
-              {selectedBid && watchedStatus && (
+              {selectedBid && (
                 <Badge
-                  className={STATUS_BADGE_CLASSES[watchedStatus as BidStatus]}
+                  className={STATUS_BADGE_CLASSES[selectedBid.status as BidStatus]}
                   variant="outline"
                 >
-                  {watchedStatus}
+                  {selectedBid.status}
                 </Badge>
               )}
             </div>
@@ -480,7 +453,7 @@ export function BidDetailDrawer() {
                             <SelectValue placeholder="Select branch" />
                           </SelectTrigger>
                           <SelectContent>
-                            {allowedBranches.map((b) => (
+                            {BRANCHES.map((b) => (
                               <SelectItem key={b} value={b}>{BRANCH_LABELS[b]}</SelectItem>
                             ))}
                           </SelectContent>
@@ -630,17 +603,8 @@ export function BidDetailDrawer() {
                       {scopeItems.map((li) => (
                         <div
                           key={li.id}
-                          className="grid grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 border-b border-[var(--border)] px-2.5 py-1.5 last:border-b-0"
+                          className="grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 border-b border-[var(--border)] px-2.5 py-1.5 last:border-b-0"
                         >
-                          <InlineAwardedCell
-                            lineItemId={li.id}
-                            bidId={selectedBid.id}
-                            bidStatus={selectedBid.status}
-                            userId={profile?.id ?? null}
-                            scope={li.scope}
-                            initialIsAwarded={li.is_awarded ?? false}
-                            onChange={updateLineItemAwarded}
-                          />
                           <Badge
                             className={SCOPE_BADGE_CLASSES[li.scope]}
                             variant="outline"
