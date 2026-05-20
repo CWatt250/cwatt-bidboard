@@ -32,6 +32,13 @@ const SCOPE_BADGE_CLASSES: Record<string, string> = {
   'Other': 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700',
 }
 
+const GENERAL_BADGE =
+  'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-800/30 dark:text-slate-400 dark:border-slate-700'
+
+function scopeBadgeClasses(scope: string): string {
+  return SCOPE_BADGE_CLASSES[scope] ?? GENERAL_BADGE
+}
+
 interface ChangeOrdersSectionProps {
   bidId: string
 }
@@ -66,6 +73,15 @@ function formatDate(iso: string | null): string {
   })
 }
 
+function coTotal(co: BidChangeOrder): number {
+  return (co.items ?? []).reduce((sum, item) => sum + Number(item.value ?? 0), 0)
+}
+
+function uniqueScopes(co: BidChangeOrder): string[] {
+  const scopes = [...new Set((co.items ?? []).map((item) => item.scope))]
+  return scopes.sort()
+}
+
 export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
   const [cos, setCos] = useState<BidChangeOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -78,7 +94,7 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
     const supabase = createClient()
     const { data, error } = await supabase
       .from('bid_change_orders')
-      .select('*')
+      .select('*, items:bid_change_order_items(*)')
       .eq('bid_id', bidId)
       .order('co_number', { ascending: true })
 
@@ -87,7 +103,7 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
       setLoading(false)
       return
     }
-    setCos((data ?? []) as BidChangeOrder[])
+    setCos((data ?? []) as unknown as BidChangeOrder[])
     setLoading(false)
   }, [bidId])
 
@@ -143,10 +159,10 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
 
   const approvedTotal = cos
     .filter((c) => c.status === 'Approved')
-    .reduce((sum, c) => sum + Number(c.value ?? 0), 0)
+    .reduce((sum, c) => sum + coTotal(c), 0)
   const pendingTotal = cos
     .filter((c) => c.status === 'Pending')
-    .reduce((sum, c) => sum + Number(c.value ?? 0), 0)
+    .reduce((sum, c) => sum + coTotal(c), 0)
 
   const hasRows = cos.length > 0
 
@@ -182,8 +198,8 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
                   <TableHead className="w-[90px]">CO #</TableHead>
                   <TableHead className="w-[120px]">Date</TableHead>
                   <TableHead>Description</TableHead>
-                  <TableHead className="w-[150px]">Scope</TableHead>
-                  <TableHead className="text-right w-[110px]">Value</TableHead>
+                  <TableHead className="w-[180px]">Scopes</TableHead>
+                  <TableHead className="text-right w-[110px]">Total</TableHead>
                   <TableHead className="w-[110px]">Status</TableHead>
                   <TableHead className="w-[40px]" />
                 </TableRow>
@@ -197,25 +213,17 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
                   >
                     <TableCell className="font-medium">{co.co_number}</TableCell>
                     <TableCell>{formatDate(co.co_date)}</TableCell>
-                    <TableCell className="max-w-[420px] truncate">
+                    <TableCell className="max-w-[380px] truncate">
                       {co.description || <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     <TableCell>
-                      {co.scope ? (
-                        <span
-                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${SCOPE_BADGE_CLASSES[co.scope] ?? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700'}`}
-                        >
-                          {co.scope}
-                        </span>
-                      ) : (
-                        <span className="text-muted-foreground text-xs">General</span>
-                      )}
+                      <ScopeChips scopes={uniqueScopes(co)} />
                     </TableCell>
                     <TableCell
                       className="text-right tabular-nums"
                       style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
                     >
-                      {formatCurrency(Number(co.value ?? 0))}
+                      {formatCurrency(coTotal(co))}
                     </TableCell>
                     <TableCell>
                       <span
@@ -275,4 +283,41 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
       />
     </Card>
   )
+}
+
+function ScopeChips({ scopes }: { scopes: string[] }) {
+  if (scopes.length === 0) {
+    return <span className="text-muted-foreground text-xs">—</span>
+  }
+
+  const display = scopes.length === 1 && scopes[0] === 'General'
+    ? ['General']
+    : scopes
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {display.map((s) => (
+        <span
+          key={s}
+          className={`inline-flex items-center rounded-full border px-1.5 py-0.5 text-xs font-medium ${scopeBadgeClasses(s)}`}
+        >
+          {abbreviateScope(s)}
+        </span>
+      ))}
+    </div>
+  )
+}
+
+function abbreviateScope(scope: string): string {
+  const map: Record<string, string> = {
+    'Plumbing Piping': 'PLMB',
+    'HVAC Piping': 'HVAC-P',
+    'Refer Piping': 'REF',
+    'HVAC Ductwork': 'DUCT',
+    'Fire Stopping': 'FIRE',
+    'Equipment': 'EQPT',
+    'General': 'GEN',
+    'Other': 'OTHER',
+  }
+  return map[scope] ?? scope.slice(0, 4).toUpperCase()
 }

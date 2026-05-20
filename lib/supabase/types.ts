@@ -107,19 +107,26 @@ export interface BidDocument {
 
 export type BidChangeOrderStatus = 'Pending' | 'Approved' | 'Rejected'
 
+export type BidChangeOrderItem = {
+  id: string
+  change_order_id: string
+  scope: string
+  value: number
+  created_at: string
+}
+
 export interface BidChangeOrder {
   id: string
   bid_id: string
   co_number: string
   co_date: string | null
   description: string | null
-  scope: string | null
-  value: number
   status: BidChangeOrderStatus
   notes: string | null
   created_at: string
   updated_at: string
   created_by: string | null
+  items?: BidChangeOrderItem[]
 }
 
 export interface Bid {

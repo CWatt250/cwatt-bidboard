@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { BidChangeOrder, BidChangeOrderStatus } from '@/lib/supabase/types'
+import type { BidChangeOrder, BidChangeOrderItem, BidChangeOrderStatus } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -35,6 +36,22 @@ interface AddChangeOrderDialogProps {
 
 const STATUS_OPTIONS: BidChangeOrderStatus[] = ['Pending', 'Approved', 'Rejected']
 
+interface ScopeRow {
+  /** Temporary client-side id for React keys. Null during edit means a row that exists in DB (will be deleted and re-inserted). */
+  _key: string
+  scope: string
+  value: string
+}
+
+let nextKey = 1
+function newRowKey(): string {
+  return `row_${nextKey++}`
+}
+
+function defaultRows(): ScopeRow[] {
+  return [{ _key: newRowKey(), scope: 'General', value: '' }]
+}
+
 function todayIso(): string {
   const d = new Date()
   const y = d.getFullYear()
@@ -63,10 +80,9 @@ export function AddChangeOrderDialog({
   const [coNumber, setCoNumber] = useState('')
   const [coDate, setCoDate] = useState('')
   const [description, setDescription] = useState('')
-  const [scope, setScope] = useState<string | null>(null)
-  const [value, setValue] = useState('')
   const [status, setStatus] = useState<BidChangeOrderStatus>('Pending')
   const [notes, setNotes] = useState('')
+  const [scopeRows, setScopeRows] = useState<ScopeRow[]>(defaultRows())
   const [saving, setSaving] = useState(false)
 
   // Initialize / reset form whenever the dialog opens
@@ -77,21 +93,31 @@ export function AddChangeOrderDialog({
       setCoNumber(existingCo.co_number)
       setCoDate(existingCo.co_date ?? '')
       setDescription(existingCo.description ?? '')
-      setScope(existingCo.scope ?? null)
-      setValue(existingCo.value?.toString() ?? '')
       setStatus(existingCo.status)
       setNotes(existingCo.notes ?? '')
+
+      // Load existing items, or one default row
+      const items = existingCo.items
+      if (items && items.length > 0) {
+        setScopeRows(
+          items.map((item) => ({
+            _key: item.id,
+            scope: item.scope,
+            value: item.value?.toString() ?? '',
+          }))
+        )
+      } else {
+        setScopeRows(defaultRows())
+      }
       return
     }
 
-    // New CO: default scope to null (General)
-    setScope(null)
-    // suggest CO-{next}, default to today
+    // New CO
     setCoDate(todayIso())
     setDescription('')
-    setValue('')
     setStatus('Pending')
     setNotes('')
+    setScopeRows(defaultRows())
     setCoNumber('') // will be filled by the async query below
 
     const supabase = createClient()
@@ -108,41 +134,93 @@ export function AddChangeOrderDialog({
       })
   }, [open, existingCo, bidId])
 
+  function updateScopeRow(key: string, field: 'scope' | 'value', val: string | null) {
+    setScopeRows((rows) =>
+      rows.map((r) => (r._key === key ? { ...r, [field]: val ?? '' } : r))
+    )
+  }
+
+  function removeScopeRow(key: string) {
+    setScopeRows((rows) => rows.filter((r) => r._key !== key))
+  }
+
+  function addScopeRow() {
+    setScopeRows((rows) => [
+      ...rows,
+      { _key: newRowKey(), scope: 'General', value: '' },
+    ])
+  }
+
+  const total = scopeRows.reduce((sum, r) => {
+    const v = r.value.trim() ? Number(r.value) : 0
+    return sum + (Number.isNaN(v) ? 0 : v)
+  }, 0)
+
   async function handleSave() {
     if (!coNumber.trim()) {
       toast.error('CO Number is required.')
       return
     }
 
+    // Validate all scope values
+    for (const row of scopeRows) {
+      if (row.value.trim() && Number.isNaN(Number(row.value))) {
+        toast.error(`Invalid value for scope "${row.scope}".`)
+        return
+      }
+    }
+
     setSaving(true)
     try {
       const supabase = createClient()
 
-      const parsedValue = value.trim() ? Number(value) : 0
-      if (Number.isNaN(parsedValue)) {
-        toast.error('Value must be a number.')
-        setSaving(false)
-        return
-      }
-
-      const row = {
-        ...(existingCo?.id ? { id: existingCo.id } : {}),
-        bid_id: bidId,
-        co_number: coNumber.trim(),
-        co_date: coDate || null,
-        description: description.trim() || null,
-        scope: scope ?? null,
-        value: parsedValue,
-        status,
-        notes: notes.trim() || null,
-        updated_at: new Date().toISOString(),
-      }
-
-      const { error } = await supabase
+      // Upsert the parent change order row (no more scope/value columns)
+      const { data: savedCo, error: coError } = await supabase
         .from('bid_change_orders')
-        .upsert([row], { onConflict: 'id', defaultToNull: false })
+        .upsert(
+          {
+            ...(existingCo?.id ? { id: existingCo.id } : {}),
+            bid_id: bidId,
+            co_number: coNumber.trim(),
+            co_date: coDate || null,
+            description: description.trim() || null,
+            status,
+            notes: notes.trim() || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'id' }
+        )
+        .select('id')
+        .single()
 
-      if (error) throw error
+      if (coError) throw coError
+      if (!savedCo) throw new Error('No CO returned after upsert')
+
+      const coId = savedCo.id
+
+      // Delete all existing items for this CO (cascade-safe via ON DELETE CASCADE,
+      // but we do it explicitly to replace)
+      await supabase
+        .from('bid_change_order_items')
+        .delete()
+        .eq('change_order_id', coId)
+
+      // Insert fresh items — skip rows with empty scope (shouldn't happen) but allow 0/negative values
+      const itemsToInsert: Partial<BidChangeOrderItem>[] = scopeRows
+        .filter((row) => row.scope.trim() !== '')
+        .map((row) => ({
+          change_order_id: coId,
+          scope: row.scope,
+          value: row.value.trim() ? Number(row.value) : 0,
+        }))
+
+      if (itemsToInsert.length > 0) {
+        const { error: itemsError } = await supabase
+          .from('bid_change_order_items')
+          .insert(itemsToInsert)
+
+        if (itemsError) throw itemsError
+      }
 
       toast.success(isEdit ? 'Change order updated.' : 'Change order added.')
       onSaved()
@@ -207,41 +285,77 @@ export function AddChangeOrderDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="co-scope">Affected Scope</Label>
-            <Select
-              value={scope ?? ''}
-              onValueChange={(v) => setScope(v || null)}
+          {/* Scope Breakdown */}
+          <div className="space-y-2">
+            <Label>Scope Breakdown</Label>
+            <div className="space-y-2">
+              {scopeRows.map((row, idx) => (
+                <div key={row._key} className="flex items-start gap-2">
+                  <div className="flex-1">
+                    <Select
+                      value={row.scope}
+                      onValueChange={(v) => updateScopeRow(row._key, 'scope', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="General">General</SelectItem>
+                        {(bidLineItemScopes ?? []).map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {s}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="w-[140px]">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      value={row.value}
+                      onChange={(e) => updateScopeRow(row._key, 'value', e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => removeScopeRow(row._key)}
+                    disabled={scopeRows.length <= 1}
+                    className="mt-0.5 shrink-0"
+                  >
+                    <XIcon className="size-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={addScopeRow}
+              className="mt-1"
             >
-              <SelectTrigger id="co-scope">
-                <SelectValue placeholder="General" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">General</SelectItem>
-                {(bidLineItemScopes ?? []).map((s) => (
-                  <SelectItem key={s} value={s}>
-                    {s}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Leave as General if not tied to a specific scope
+              <PlusIcon className="size-3.5 mr-1" />
+              Add Scope
+            </Button>
+
+            <p
+              className="text-sm font-semibold tabular-nums text-right"
+              style={{ fontFamily: 'var(--font-mono), "IBM Plex Mono", monospace' }}
+            >
+              Total: {new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                maximumFractionDigits: 0,
+              }).format(total)}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label htmlFor="co-value">Value</Label>
-              <Input
-                id="co-value"
-                type="number"
-                step="0.01"
-                value={value}
-                onChange={(e) => setValue(e.target.value)}
-                placeholder="0.00 (negative for credit)"
-              />
-            </div>
             <div className="space-y-1.5">
               <Label htmlFor="co-status">Status</Label>
               <Select
