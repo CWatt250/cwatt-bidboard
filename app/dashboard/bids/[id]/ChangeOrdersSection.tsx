@@ -22,6 +22,16 @@ import {
 } from '@/components/ui/table'
 import { AddChangeOrderDialog } from './AddChangeOrderDialog'
 
+const SCOPE_BADGE_CLASSES: Record<string, string> = {
+  'Plumbing Piping': 'bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-300 dark:border-blue-800',
+  'HVAC Piping': 'bg-purple-100 text-purple-700 border-purple-200 dark:bg-purple-900/30 dark:text-purple-300 dark:border-purple-800',
+  'Refer Piping': 'bg-cyan-100 text-cyan-700 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-300 dark:border-cyan-800',
+  'HVAC Ductwork': 'bg-orange-100 text-orange-700 border-orange-200 dark:bg-orange-900/30 dark:text-orange-300 dark:border-orange-800',
+  'Fire Stopping': 'bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+  'Equipment': 'bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-300 dark:border-emerald-800',
+  'Other': 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700',
+}
+
 interface ChangeOrdersSectionProps {
   bidId: string
 }
@@ -60,6 +70,7 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
   const [cos, setCos] = useState<BidChangeOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [projectName, setProjectName] = useState('')
+  const [lineItemScopes, setLineItemScopes] = useState<string[]>([])
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingCo, setEditingCo] = useState<BidChangeOrder | undefined>(undefined)
 
@@ -90,6 +101,14 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
       .single()
       .then(({ data }) => {
         if (data?.project_name) setProjectName(data.project_name as string)
+      })
+    void supabase
+      .from('bid_line_items')
+      .select('scope')
+      .eq('bid_id', bidId)
+      .then(({ data }) => {
+        const scopes = [...new Set((data ?? []).map((r) => r.scope as string).filter(Boolean))].sort()
+        setLineItemScopes(scopes)
       })
   }, [bidId, fetchCos])
 
@@ -163,6 +182,7 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
                   <TableHead className="w-[90px]">CO #</TableHead>
                   <TableHead className="w-[120px]">Date</TableHead>
                   <TableHead>Description</TableHead>
+                  <TableHead className="w-[150px]">Scope</TableHead>
                   <TableHead className="text-right w-[110px]">Value</TableHead>
                   <TableHead className="w-[110px]">Status</TableHead>
                   <TableHead className="w-[40px]" />
@@ -179,6 +199,17 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
                     <TableCell>{formatDate(co.co_date)}</TableCell>
                     <TableCell className="max-w-[420px] truncate">
                       {co.description || <span className="text-muted-foreground">—</span>}
+                    </TableCell>
+                    <TableCell>
+                      {co.scope ? (
+                        <span
+                          className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${SCOPE_BADGE_CLASSES[co.scope] ?? 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700'}`}
+                        >
+                          {co.scope}
+                        </span>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">General</span>
+                      )}
                     </TableCell>
                     <TableCell
                       className="text-right tabular-nums"
@@ -237,6 +268,7 @@ export function ChangeOrdersSection({ bidId }: ChangeOrdersSectionProps) {
         bidId={bidId}
         bidProjectName={projectName}
         existingCo={editingCo}
+        bidLineItemScopes={lineItemScopes}
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onSaved={() => void fetchCos()}

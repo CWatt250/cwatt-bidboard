@@ -113,6 +113,7 @@ export interface BidChangeOrder {
   co_number: string
   co_date: string | null
   description: string | null
+  scope: string | null
   value: number
   status: BidChangeOrderStatus
   notes: string | null

@@ -1,0 +1,24 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport sys, json, re\ntry:\n    data = json.load(sys.stdin)\nexcept Exception:\n    sys.exit(0)\nfp = data.get('file_path', '') or data.get('path', '')\nif re.search(r'\\.env(\\.[^/]*)?\\.local$', fp):\n    print('BLOCKED: Edits to .env*.local files are prohibited — credential leak prevention.', file=sys.stderr)\n    sys.exit(2)\n\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 -c \"\nimport sys, json, os, re\ntry:\n    data = json.load(sys.stdin)\nexcept Exception:\n    sys.exit(0)\nfp = data.get('file_path', '') or data.get('path', '')\nif re.search(r'supabase/migrations/.*\\.sql$', fp) and os.path.isfile(fp):\n    print('BLOCKED: Editing an existing migration is prohibited — create a new numbered migration file instead.', file=sys.stderr)\n    sys.exit(2)\n\""
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -27,6 +27,7 @@ interface AddChangeOrderDialogProps {
   bidId: string
   bidProjectName: string
   existingCo?: BidChangeOrder
+  bidLineItemScopes?: string[]
   open: boolean
   onOpenChange: (open: boolean) => void
   onSaved: () => void
@@ -52,6 +53,7 @@ export function AddChangeOrderDialog({
   bidId,
   bidProjectName,
   existingCo,
+  bidLineItemScopes = [],
   open,
   onOpenChange,
   onSaved,
@@ -61,6 +63,7 @@ export function AddChangeOrderDialog({
   const [coNumber, setCoNumber] = useState('')
   const [coDate, setCoDate] = useState('')
   const [description, setDescription] = useState('')
+  const [scope, setScope] = useState<string | null>(null)
   const [value, setValue] = useState('')
   const [status, setStatus] = useState<BidChangeOrderStatus>('Pending')
   const [notes, setNotes] = useState('')
@@ -74,13 +77,16 @@ export function AddChangeOrderDialog({
       setCoNumber(existingCo.co_number)
       setCoDate(existingCo.co_date ?? '')
       setDescription(existingCo.description ?? '')
+      setScope(existingCo.scope ?? null)
       setValue(existingCo.value?.toString() ?? '')
       setStatus(existingCo.status)
       setNotes(existingCo.notes ?? '')
       return
     }
 
-    // New CO: suggest CO-{next}, default to today
+    // New CO: default scope to null (General)
+    setScope(null)
+    // suggest CO-{next}, default to today
     setCoDate(todayIso())
     setDescription('')
     setValue('')
@@ -125,6 +131,7 @@ export function AddChangeOrderDialog({
         co_number: coNumber.trim(),
         co_date: coDate || null,
         description: description.trim() || null,
+        scope: scope ?? null,
         value: parsedValue,
         status,
         notes: notes.trim() || null,
@@ -198,6 +205,29 @@ export function AddChangeOrderDialog({
               placeholder="Scope of the change"
               rows={3}
             />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="co-scope">Affected Scope</Label>
+            <Select
+              value={scope ?? ''}
+              onValueChange={(v) => setScope(v || null)}
+            >
+              <SelectTrigger id="co-scope">
+                <SelectValue placeholder="General" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">General</SelectItem>
+                {(bidLineItemScopes ?? []).map((s) => (
+                  <SelectItem key={s} value={s}>
+                    {s}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Leave as General if not tied to a specific scope
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
