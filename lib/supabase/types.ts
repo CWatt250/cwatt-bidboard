@@ -105,6 +105,22 @@ export interface BidDocument {
   category: string
 }
 
+export type BidChangeOrderStatus = 'Pending' | 'Approved' | 'Rejected'
+
+export interface BidChangeOrder {
+  id: string
+  bid_id: string
+  co_number: string
+  co_date: string | null
+  description: string | null
+  value: number
+  status: BidChangeOrderStatus
+  notes: string | null
+  created_at: string
+  updated_at: string
+  created_by: string | null
+}
+
 export interface Bid {
   id: string
   project_name: string

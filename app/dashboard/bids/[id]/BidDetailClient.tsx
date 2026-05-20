@@ -26,6 +26,7 @@ import { InlineAwardedCell } from '@/components/bids/InlineAwardedCell'
 import { InlineScopeEstimatorCell } from '@/components/bids/InlineScopeEstimatorCell'
 import { ProminentStatusCell } from '@/components/bids/ProminentStatusCell'
 import { DocumentsSection } from '@/components/bids/DocumentsSection'
+import { ChangeOrdersSection } from './ChangeOrdersSection'
 import type { BidStatus, Branch, BidScope } from '@/lib/supabase/types'
 import { BRANCH_LABELS, getBidClientName } from '@/lib/supabase/types'
 import { Button } from '@/components/ui/button'
@@ -930,6 +931,11 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
               </div>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Change Orders */}
+        <div className="mt-6">
+          <ChangeOrdersSection bidId={bid.id} />
         </div>
 
         {/* Bid Information (project metadata) */}
