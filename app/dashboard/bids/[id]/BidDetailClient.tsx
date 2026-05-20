@@ -486,6 +486,24 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         toast.error('No scopes assigned to this client.')
         return
       }
+
+      // Match IDs from already-loaded line items — avoids enum/text
+      // comparison over PostgREST which silently fails on values
+      // containing spaces (e.g. "HVAC Ductwork", "Plumbing Piping").
+      // This mirrors the exact pattern InlineAwardedCell uses.
+      const matchingIds = (bid?.line_items ?? [])
+        .filter(
+          (li) =>
+            !li.client &&
+            clientScopes.includes(li.scope as string)
+        )
+        .map((li) => li.id)
+
+      if (matchingIds.length === 0) {
+        toast.error('No matching scope line items found.')
+        return
+      }
+
       const { error } = await supabase
         .from('bid_line_items')
         .update({
@@ -493,8 +511,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
           is_awarded: true,
           awarded_at: new Date().toISOString(),
         })
-        .eq('bid_id', bidId)
-        .in('scope', clientScopes)
+        .in('id', matchingIds)
       if (error) {
         console.error('[award] award failed', error)
         toast.error('Failed to update award status.')
