@@ -51,7 +51,6 @@ export interface BidLineItem {
   scope: BidScope
   price: number | null
   is_awarded: boolean
-  awarded_to_client_id: string | null
   awarded_at: string | null
   estimator_id: string | null
   /** Joined from profiles via bid_line_items.estimator_id — null when not overridden */
