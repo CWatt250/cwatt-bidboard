@@ -412,6 +412,14 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
     refetch()
   }
 
+  const winningClientIds = useMemo(() => {
+    const s = new Set<string>()
+    for (const item of bid?.line_items ?? []) {
+      if (item.awarded_to_client_id) s.add(item.awarded_to_client_id)
+    }
+    return s
+  }, [bid?.line_items])
+
   // ─── Loading State ────────────────────────────────────────────────────────
 
   if (loading) {
@@ -448,14 +456,6 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   }
 
   // ─── Award-by-Client (#6) ─────────────────────────────────────────────
-
-  const winningClientIds = useMemo(() => {
-    const s = new Set<string>()
-    for (const item of bid.line_items ?? []) {
-      if (item.awarded_to_client_id) s.add(item.awarded_to_client_id)
-    }
-    return s
-  }, [bid.line_items])
 
   async function handleAwardToggle(clientId: string | null, isWinner: boolean) {
     if (!clientId) return
