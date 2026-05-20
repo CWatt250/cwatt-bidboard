@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { PlusIcon, XIcon } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import type { BidChangeOrder, BidChangeOrderItem, BidChangeOrderStatus } from '@/lib/supabase/types'
+import type { BidChangeOrder, BidChangeOrderItem, BidChangeOrderStatus, BidScope } from '@/lib/supabase/types'
+import { SCOPE_ABBREVIATIONS, SCOPE_BADGE_CLASSES } from '@/config/colors'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -35,6 +37,37 @@ interface AddChangeOrderDialogProps {
 }
 
 const STATUS_OPTIONS: BidChangeOrderStatus[] = ['Pending', 'Approved', 'Rejected']
+
+const SCOPE_PILL_CLASS =
+  'inline-flex items-center justify-center rounded border px-1.5 py-0.5 text-[10px] font-semibold leading-none min-w-[42px]'
+
+/** Canonical scope list shown in the dropdown — order matches the design spec. */
+const SCOPE_OPTIONS: readonly BidScope[] = [
+  'Plumbing Piping',
+  'HVAC Piping',
+  'HVAC Ductwork',
+  'Fire Stopping',
+  'Refer Piping',
+  'Equipment',
+  'Other',
+]
+
+function ScopeOption({ scope }: { scope: string }) {
+  if (scope === 'General') {
+    return <span className="text-muted-foreground">General</span>
+  }
+  const badge = SCOPE_BADGE_CLASSES[scope as BidScope]
+  const abbrev = SCOPE_ABBREVIATIONS[scope as BidScope]
+  if (!badge || !abbrev) {
+    return <span>{scope}</span>
+  }
+  return (
+    <span className="flex items-center gap-2">
+      <span className={cn(SCOPE_PILL_CLASS, badge)}>{abbrev}</span>
+      <span>{scope}</span>
+    </span>
+  )
+}
 
 interface ScopeRow {
   /** Temporary client-side id for React keys. Null during edit means a row that exists in DB (will be deleted and re-inserted). */
@@ -70,7 +103,6 @@ export function AddChangeOrderDialog({
   bidId,
   bidProjectName,
   existingCo,
-  bidLineItemScopes = [],
   open,
   onOpenChange,
   onSaved,
@@ -297,13 +329,15 @@ export function AddChangeOrderDialog({
                       onValueChange={(v) => updateScopeRow(row._key, 'scope', v)}
                     >
                       <SelectTrigger>
-                        <SelectValue />
+                        <ScopeOption scope={row.scope} />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="General">General</SelectItem>
-                        {(bidLineItemScopes ?? []).map((s) => (
+                        <SelectItem value="General">
+                          <ScopeOption scope="General" />
+                        </SelectItem>
+                        {SCOPE_OPTIONS.map((s) => (
                           <SelectItem key={s} value={s}>
-                            {s}
+                            <ScopeOption scope={s} />
                           </SelectItem>
                         ))}
                       </SelectContent>
