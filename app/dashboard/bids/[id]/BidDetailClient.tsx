@@ -457,18 +457,49 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   // ─── Award-by-Client (#6) ─────────────────────────────────────────────
 
-  async function handleAwardToggle(clientId: string | null, isWinner: boolean) {
+  async function handleAwardToggle(
+    clientId: string | null,
+    isWinner: boolean
+  ) {
     if (!clientId) return
     const supabase = createClient()
-    const fn = isWinner ? 'unaward_client' : 'award_client'
-    const { error } = await supabase.rpc(fn, {
-      p_bid_id: bidId,
-      p_client_id: clientId,
-    })
-    if (error) {
-      console.error('[award] toggle failed', error)
-      toast.error('Failed to update award status.')
-      return
+
+    if (isWinner) {
+      const { error } = await supabase
+        .from('bid_line_items')
+        .update({
+          awarded_to_client_id: null,
+          is_awarded: false,
+          awarded_at: null,
+        })
+        .eq('bid_id', bidId)
+        .eq('awarded_to_client_id', clientId)
+      if (error) {
+        console.error('[award] unaward failed', error)
+        toast.error('Failed to update award status.')
+        return
+      }
+    } else {
+      const clientScopes =
+        clientRows.find((r) => r.client_id === clientId)?.scopes ?? []
+      if (clientScopes.length === 0) {
+        toast.error('No scopes assigned to this client.')
+        return
+      }
+      const { error } = await supabase
+        .from('bid_line_items')
+        .update({
+          awarded_to_client_id: clientId,
+          is_awarded: true,
+          awarded_at: new Date().toISOString(),
+        })
+        .eq('bid_id', bidId)
+        .in('scope', clientScopes)
+      if (error) {
+        console.error('[award] award failed', error)
+        toast.error('Failed to update award status.')
+        return
+      }
     }
     refetch()
   }
