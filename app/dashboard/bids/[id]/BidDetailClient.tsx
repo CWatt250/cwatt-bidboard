@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { useForm, Controller } from 'react-hook-form'
@@ -199,7 +199,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
   // scope toggles persist to bid_clients.scopes immediately — they don't wait
   // for the Save Changes button.
   const [clientRows, setClientRows] = useState<
-    Array<{ id: string; name: string; scopes: string[] }>
+    Array<{ id: string; name: string; client_id: string | null; scopes: string[] }>
   >([])
   const [allClients, setAllClients] = useState<string[]>([])
   const [newClientName, setNewClientName] = useState('')
@@ -248,6 +248,7 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
         .map((c) => ({
           id: c.id,
           name: getBidClientName(c),
+          client_id: c.client_id,
           scopes: c.scopes ?? [],
         }))
         .filter((r) => r.name),
@@ -444,6 +445,32 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
 
   function perClientTotal(scopes: string[]): number {
     return scopes.reduce((s, scope) => s + (priceByScope.get(scope) ?? 0), 0)
+  }
+
+  // ─── Award-by-Client (#6) ─────────────────────────────────────────────
+
+  const winningClientIds = useMemo(() => {
+    const s = new Set<string>()
+    for (const item of bid.line_items ?? []) {
+      if (item.awarded_to_client_id) s.add(item.awarded_to_client_id)
+    }
+    return s
+  }, [bid.line_items])
+
+  async function handleAwardToggle(clientId: string | null, isWinner: boolean) {
+    if (!clientId) return
+    const supabase = createClient()
+    const fn = isWinner ? 'unaward_client' : 'award_client'
+    const { error } = await supabase.rpc(fn, {
+      p_bid_id: bidId,
+      p_client_id: clientId,
+    })
+    if (error) {
+      console.error('[award] toggle failed', error)
+      toast.error('Failed to update award status.')
+      return
+    }
+    refetch()
   }
 
   const uniqueClientCount = clientRows.length
@@ -791,7 +818,8 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
             <CardContent className="space-y-3 p-6">
               {/* Per-client rows: name · scope chips · per-client total · remove */}
               <div className="border rounded-md overflow-hidden">
-                <div className="grid grid-cols-[1fr_minmax(0,2fr)_120px_32px] gap-3 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                <div className="grid grid-cols-[32px_1fr_minmax(0,2fr)_120px_32px] gap-3 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground border-b">
+                  <span className="text-center" title="Awarded">Won</span>
                   <span>Client</span>
                   <span>Scopes</span>
                   <span className="text-right">Total</span>
@@ -807,8 +835,23 @@ export default function BidDetailClient({ bidId }: { bidId: string }) {
                     return (
                       <div
                         key={row.id}
-                        className="grid grid-cols-[1fr_minmax(0,2fr)_120px_32px] gap-3 px-3 py-2 items-center border-b last:border-b-0"
+                        className="grid grid-cols-[32px_1fr_minmax(0,2fr)_120px_32px] gap-3 px-3 py-2 items-center border-b last:border-b-0"
                       >
+                        <label className="inline-flex items-center justify-center cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={row.client_id != null && winningClientIds.has(row.client_id)}
+                            disabled={row.client_id == null}
+                            onChange={() => handleAwardToggle(row.client_id, winningClientIds.has(row.client_id ?? ''))}
+                            aria-label={`Award to ${row.name}`}
+                            style={{
+                              width: 16,
+                              height: 16,
+                              cursor: row.client_id == null ? 'not-allowed' : 'pointer',
+                              accentColor: 'var(--green, #16a34a)',
+                            }}
+                          />
+                        </label>
                         <span className="text-sm font-medium truncate" title={row.name}>
                           {row.name}
                         </span>
